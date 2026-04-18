@@ -1,0 +1,566 @@
+{% extends "base.html" %}
+{% from "sidebar.html" import sidebar with context %}
+{% block title %} — Products{% endblock %}
+{% block body %}
+<div class="app-layout">
+  {{ sidebar('products') }}
+  <div class="main-area">
+    <div class="topbar">
+      <div style="font-size:18px;font-weight:700">📦 Products</div>
+      <div class="flex gap-2">
+        <button class="btn btn-ghost btn-sm" onclick="openManageCatModal()">🏷️ Manage Categories</button>
+        <button class="btn btn-primary btn-sm" onclick="openModal('addProductModal')">+ Add Product</button>
+      </div>
+    </div>
+    <div class="page-content fade-in">
+      <div class="table-wrap">
+        <div class="table-header">
+          <div class="input-icon-wrap" style="width:280px">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input class="form-input" id="prodSearch" placeholder="Search products…" oninput="filterTable()">
+          </div>
+          <span class="text-muted text-sm">{{ products|length }} products</span>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="data-table" id="prodTable">
+            <thead><tr>
+              <th>Barcode</th><th>Name</th><th>Category</th><th>Rack/Section</th>
+              <th>Buy Price</th><th>Sell Price</th><th>W/S Price</th><th>Stock</th><th>Actions</th>
+            </tr></thead>
+            <tbody>
+              {% for p in products %}
+              <tr data-name="{{ p.name|lower }}" data-barcode="{{ p.barcode or '' }}" data-product-id="{{ p.id }}">
+                <td class="text-xs text-muted">{{ p.barcode or '—' }}</td>
+                <td style="font-weight:600">
+                  {{ p.name }}
+                  {% if p.barcode_type == 'weight' %}<span class="badge badge-purple" style="margin-left:6px;font-size:10px">⚖️ kg</span>{% endif %}
+                </td>
+                <td><span class="badge badge-primary">{{ p.cat.name if p.cat else '—' }}</span></td>
+                <td class="text-sm text-muted">
+                  {% if p.rack_number %}R:{{ p.rack_number }}{% endif %}
+                  {% if p.section_number %} S:{{ p.section_number }}{% endif %}
+                  {% if not p.rack_number and not p.section_number %}—{% endif %}
+                </td>
+                <td class="text-sm">LKR {{ "%.2f"|format(p.buy_price) }}</td>
+                <td style="font-weight:700;color:var(--accent)">LKR {{ "%.2f"|format(p.sell_price) }}</td>
+                <td class="text-sm text-muted">{% if p.wholesale_price %}LKR {{ "%.0f"|format(p.wholesale_price) }}{% else %}—{% endif %}</td>
+                <td>
+                  <span class="badge {{ 'badge-danger' if p.is_low else 'badge-success' }}">{{ p.stock_qty }}</span>
+                </td>
+                <td>
+                  <div class="flex gap-2">
+                    <button class="btn btn-ghost btn-sm edit-product-btn" data-pid="{{ p.id }}">Edit</button>
+                    <button class="btn btn-sm delete-btn" style="background:rgba(239,68,68,.1);color:var(--danger)" data-id="{{ p.id }}">Delete</button>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Product Modal -->
+<div class="modal-overlay" id="addProductModal">
+  <div class="modal" style="width:640px">
+    <div class="modal-title">📦 Add New Product</div>
+    <div class="grid-2 mb-4" style="gap:12px">
+      <div class="form-group"><label class="form-label">Product Name *</label><input class="form-input" id="pName" placeholder="Product name"></div>
+      <div class="form-group"><label class="form-label">Barcode</label><input class="form-input" id="pBarcode" placeholder="Scan or type barcode"><div id="pBarcodeHelp" class="text-xs text-muted" style="margin-top:4px"></div></div>
+      <div class="form-group"><label class="form-label">Category</label>
+        <select data-custom-select class="form-select" data-custom-select-search="true" id="pCategory">
+          <option value="">— Select —</option>
+          {% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Supplier</label>
+        <select data-custom-select class="form-select" data-custom-select-search="true" id="pSupplier">
+          <option value="">— Select —</option>
+          {% for s in suppliers %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Product Type *</label>
+        <select data-custom-select class="form-select" id="pProductType">
+          <option value="normal" selected>Normal Product</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Buy Price (LKR)</label><input class="form-input" id="pBuyPrice" type="number" min="0" step="0.01" placeholder="0.00"></div>
+      <div class="form-group"><label class="form-label">Sell Price (LKR) *</label><input class="form-input" id="pSellPrice" type="number" min="0" step="0.01" placeholder="0.00"></div>
+      <div class="form-group"><label class="form-label">Wholesale Price (LKR)</label><input class="form-input" id="pWsPrice" type="number" min="0" step="0.01" placeholder="0.00"></div>
+      <div class="form-group"><label class="form-label">Stock Qty</label><input class="form-input" id="pStock" type="number" min="0" placeholder="0"></div>
+      <div class="form-group"><label class="form-label">Low Stock Alert</label><input class="form-input" id="pLowStock" type="number" min="0" placeholder="10" value="10"></div>
+      <div class="form-group"><label class="form-label">Barcode Type</label>
+        <select data-custom-select class="form-select" id="pBarcodeType" onchange="toggleWeightField()">
+          <option value="normal">Normal</option>
+          <option value="weight">Weight (per kg)</option>
+        </select>
+      </div>
+      <div class="form-group" id="pricePerKgField" style="display:none">
+        <label class="form-label">Price per KG (LKR)</label><input class="form-input" id="pPricePerKg" type="number" min="0" step="0.01" placeholder="0.00">
+      </div>
+      <div class="form-group"><label class="form-label">Rack Number</label><input class="form-input" id="pRack" placeholder="e.g. A1"></div>
+      <div class="form-group"><label class="form-label">Section Number</label><input class="form-input" id="pSection" placeholder="e.g. S3"></div>
+      <div class="form-group" style="grid-column:span 2">
+        <label class="form-label">🛡️ Warranty Period</label>
+        <select data-custom-select class="form-select" id="pWarranty">
+          <option value="none">No Warranty</option>
+          <option value="7_days">7 Days</option>
+          <option value="14_days">14 Days</option>
+          <option value="1_month">1 Month</option>
+          <option value="3_months">3 Months</option>
+          <option value="6_months">6 Months</option>
+          <option value="12_months">1 Year</option>
+        </select>
+      </div>
+    </div>
+    <div class="flex gap-2">
+      <button class="btn btn-ghost" onclick="closeModal('addProductModal')" style="flex:1">Cancel</button>
+      <button class="btn btn-primary" onclick="addProduct()" style="flex:2">+ Add Product</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Product Modal -->
+<div class="modal-overlay" id="editProductModal">
+  <div class="modal" style="width:640px">
+    <div class="modal-title">✏️ Edit Product</div>
+    <input type="hidden" id="ePid">
+    <div class="grid-2 mb-4" style="gap:12px">
+      <div class="form-group"><label class="form-label">Product Name *</label><input class="form-input" id="ePName"></div>
+      <div class="form-group"><label class="form-label">Barcode</label><input class="form-input" id="ePBarcode"><div id="ePBarcodeHelp" class="text-xs text-muted" style="margin-top:4px"></div></div>
+      <div class="form-group"><label class="form-label">Category</label>
+        <select data-custom-select class="form-select" data-custom-select-search="true" id="ePCategory">
+          <option value="">— Select —</option>
+          {% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Supplier</label>
+        <select data-custom-select class="form-select" data-custom-select-search="true" id="ePSupplier">
+          <option value="">— Select —</option>
+          {% for s in suppliers %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Product Type *</label>
+        <select data-custom-select class="form-select" id="ePProductType">
+          <option value="normal">Normal Product</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Buy Price (LKR)</label><input class="form-input" id="ePBuyPrice" type="number" min="0" step="0.01"></div>
+      <div class="form-group"><label class="form-label">Sell Price (LKR) *</label><input class="form-input" id="ePSellPrice" type="number" min="0" step="0.01"></div>
+      <div class="form-group"><label class="form-label">Wholesale Price (LKR)</label><input class="form-input" id="ePWsPrice" type="number" min="0" step="0.01"></div>
+      <div class="form-group"><label class="form-label">Stock Qty</label><input class="form-input" id="ePStock" type="number" min="0"></div>
+      <div class="form-group"><label class="form-label">Low Stock Alert</label><input class="form-input" id="ePLowStock" type="number" min="0"></div>
+      <div class="form-group"><label class="form-label">Barcode Type</label>
+        <select data-custom-select class="form-select" id="ePBarcodeType" onchange="toggleEditWeightField()">
+          <option value="normal">Normal</option>
+          <option value="weight">Weight (per kg)</option>
+        </select>
+      </div>
+      <div class="form-group" id="ePricePerKgField" style="display:none">
+        <label class="form-label">Price per KG (LKR)</label><input class="form-input" id="ePPricePerKg" type="number" min="0" step="0.01">
+      </div>
+      <div class="form-group"><label class="form-label">Rack Number</label><input class="form-input" id="ePRack" placeholder="e.g. A1"></div>
+      <div class="form-group"><label class="form-label">Section Number</label><input class="form-input" id="ePSection" placeholder="e.g. S3"></div>
+      <div class="form-group" style="grid-column:span 2">
+        <label class="form-label">🛡️ Warranty Period</label>
+        <select data-custom-select class="form-select" id="ePWarranty">
+          <option value="none">No Warranty</option>
+          <option value="7_days">7 Days</option>
+          <option value="14_days">14 Days</option>
+          <option value="1_month">1 Month</option>
+          <option value="3_months">3 Months</option>
+          <option value="6_months">6 Months</option>
+          <option value="12_months">1 Year</option>
+        </select>
+      </div>
+    </div>
+    <div class="flex gap-2">
+      <button class="btn btn-ghost" onclick="closeModal('editProductModal')" style="flex:1">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEdit()" style="flex:2">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Manage Categories Modal -->
+<div class="modal-overlay" id="manageCatModal">
+  <div class="modal" style="width:580px">
+    <div class="flex items-center justify-between mb-4">
+      <div class="modal-title" style="margin-bottom:0">🏷️ Manage Categories</div>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('manageCatModal')">✕</button>
+    </div>
+    <!-- Add new category form -->
+    <div style="background:var(--stat);border-radius:12px;padding:14px 16px;margin-bottom:16px">
+      <div class="form-label" style="margin-bottom:10px">ADD NEW CATEGORY</div>
+      <div class="flex gap-2">
+        <input class="form-input" id="newCatName" placeholder="Category name *" style="flex:1">
+        <input class="form-input" id="newCatDesc" placeholder="Description (optional)" style="flex:1">
+        <button class="btn btn-primary" onclick="addCategory()" style="white-space:nowrap">+ Add</button>
+      </div>
+    </div>
+    <!-- Live category list -->
+    <div id="catManageList" style="max-height:380px;overflow-y:auto">
+      <div style="text-align:center;padding:20px;color:var(--muted);font-size:13px">Loading…</div>
+    </div>
+    <div style="margin-top:14px">
+      <button class="btn btn-ghost btn-full" onclick="closeModal('manageCatModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Category Modal -->
+<div class="modal-overlay" id="editCatModal">
+  <div class="modal" style="width:400px">
+    <div class="modal-title">✏️ Edit Category</div>
+    <input type="hidden" id="editCatId">
+    <div class="form-group mb-3">
+      <label class="form-label">Category Name *</label>
+      <input class="form-input" id="editCatName" placeholder="Category name">
+    </div>
+    <div class="form-group mb-4">
+      <label class="form-label">Description</label>
+      <input class="form-input" id="editCatDesc" placeholder="Description (optional)">
+    </div>
+    <div class="flex gap-2">
+      <button class="btn btn-ghost" onclick="closeModal('editCatModal')" style="flex:1">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCatEdit()" style="flex:1">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+function filterTable() {
+  const q = document.getElementById('prodSearch').value.toLowerCase();
+  document.querySelectorAll('#prodTable tbody tr').forEach(r => {
+    const name = r.dataset.name || '';
+    const bc   = r.dataset.barcode || '';
+    r.style.display = (name.includes(q) || bc.includes(q)) ? '' : 'none';
+  });
+}
+
+function toggleWeightField() {
+  document.getElementById('pricePerKgField').style.display =
+    document.getElementById('pBarcodeType').value === 'weight' ? 'block' : 'none';
+}
+function toggleEditWeightField() {
+  document.getElementById('ePricePerKgField').style.display =
+    document.getElementById('ePBarcodeType').value === 'weight' ? 'block' : 'none';
+}
+
+let barcodeValidationTimer = null;
+async function validateBarcodeInput(inputId, helpId, excludeProductId = null) {
+  const input = document.getElementById(inputId);
+  const help = document.getElementById(helpId);
+  if (!input || !help) return true;
+  const barcode = (input.value || '').trim();
+  if (!barcode) { help.textContent = ''; return true; }
+  try {
+    const params = new URLSearchParams({ barcode });
+    if (excludeProductId) params.set('exclude_product_id', String(excludeProductId));
+    const res = await fetch(`/api/barcode/validate?${params.toString()}`);
+    const data = await res.json();
+    const available = !!data.available;
+    help.textContent = available ? '✅ Barcode is available.' : '❌ Barcode is already used by another product.';
+    help.style.color = available ? 'var(--success)' : 'var(--danger)';
+    return available;
+  } catch (_error) {
+    help.textContent = '⚠ Barcode validation unavailable.';
+    help.style.color = 'var(--warning)';
+    return true;
+  }
+}
+
+function wireBarcodeValidation(inputId, helpId, excludeProductIdProvider = null) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  input.addEventListener('input', () => {
+    clearTimeout(barcodeValidationTimer);
+    barcodeValidationTimer = setTimeout(() => {
+      const exclude = excludeProductIdProvider ? excludeProductIdProvider() : null;
+      validateBarcodeInput(inputId, helpId, exclude);
+    }, 250);
+  });
+}
+
+// Event delegation for edit buttons — avoids inline JSON encoding issues
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('prodTable').addEventListener('click', async function(e) {
+    const btn = e.target.closest('.edit-product-btn');
+    if (!btn) return;
+    const pid = btn.dataset.pid;
+    if (!pid) return;
+    btn.textContent = '…';
+    btn.disabled = true;
+    try {
+      const res = await fetch(`/api/products/${pid}`, {
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const p = await res.json();
+      editProduct(p);
+    } catch(err) {
+      toast('Failed to load product: ' + err.message, 'error');
+    } finally {
+      btn.textContent = 'Edit';
+      btn.disabled = false;
+    }
+  });
+
+  const catManageList = document.getElementById('catManageList');
+  if (catManageList) {
+    catManageList.addEventListener('click', async (e) => {
+      const delBtn = e.target.closest('button[data-action="delete-category"]');
+      if (!delBtn) return;
+      const catId = delBtn.dataset.categoryId;
+      const catName = delBtn.dataset.categoryName || 'this category';
+      if (!catId) return;
+      await deleteCategoryUI(catId, catName, delBtn);
+    });
+  }
+
+  document.querySelectorAll('.delete-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.id;
+      if (!id) return;
+      const confirmed = await AppDialog.confirm('Are you sure you want to delete this product?', { title: 'Delete product', confirmText: 'Delete', variant: 'danger' });
+      if (!confirmed) return;
+
+      btn.disabled = true;
+      const originalText = btn.textContent;
+      btn.textContent = 'Deleting...';
+
+      try {
+        const response = await fetch(`/api/products/${id}`, { method: 'DELETE' });
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || data.message || 'Failed to delete product');
+        }
+
+        const row = btn.closest('tr');
+        if (row) {
+          row.remove();
+        } else {
+          location.reload();
+        }
+        toast('Product deleted successfully', 'success');
+      } catch (error) {
+        await AppDialog.alert(error.message || 'Failed to delete product', { title: 'Delete failed', variant: 'danger' });
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
+    });
+  });
+
+  wireBarcodeValidation('pBarcode', 'pBarcodeHelp');
+  wireBarcodeValidation('ePBarcode', 'ePBarcodeHelp', () => document.getElementById('ePid').value || null);
+  const initialQuery = new URLSearchParams(window.location.search).get('q');
+  if (initialQuery) {
+    document.getElementById('prodSearch').value = initialQuery;
+    filterTable();
+  }
+});
+
+async function addProduct() {
+  const name = document.getElementById('pName').value.trim();
+  const sell = parseFloat(document.getElementById('pSellPrice').value);
+  if (!name)          { toast('Product name is required', 'error'); return; }
+  if (isNaN(sell) || sell < 0) { toast('Sell price must be a valid non-negative number', 'error'); return; }
+  if (!await validateBarcodeInput('pBarcode', 'pBarcodeHelp')) { toast('Please use a unique barcode', 'error'); return; }
+  const data = {
+    name, barcode: document.getElementById('pBarcode').value,
+    category_id: document.getElementById('pCategory').value || null,
+    supplier_id:  document.getElementById('pSupplier').value || null,
+    buy_price:  parseFloat(document.getElementById('pBuyPrice').value)  || 0,
+    sell_price: sell,
+    wholesale_price: parseFloat(document.getElementById('pWsPrice').value)  || 0,
+    stock_qty:  parseInt(document.getElementById('pStock').value)    || 0,
+    low_stock_lvl: parseInt(document.getElementById('pLowStock').value) || 10,
+    barcode_type: document.getElementById('pBarcodeType').value,
+    price_per_kg: parseFloat(document.getElementById('pPricePerKg').value) || 0,
+    rack_number: document.getElementById('pRack').value,
+    section_number: document.getElementById('pSection').value,
+    warranty_period: document.getElementById('pWarranty').value,
+    product_type: document.getElementById('pProductType').value,
+  };
+  const res = await api('/api/products', { method: 'POST', body: data });
+  if (res && res.id) { toast('Product added!', 'success'); setTimeout(() => location.reload(), 800); }
+  else toast(res?.error || 'Error adding product', 'error');
+}
+
+function editProduct(p) {
+  document.getElementById('ePid').value        = p.id;
+  document.getElementById('ePName').value      = p.name;
+  document.getElementById('ePBarcode').value   = p.barcode || '';
+  document.getElementById('ePBuyPrice').value  = p.buy_price;
+  document.getElementById('ePSellPrice').value = p.sell_price;
+  document.getElementById('ePWsPrice').value   = p.wholesale_price || 0;
+  document.getElementById('ePStock').value     = p.stock_qty;
+  document.getElementById('ePLowStock').value  = p.low_stock_lvl;
+  document.getElementById('ePBarcodeType').value = p.barcode_type || 'normal';
+  document.getElementById('ePPricePerKg').value  = p.price_per_kg || 0;
+  document.getElementById('ePRack').value    = p.rack_number || '';
+  document.getElementById('ePSection').value = p.section_number || '';
+  document.getElementById('ePCategory').value  = p.category_id || '';
+  document.getElementById('ePSupplier').value  = p.supplier_id  || '';
+  document.getElementById('ePWarranty').value  = p.warranty_period || 'none';
+  document.getElementById('ePProductType').value = p.product_type || (p.is_imei_tracked ? 'imei' : 'normal');
+  toggleEditWeightField();
+  ['ePCategory', 'ePSupplier', 'ePBarcodeType', 'ePWarranty', 'ePProductType'].forEach(id => {
+    const select = document.getElementById(id);
+    if (select) CustomSelect.refresh(select);
+  });
+  openModal('editProductModal');
+}
+
+async function saveEdit() {
+  const pid  = document.getElementById('ePid').value;
+  const name = document.getElementById('ePName').value.trim();
+  const sell = parseFloat(document.getElementById('ePSellPrice').value);
+  if (!name)          { toast('Product name is required', 'error'); return; }
+  if (isNaN(sell) || sell < 0) { toast('Sell price must be a valid non-negative number', 'error'); return; }
+  if (!await validateBarcodeInput('ePBarcode', 'ePBarcodeHelp', pid)) { toast('Please use a unique barcode', 'error'); return; }
+  const data = {
+    name:         name,
+    barcode:      document.getElementById('ePBarcode').value,
+    category_id:  document.getElementById('ePCategory').value || null,
+    supplier_id:  document.getElementById('ePSupplier').value || null,
+    buy_price:    parseFloat(document.getElementById('ePBuyPrice').value)  || 0,
+    sell_price:   parseFloat(document.getElementById('ePSellPrice').value) || 0,
+    wholesale_price: parseFloat(document.getElementById('ePWsPrice').value) || 0,
+    stock_qty:    parseInt(document.getElementById('ePStock').value)    || 0,
+    low_stock_lvl: parseInt(document.getElementById('ePLowStock').value) || 10,
+    barcode_type: document.getElementById('ePBarcodeType').value,
+    price_per_kg: parseFloat(document.getElementById('ePPricePerKg').value) || 0,
+    rack_number: document.getElementById('ePRack').value,
+    section_number: document.getElementById('ePSection').value,
+    warranty_period: document.getElementById('ePWarranty').value,
+    product_type: document.getElementById('ePProductType').value,
+  };
+  const res = await api(`/api/products/${pid}`, { method: 'PUT', body: data });
+  if (res && res.id) { toast('Product updated!', 'success'); setTimeout(() => location.reload(), 800); }
+  else toast(res?.error || 'Error updating product', 'error');
+}
+
+// ── Category Management ───────────────────────────────────────────────────────
+
+/** Open the Manage Categories modal and load the current list from server. */
+function openManageCatModal() {
+  loadCategoryList();
+  openModal('manageCatModal');
+}
+
+/** Fetch categories from API and render the management list. */
+async function loadCategoryList() {
+  const list = document.getElementById('catManageList');
+  if (list) list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);font-size:13px">Loading…</div>';
+  const cats = await api('/api/categories');
+  if (!list) return;
+  if (!cats || !cats.length) {
+    list.innerHTML = '<div class="empty-state"><div class="empty-icon">🏷️</div><div>No categories yet</div></div>';
+    return;
+  }
+  list.innerHTML = cats.map(c => `
+    <div style="background:var(--stat);border-radius:10px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-weight:700;font-size:14px">${escHtml(c.name)}</div>
+        ${c.description ? `<div class="text-muted text-xs">${escHtml(c.description)}</div>` : ''}
+      </div>
+      <div class="flex gap-2">
+        <button class="btn btn-ghost btn-sm" onclick="openEditCat(${c.id})">Edit</button>
+        <button class="btn btn-sm" style="background:rgba(239,68,68,.1);color:var(--danger)"
+                data-action="delete-category" data-category-id="${c.id}" data-category-name="${escHtml(c.name)}">Delete</button>
+      </div>
+    </div>`).join('');
+  // Cache categories for the edit form
+  window._catCache = {};
+  cats.forEach(c => { window._catCache[c.id] = c; });
+}
+
+/** Open the edit form pre-filled for the given category ID. */
+function openEditCat(id) {
+  const c = (window._catCache || {})[id];
+  if (!c) { toast('Category not found', 'error'); return; }
+  document.getElementById('editCatId').value   = c.id;
+  document.getElementById('editCatName').value = c.name;
+  document.getElementById('editCatDesc').value = c.description || '';
+  openModal('editCatModal');
+}
+
+/** Add a new category. */
+async function addCategory() {
+  const name = document.getElementById('newCatName').value.trim();
+  const desc = document.getElementById('newCatDesc').value.trim();
+  if (!name) { toast('Category name is required', 'error'); return; }
+  const res = await api('/api/categories', { method: 'POST', body: { name, description: desc } });
+  if (res && res.id) {
+    toast(`Category "${res.name}" added!`, 'success');
+    document.getElementById('newCatName').value = '';
+    document.getElementById('newCatDesc').value = '';
+    loadCategoryList();
+  } else {
+    toast(res?.error || res?.msg || 'Error adding category', 'error');
+  }
+}
+
+/** Save edits to an existing category. */
+async function saveCatEdit() {
+  const id   = document.getElementById('editCatId').value;
+  const name = document.getElementById('editCatName').value.trim();
+  const desc = document.getElementById('editCatDesc').value.trim();
+  if (!name) { toast('Category name is required', 'error'); return; }
+  const res = await api(`/api/categories/${id}`, { method: 'PUT', body: { name, description: desc } });
+  if (res && res.id) {
+    toast(`Category updated to "${res.name}"`, 'success');
+    closeModal('editCatModal');
+    loadCategoryList();
+  } else {
+    toast(res?.msg || 'Error updating category', 'error');
+  }
+}
+
+/** Delete a category (will fail server-side if products are linked). */
+async function deleteCategoryUI(id, name, buttonEl = null) {
+  const confirmed = await AppDialog.confirm(`Delete category "${name}"?\nProducts in this category will not be deleted, but will lose their category.`, {
+    title: 'Delete category',
+    confirmText: 'Delete',
+    variant: 'danger'
+  });
+  if (!confirmed) return;
+
+  if (buttonEl) {
+    buttonEl.disabled = true;
+    buttonEl.textContent = 'Deleting...';
+  }
+
+  try {
+    const res = await api(`/api/categories/${id}`, { method: 'DELETE' });
+    if (res && res.ok) {
+      toast(`Category "${name}" deleted`, 'success');
+      await loadCategoryList();
+      return;
+    }
+
+    const message = (res?.msg || '').includes('active products')
+      ? 'This category cannot be deleted because products are still assigned to it.'
+      : (res?.msg || 'Error deleting category');
+    await AppDialog.alert(message, { title: 'Cannot delete category', variant: 'danger' });
+  } finally {
+    if (buttonEl && document.body.contains(buttonEl)) {
+      buttonEl.disabled = false;
+      buttonEl.textContent = 'Delete';
+    }
+  }
+}
+
+/** Simple HTML escape to prevent XSS in dynamically-built HTML. */
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+{% endblock %}

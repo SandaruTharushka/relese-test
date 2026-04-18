@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Service Receipt — {{ job.job_number }}</title>
+  <style>
+    :root {
+      --ink: #111827; --muted: #6b7280; --line: #d1d5db;
+      --green: #065f46; --red: #b91c1c; --blue: #1d4ed8;
+      --surface: #f9fafb; --card: #fff;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--surface); font-family: 'Segoe UI', Arial, sans-serif; color: var(--ink); }
+
+    /* ── Action bar (hidden on print) ─────────── */
+    .action-bar {
+      background: #111827; color: #fff; padding: 10px 20px;
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .action-bar .title { font-weight: 700; font-size: 15px; flex: 1; min-width: 180px; }
+    .action-bar .subtitle { font-size: 12px; color: #9ca3af; }
+    .btn-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .btn { border: none; border-radius: 6px; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: opacity .15s; }
+    .btn:hover { opacity: .85; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-primary  { background: #6366f1; color: #fff; }
+    .btn-ghost    { background: #374151; color: #fff; }
+    .btn-success  { background: #059669; color: #fff; }
+    .btn-danger   { background: #dc2626; color: #fff; }
+    .copies-input { background: #374151; border: 1px solid #4b5563; color: #fff; border-radius: 6px; padding: 7px 10px; font-size: 13px; width: 60px; }
+
+    /* ── Status toast ────────────────────────── */
+    #printStatus {
+      display: none; margin: 0 20px; padding: 10px 16px; border-radius: 6px;
+      font-size: 13px; font-weight: 600; align-items: center; gap: 8px;
+    }
+    #printStatus.show { display: flex; }
+    #printStatus.ok   { background: #d1fae5; color: #065f46; }
+    #printStatus.err  { background: #fee2e2; color: #b91c1c; }
+    #printStatus.info { background: #dbeafe; color: #1e40af; }
+
+    /* ── Receipt card ────────────────────────── */
+    @page { size: {{ paper_width or '80mm' }} auto; margin: 4mm; }
+    .page-wrap { padding: 20px; display: flex; justify-content: center; }
+    .receipt-shell { width: {{ paper_width or '80mm' }}; }
+    .receipt {
+      background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+      padding: 12px 10px; font-size: 11.5px; box-shadow: 0 2px 8px rgba(0,0,0,.06);
+    }
+    .center { text-align: center; }
+    .store-name { font-size: 14px; font-weight: 800; letter-spacing: .04em; text-align: center; }
+    .store-sub { font-size: 11px; color: var(--muted); text-align: center; margin: 1px 0; }
+    .receipt-title { font-size: 12px; font-weight: 800; letter-spacing: .1em; text-align: center; margin: 6px 0; }
+    .sep { border: none; border-top: 1px dashed #111; margin: 7px 0; }
+    .row { display: flex; justify-content: space-between; gap: 6px; margin: 3px 0; line-height: 1.4; }
+    .row .lbl { color: var(--muted); white-space: nowrap; }
+    .row .val { font-weight: 600; text-align: right; word-break: break-word; max-width: 60%; }
+    .reg-no {
+      display: inline-block; border: 2px solid #000; border-radius: 3px;
+      padding: 3px 10px; font-family: monospace; font-size: 14px;
+      font-weight: 800; letter-spacing: 3px; margin: 6px 0;
+    }
+    .issue-label { font-weight: 700; margin: 4px 0 2px; }
+    .issue-text { line-height: 1.45; color: #374151; }
+    table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+    th, td { font-size: 10.5px; padding: 3px 0; border-bottom: 1px dashed var(--line); }
+    th { text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+    th:last-child, td:last-child { text-align: right; }
+    .total-row { font-size: 13px; font-weight: 800; border-top: 1.5px solid #000; padding-top: 5px; margin-top: 5px; }
+    .balance-row { color: var(--red); font-weight: 800; }
+    .paid-badge { color: var(--green); font-weight: 800; font-size: 12px; text-align: center; margin-top: 4px; }
+    .footer-line { font-size: 10px; color: var(--muted); text-align: center; margin: 2px 0; }
+
+    @media print {
+      body { background: #fff; }
+      .action-bar, #printStatus, .no-print { display: none !important; }
+      .page-wrap { padding: 0; }
+      .receipt { border: none; border-radius: 0; box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Action bar ─────────────────────────────────────── -->
+<div class="action-bar no-print">
+  <div>
+    <div class="title">🧾 Service Receipt</div>
+    <div class="subtitle">{{ job.job_number }} · {{ job.status | replace('_',' ') | title }}</div>
+  </div>
+  <div class="btn-bar">
+    <label style="color:#9ca3af;font-size:12px;font-weight:600">Copies</label>
+    <input id="copiesInput" type="number" class="copies-input" value="1" min="1" max="5" />
+    <button id="btnThermal" class="btn btn-primary" onclick="printThermal()">
+      🖨 Print on Thermal Printer
+    </button>
+    <button class="btn btn-ghost" onclick="window.print()">
+      🌐 Print / Save PDF
+    </button>
+    <button class="btn btn-ghost" onclick="window.close()">✕ Close</button>
+  </div>
+</div>
+
+<!-- ── Status toast ───────────────────────────────────── -->
+<div id="printStatus"></div>
+
+<!-- ── Receipt preview ───────────────────────────────── -->
+<div class="page-wrap">
+  <div class="receipt-shell">
+    <div class="receipt">
+
+      <!-- Store header -->
+      <div class="store-name">{{ store.name }}</div>
+      {% if store.branch %}<div class="store-sub">{{ store.branch }}</div>{% endif %}
+      {% if store.address %}<div class="store-sub">{{ store.address }}</div>{% endif %}
+      {% if store.phone %}<div class="store-sub">Tel: {{ store.phone }}</div>{% endif %}
+      {% if store.email %}<div class="store-sub">{{ store.email }}</div>{% endif %}
+
+      <hr class="sep" />
+      <div class="receipt-title">SERVICE RECEIPT</div>
+      <hr class="sep" />
+
+      <!-- Job info -->
+      <div class="row"><span class="lbl">Job #</span><span class="val">{{ job.job_number }}</span></div>
+      {% if job.service_type %}
+      <div class="row"><span class="lbl">Service Type</span><span class="val">{{ job.service_type | title }}</span></div>
+      {% endif %}
+      <div class="row"><span class="lbl">Received</span><span class="val">{{ job.received_date.strftime('%Y-%m-%d %H:%M') if job.received_date else '—' }}</span></div>
+      {% if job.completed_date %}
+      <div class="row"><span class="lbl">Completed</span><span class="val">{{ job.completed_date.strftime('%Y-%m-%d %H:%M') }}</span></div>
+      {% endif %}
+      <div class="row"><span class="lbl">Status</span><span class="val">{{ job.status | replace('_',' ') | title }}</span></div>
+      <div class="row"><span class="lbl">Technician</span><span class="val">{{ job.technician.full_name if job.technician else cashier_name }}</span></div>
+
+      <hr class="sep" />
+
+      <!-- Customer -->
+      <div class="row"><span class="lbl">Customer</span><span class="val">{{ job.customer_name or (job.customer.name if job.customer else 'Walk-in') }}</span></div>
+      <div class="row"><span class="lbl">Phone</span><span class="val">{{ job.customer_phone or (job.customer.phone if job.customer else '—') }}</span></div>
+
+      <hr class="sep" />
+
+      <!-- Vehicle -->
+      {% if job.vehicle_reg_no %}
+      <div class="center"><span class="reg-no">{{ job.vehicle_reg_no }}</span></div>
+      {% endif %}
+      <div class="row"><span class="lbl">Vehicle</span><span class="val">{{ [job.vehicle_year|string if job.vehicle_year, job.vehicle_make, job.vehicle_model] | select | join(' ') or '—' }}</span></div>
+      {% if job.vehicle_color %}<div class="row"><span class="lbl">Colour</span><span class="val">{{ job.vehicle_color }}</span></div>{% endif %}
+      {% if job.odometer_in %}<div class="row"><span class="lbl">Odo In</span><span class="val">{{ '{:,}'.format(job.odometer_in) }} km</span></div>{% endif %}
+      {% if job.odometer_out %}<div class="row"><span class="lbl">Odo Out</span><span class="val">{{ '{:,}'.format(job.odometer_out) }} km</span></div>{% endif %}
+
+      <hr class="sep" />
+
+      <!-- Issue & Diagnosis -->
+      <div class="issue-label">Issue Reported</div>
+      <div class="issue-text">{{ job.issue_reported or '—' }}</div>
+      {% if job.diagnosis %}
+      <div class="issue-label" style="margin-top:6px">Work Done</div>
+      <div class="issue-text">{{ job.diagnosis }}</div>
+      {% endif %}
+
+      <!-- Parts -->
+      {% if job.parts %}
+      <hr class="sep" />
+      <div style="font-weight:700;margin-bottom:3px">Parts &amp; Materials</div>
+      <table>
+        <thead><tr><th style="text-align:left">Item</th><th>Qty</th><th>Total</th></tr></thead>
+        <tbody>
+          {% for part in job.parts %}
+          <tr>
+            <td>{{ part.part_name }}</td>
+            <td style="text-align:center">{{ part.quantity }}</td>
+            <td>LKR {{ '%.2f' | format(part.total | float) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+
+      <!-- Totals -->
+      <hr class="sep" />
+      <div class="row"><span class="lbl">Parts Total</span><span class="val">LKR {{ '%.2f' | format([0, payment.total_amount | float - job.labour_charge | float] | max) }}</span></div>
+      <div class="row"><span class="lbl">Labour Charge</span><span class="val">LKR {{ '%.2f' | format(job.labour_charge | float) }}</span></div>
+      <div class="row total-row"><span>TOTAL</span><span>LKR {{ '%.2f' | format(payment.total_amount | float) }}</span></div>
+      <div class="row"><span class="lbl">Advance Paid</span><span class="val">LKR {{ '%.2f' | format(payment.advance_paid | float) }}</span></div>
+      <div class="row"><span class="lbl">Additional Paid</span><span class="val">LKR {{ '%.2f' | format(payment.additional_paid | float) }}</span></div>
+
+      {% if payment.remaining_balance | float > 0 %}
+      <div class="row balance-row">
+        <span>BALANCE DUE</span><span>LKR {{ '%.2f' | format(payment.remaining_balance | float) }}</span>
+      </div>
+      {% else %}
+      <div class="paid-badge">✓ FULLY PAID</div>
+      {% endif %}
+
+      <!-- Payment breakdown -->
+      {% if payment.payments %}
+      <hr class="sep" />
+      <div style="font-weight:700;margin-bottom:3px">Payment Details</div>
+      {% for p in payment.payments %}
+      <div class="row" style="color:var(--muted)">
+        <span>{{ p.payment_date.strftime('%m-%d %H:%M') if p.payment_date else '—' }} · {{ (p.method or 'cash') | replace('_',' ') | title }}</span>
+        <span class="val">LKR {{ '%.2f' | format(p.amount | float) }}</span>
+      </div>
+      {% endfor %}
+      {% endif %}
+
+      <hr class="sep" />
+      <div class="footer-line">Thank you for choosing {{ store.name }}!</div>
+      <div class="footer-line">Please keep this receipt for your records.</div>
+      <div class="footer-line" style="margin-top:6px">Printed: <span id="printedAt"></span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ── Timestamp ─────────────────────────────────
+  document.getElementById('printedAt').textContent = new Date().toLocaleString('en-LK');
+
+  // ── Show status message ───────────────────────
+  function showStatus(msg, type = 'info') {
+    const el = document.getElementById('printStatus');
+    el.textContent = msg;
+    el.className = 'show ' + type;
+    el.style.display = 'flex';
+    if (type === 'ok') {
+      setTimeout(() => { el.style.display = 'none'; }, 5000);
+    }
+  }
+
+  // ── Thermal print ─────────────────────────────
+  async function printThermal() {
+    const btn = document.getElementById('btnThermal');
+    const copies = Math.max(1, Math.min(5, parseInt(document.getElementById('copiesInput').value) || 1));
+    btn.disabled = true;
+    btn.textContent = '⏳ Sending…';
+    showStatus('Sending to thermal printer…', 'info');
+    try {
+      const res = await fetch('/api/printing/receipt/print-job', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_id: {{ job.id }}, copies }),
+      });
+      const d = await res.json();
+      if (d.ok) {
+        showStatus(`✅ Receipt sent to printer${d.target ? ' (' + d.target + ')' : ''}. Copies: ${copies}`, 'ok');
+      } else {
+        const hint = d.code === 'PRINTER_NOT_CONFIGURED'
+          ? ' — No thermal printer configured in Settings.'
+          : d.code === 'PRINTER_OFFLINE'
+          ? ' — Printer appears offline. Check connection.'
+          : '';
+        showStatus(`❌ ${d.msg || d.error || 'Print failed'}${hint}`, 'err');
+      }
+    } catch (e) {
+      showStatus('❌ Network error: ' + e.message, 'err');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '🖨 Print on Thermal Printer';
+    }
+  }
+
+  // ── Auto-print on load ────────────────────────
+  window.addEventListener('load', () => {
+    {% if auto_print %}
+    // Auto-trigger thermal if printer is likely configured, else browser print
+    fetch('/api/printing/receipt/status')
+      .then(r => r.json())
+      .then(d => {
+        if (d.receipt && d.receipt.connected) {
+          printThermal();
+        } else {
+          setTimeout(() => { window.focus(); window.print(); }, 200);
+        }
+      })
+      .catch(() => {
+        setTimeout(() => { window.focus(); window.print(); }, 200);
+      });
+    {% endif %}
+  });
+
+  window.addEventListener('afterprint', () => {
+    {% if auto_print %}
+    try { window.close(); } catch (_) {}
+    {% endif %}
+  });
+</script>
+</body>
+</html>

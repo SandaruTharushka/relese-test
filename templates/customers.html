@@ -1,0 +1,350 @@
+{% extends "base.html" %}
+{% from "sidebar.html" import sidebar with context %}
+{% block title %} — Customers{% endblock %}
+{% block body %}
+<div class="app-layout">
+  {{ sidebar('customers') }}
+  <div class="main-area">
+    <div class="topbar">
+      <div>
+        <div style="font-size:20px;font-weight:700">👤 Customer CRM</div>
+        <div style="font-size:13px;color:var(--muted)">Full customer history, credit tracking &amp; profile management</div>
+      </div>
+      <button class="btn btn-primary" onclick="openAddModal()">+ Add Customer</button>
+    </div>
+
+    <div class="content-area" style="display:flex;flex-direction:column;gap:14px">
+
+      <!-- ── Stats bar ─────────────────────────────────────────────── -->
+      <div id="statsBar" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px"></div>
+
+      <!-- ── Search + filter ────────────────────────────────────────── -->
+      <div class="card" style="padding:14px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <input id="searchInput" type="text" class="input" placeholder="🔍  Search by name, phone, or NIC…"
+               style="flex:1;min-width:240px;max-width:400px" oninput="debounceSearch(this.value)">
+        <button class="btn btn-ghost btn-sm" onclick="loadCustomers('')" style="white-space:nowrap">↺ Refresh</button>
+        <div style="margin-left:auto;font-size:12px;color:var(--muted)" id="resultCount"></div>
+      </div>
+
+      <!-- ── Table ─────────────────────────────────────────────────── -->
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="overflow:auto">
+          <table class="table" id="customersTable" style="min-width:900px">
+            <thead>
+              <tr>
+                <th style="width:32px"></th>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>NIC</th>
+                <th style="text-align:center">Vehicles</th>
+                <th style="text-align:center">Jobs</th>
+                <th style="text-align:center">Invoices</th>
+                <th style="text-align:right">Total Spent</th>
+                <th style="text-align:right">Outstanding</th>
+                <th>Last Visit</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="customersTbody">
+              <tr><td colspan="11" style="text-align:center;color:var(--muted);padding:50px">
+                <div style="font-size:28px;margin-bottom:8px">⏳</div>Loading customers…
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Add Customer Modal ─────────────────────────────────────────── -->
+<div class="modal-backdrop" id="addCustomerModal" onclick="closeModal('addCustomerModal')">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:480px">
+    <div class="modal-header">
+      <div class="modal-title">👤 Add Customer</div>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('addCustomerModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div>
+          <label class="label">Name *</label>
+          <input id="newCustName" type="text" class="input" placeholder="Full name">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <label class="label">Phone</label>
+            <input id="newCustPhone" type="text" class="input" placeholder="07X XXXXXXX">
+          </div>
+          <div>
+            <label class="label">NIC</label>
+            <input id="newCustNIC" type="text" class="input" placeholder="XXXXXXXXX(V/X)">
+          </div>
+        </div>
+        <div>
+          <label class="label">Email</label>
+          <input id="newCustEmail" type="email" class="input" placeholder="email@example.com">
+        </div>
+        <div>
+          <label class="label">Address</label>
+          <textarea id="newCustAddress" class="input" rows="2" placeholder="Address..."></textarea>
+        </div>
+        <div>
+          <label class="label">Notes</label>
+          <textarea id="newCustNotes" class="input" rows="2" placeholder="Optional notes..."></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('addCustomerModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCustomer()">Save Customer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Edit Customer Modal ────────────────────────────────────────── -->
+<div class="modal-backdrop" id="editCustomerModal" onclick="closeModal('editCustomerModal')">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:480px">
+    <div class="modal-header">
+      <div class="modal-title">✏️ Edit Customer</div>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('editCustomerModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editCustId">
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div>
+          <label class="label">Name *</label>
+          <input id="editCustName" type="text" class="input" placeholder="Full name">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <label class="label">Phone</label>
+            <input id="editCustPhone" type="text" class="input" placeholder="07X XXXXXXX">
+          </div>
+          <div>
+            <label class="label">NIC</label>
+            <input id="editCustNIC" type="text" class="input" placeholder="XXXXXXXXX(V/X)">
+          </div>
+        </div>
+        <div>
+          <label class="label">Email</label>
+          <input id="editCustEmail" type="email" class="input" placeholder="email@example.com">
+        </div>
+        <div>
+          <label class="label">Address</label>
+          <textarea id="editCustAddress" class="input" rows="2" placeholder="Address..."></textarea>
+        </div>
+        <div>
+          <label class="label">Notes</label>
+          <textarea id="editCustNotes" class="input" rows="2" placeholder="Optional notes..."></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('editCustomerModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="updateCustomer()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<style>
+.cust-row-initials {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), #7C3AED);
+  color: #fff; font-size: 11px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+}
+.cust-stats-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 12px 16px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.cust-stats-lbl { font-size: 11px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.cust-stats-val { font-size: 22px; font-weight: 800; }
+.outstanding-cell { color: var(--danger, #ef4444); font-weight: 700; }
+.owing-badge {
+  display: inline-block;
+  padding: 1px 7px; border-radius: 10px;
+  background: rgba(239,68,68,.12); color: var(--danger, #ef4444);
+  font-size: 10px; font-weight: 800; margin-left: 4px;
+}
+</style>
+<script>
+let allCustomers = [];
+
+function money(v) {
+  return 'LKR ' + parseFloat(v || 0).toLocaleString('en-LK', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escAttr(s) {
+  return String(s || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+function initials(name) {
+  const parts = (name || '').trim().split(/\s+/);
+  return (parts.length >= 2 ? parts[0][0] + parts[parts.length-1][0] : (parts[0] || '?')[0]).toUpperCase();
+}
+
+async function loadCustomers(q = '') {
+  const url = q ? `/api/retail-customers?q=${encodeURIComponent(q)}` : '/api/retail-customers';
+  const res = await fetch(url);
+  const data = await res.json();
+  allCustomers = data.customers || [];
+  renderCustomers(allCustomers);
+  renderStats(allCustomers);
+}
+
+function renderStats(customers) {
+  const total = customers.length;
+  const totalOutstanding = customers.reduce((a, c) => a + (c.outstanding_balance || 0), 0);
+  const totalSpent = customers.reduce((a, c) => a + (c.total_spent || 0), 0);
+  const withDebt = customers.filter(c => (c.outstanding_balance || 0) > 0).length;
+  document.getElementById('statsBar').innerHTML = [
+    `<div class="cust-stats-card"><div class="cust-stats-lbl">Total Customers</div><div class="cust-stats-val">${total}</div></div>`,
+    `<div class="cust-stats-card"><div class="cust-stats-lbl">With Outstanding</div><div class="cust-stats-val" style="color:var(--danger,#ef4444)">${withDebt}</div></div>`,
+    `<div class="cust-stats-card"><div class="cust-stats-lbl">Total Outstanding</div><div class="cust-stats-val" style="color:var(--danger,#ef4444)">${money(totalOutstanding)}</div></div>`,
+    `<div class="cust-stats-card"><div class="cust-stats-lbl">Total Revenue</div><div class="cust-stats-val">${money(totalSpent)}</div></div>`,
+  ].join('');
+}
+
+function renderCustomers(customers) {
+  const tbody = document.getElementById('customersTbody');
+  document.getElementById('resultCount').textContent = customers.length
+    ? `Showing ${customers.length} customer${customers.length !== 1 ? 's' : ''}`
+    : '';
+
+  if (!customers.length) {
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:50px"><div style="font-size:28px;margin-bottom:8px">🔍</div>No customers found</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = customers.map(c => {
+    const hasDebt = (c.outstanding_balance || 0) > 0;
+    return `<tr>
+      <td><div class="cust-row-initials">${initials(c.name)}</div></td>
+      <td>
+        <a href="/customers/${c.id}" style="color:var(--accent);font-weight:700;text-decoration:none">${escHtml(c.name)}</a>
+        ${hasDebt ? `<span class="owing-badge">OWES</span>` : ''}
+        <div style="font-size:11px;color:var(--muted);margin-top:1px">${escHtml(c.customer_code || '')}</div>
+      </td>
+      <td>${escHtml(c.phone || '—')}</td>
+      <td>${escHtml(c.nic || '—')}</td>
+      <td style="text-align:center">${c.vehicles_count || 0}</td>
+      <td style="text-align:center">${c.total_jobs || 0}</td>
+      <td style="text-align:center">${c.total_invoices || 0}</td>
+      <td style="text-align:right">${money(c.total_spent)}</td>
+      <td style="text-align:right${hasDebt ? ';color:var(--danger,#ef4444);font-weight:700' : ''}">${money(c.outstanding_balance)}</td>
+      <td style="white-space:nowrap;font-size:12px;color:var(--muted)">${escHtml(c.last_visit || '—')}</td>
+      <td>
+        <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
+          <a href="/customers/${c.id}" class="btn btn-ghost btn-sm">👁 View</a>
+          <a href="/repairs?prefill_customer=${c.id}" class="btn btn-ghost btn-sm">🔧 Job</a>
+          <a href="/billing?retail_customer_id=${c.id}" class="btn btn-ghost btn-sm">🧾 Sale</a>
+          <button class="btn btn-ghost btn-sm" onclick="openEditModal(${c.id})">✏️</button>
+          <button class="btn btn-ghost btn-sm" style="color:var(--danger,#ef4444)" onclick="deleteCustomer(${c.id}, '${escAttr(c.name)}')">🗑</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+let _searchTimer;
+function debounceSearch(q) {
+  clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(() => loadCustomers(q), 280);
+}
+
+// ── Add Customer ───────────────────────────────────────────────────
+function openAddModal() {
+  ['newCustName','newCustPhone','newCustNIC','newCustEmail','newCustAddress','newCustNotes']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  openModal('addCustomerModal');
+}
+
+async function saveCustomer() {
+  const name = document.getElementById('newCustName').value.trim();
+  if (!name) { toast('Name is required', 'error'); return; }
+  const payload = {
+    name,
+    phone:   document.getElementById('newCustPhone').value.trim(),
+    nic:     document.getElementById('newCustNIC').value.trim(),
+    email:   document.getElementById('newCustEmail').value.trim(),
+    address: document.getElementById('newCustAddress').value.trim(),
+    notes:   document.getElementById('newCustNotes').value.trim(),
+  };
+  const csrf = document.querySelector('meta[name=csrf-token]');
+  const res = await fetch('/api/retail-customers', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(csrf ? {'X-CSRFToken': csrf.content} : {}) },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) { toast(data.error || 'Error saving customer', 'error'); return; }
+  if (data.match_status === 'matched_by_phone') {
+    toast('⚠️ Phone already exists — linked to existing customer profile.', 'warning');
+  } else {
+    toast('Customer saved!', 'success');
+  }
+  closeModal('addCustomerModal');
+  loadCustomers('');
+}
+
+// ── Edit Customer ──────────────────────────────────────────────────
+async function openEditModal(cid) {
+  const res = await fetch(`/api/retail-customers/${cid}`);
+  if (!res.ok) { toast('Failed to load customer', 'error'); return; }
+  const c = await res.json();
+  document.getElementById('editCustId').value      = cid;
+  document.getElementById('editCustName').value    = c.name || '';
+  document.getElementById('editCustPhone').value   = c.phone || '';
+  document.getElementById('editCustNIC').value     = c.nic || '';
+  document.getElementById('editCustEmail').value   = c.email || '';
+  document.getElementById('editCustAddress').value = c.address || '';
+  document.getElementById('editCustNotes').value   = c.notes || '';
+  openModal('editCustomerModal');
+}
+
+async function updateCustomer() {
+  const cid  = document.getElementById('editCustId').value;
+  const name = document.getElementById('editCustName').value.trim();
+  if (!name) { toast('Name is required', 'error'); return; }
+  const payload = {
+    name,
+    phone:   document.getElementById('editCustPhone').value.trim(),
+    nic:     document.getElementById('editCustNIC').value.trim(),
+    email:   document.getElementById('editCustEmail').value.trim(),
+    address: document.getElementById('editCustAddress').value.trim(),
+    notes:   document.getElementById('editCustNotes').value.trim(),
+  };
+  const csrf = document.querySelector('meta[name=csrf-token]');
+  const res = await fetch(`/api/retail-customers/${cid}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...(csrf ? {'X-CSRFToken': csrf.content} : {}) },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) { toast(data.error || 'Error updating customer', 'error'); return; }
+  toast('Customer updated!', 'success');
+  closeModal('editCustomerModal');
+  loadCustomers('');
+}
+
+// ── Delete Customer ────────────────────────────────────────────────
+async function deleteCustomer(cid, name) {
+  if (!confirm(`Deactivate customer "${name}"?\n\nSales and job history will be preserved.`)) return;
+  const csrf = document.querySelector('meta[name=csrf-token]');
+  const res = await fetch(`/api/retail-customers/${cid}`, {
+    method: 'DELETE',
+    headers: csrf ? {'X-CSRFToken': csrf.content} : {},
+  });
+  if (!res.ok) { toast('Error removing customer', 'error'); return; }
+  toast('Customer deactivated.', 'success');
+  loadCustomers('');
+}
+
+loadCustomers('');
+</script>
+{% endblock %}

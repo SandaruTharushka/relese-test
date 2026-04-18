@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+{% from "sidebar.html" import sidebar with context %}
+{% block title %} — Vehicle History{% endblock %}
+{% block body %}
+<div class="app-layout">
+  {{ sidebar('vehicle_history') }}
+  <div class="main-area">
+    <div class="topbar">
+      <div>
+        <div style="font-size:20px;font-weight:700">📋 Vehicle Service History</div>
+        <div style="font-size:13px;color:var(--muted)">Look up full service history by licence plate</div>
+      </div>
+    </div>
+
+    <div class="content-area">
+
+      <!-- Search bar -->
+      <div class="card" style="padding:20px;margin-bottom:16px">
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+          <div style="flex:1;min-width:200px">
+            <label class="label">Licence Plate / Reg. No.</label>
+            <input id="searchInput" type="text" class="input"
+              placeholder="e.g. WP CAB-1234" style="font-size:15px;text-transform:uppercase"
+              onkeydown="if(event.key==='Enter') searchVehicle()">
+          </div>
+          <button class="btn btn-primary" style="height:38px;padding:0 24px" onclick="searchVehicle()">🔍 Search</button>
+          <button class="btn btn-ghost" style="height:38px" onclick="clearSearch()">Clear</button>
+        </div>
+
+        <!-- Suggestions -->
+        <div id="suggestions" style="display:none;margin-top:12px">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;font-weight:600">Matching Vehicles</div>
+          <div id="suggestionsList" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+        </div>
+      </div>
+
+      <!-- Results -->
+      <div id="resultsArea" style="display:none">
+        <!-- Vehicle summary card -->
+        <div class="card" id="vehicleSummaryCard" style="padding:20px;margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="font-size:36px;font-weight:800;font-family:monospace;border:3px solid var(--text);border-radius:6px;padding:6px 20px;letter-spacing:3px" id="regNoBadge">—</div>
+            <div>
+              <div id="vehicleTitle" style="font-size:20px;font-weight:700">—</div>
+              <div id="vehicleSubtitle" style="font-size:13px;color:var(--muted)"></div>
+              <div id="visitCount" style="margin-top:4px"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Timeline -->
+        <div id="historyTimeline"></div>
+      </div>
+
+      <!-- Empty state -->
+      <div id="emptyState" style="display:none;text-align:center;padding:60px;color:var(--muted)">
+        <div style="font-size:48px;margin-bottom:12px">🚗</div>
+        <div style="font-size:16px;font-weight:600">No history found</div>
+        <div style="font-size:13px">No service records for this licence plate.</div>
+      </div>
+
+      <!-- Initial state -->
+      <div id="initialState" style="text-align:center;padding:60px;color:var(--muted)">
+        <div style="font-size:48px;margin-bottom:12px">📋</div>
+        <div style="font-size:16px;font-weight:600">Enter a licence plate to search</div>
+        <div style="font-size:13px">Full service history will appear here</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+let searchTimeout = null;
+
+const STATUS_CONFIG = {
+  received:      { label:'Received',       color:'#3B82F6' },
+  diagnosing:    { label:'Diagnosing',     color:'#8B5CF6' },
+  waiting_parts: { label:'Waiting Parts',  color:'#F59E0B' },
+  in_progress:   { label:'In Progress',    color:'#F97316' },
+  ready:         { label:'Ready ✓',        color:'#10B981' },
+  delivered:     { label:'Delivered',      color:'#6B7280' },
+  cancelled:     { label:'Cancelled',      color:'#EF4444' },
+};
+
+function fmtMoney(v){ return 'LKR '+parseFloat(v||0).toLocaleString('en-LK',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtStatus(s){ const c=STATUS_CONFIG[s]||{label:s,color:'#888'}; return `<span style="background:${c.color}22;color:${c.color};border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600">${c.label}</span>`; }
+
+// Live suggestions while typing
+document.getElementById('searchInput').addEventListener('input', function(){
+  const q = this.value.trim();
+  this.value = this.value.toUpperCase();
+  clearTimeout(searchTimeout);
+  if(q.length < 2){ document.getElementById('suggestions').style.display='none'; return; }
+  searchTimeout = setTimeout(() => loadSuggestions(q), 300);
+});
+
+async function loadSuggestions(q){
+  try{
+    const r = await fetch('/api/vehicles/search?q='+encodeURIComponent(q));
+    const d = await r.json();
+    const list = document.getElementById('suggestionsList');
+    const wrap = document.getElementById('suggestions');
+    if(!d.results||!d.results.length){ wrap.style.display='none'; return; }
+    list.innerHTML = d.results.map(v=>`
+      <button class="btn btn-ghost btn-sm" onclick="selectVehicle('${v.reg_no}')" style="font-family:monospace;font-weight:700;font-size:13px">
+        ${v.reg_no}
+        <span style="font-family:sans-serif;font-weight:400;font-size:11px;color:var(--muted);margin-left:4px">${[v.vehicle_make,v.vehicle_model].filter(Boolean).join(' ')}</span>
+      </button>
+    `).join('');
+    wrap.style.display='block';
+  }catch(e){}
+}
+
+function selectVehicle(reg){
+  document.getElementById('searchInput').value = reg;
+  document.getElementById('suggestions').style.display='none';
+  searchVehicle();
+}
+
+async function searchVehicle(){
+  const reg = (document.getElementById('searchInput').value||'').trim().toUpperCase();
+  if(!reg){ return; }
+  document.getElementById('suggestions').style.display='none';
+  document.getElementById('initialState').style.display='none';
+  document.getElementById('emptyState').style.display='none';
+  document.getElementById('resultsArea').style.display='none';
+  document.getElementById('historyTimeline').innerHTML='<div style="text-align:center;padding:40px;color:var(--muted)">Loading…</div>';
+  document.getElementById('resultsArea').style.display='block';
+
+  try{
+    const [histRes, lastJobRes] = await Promise.all([
+      fetch('/api/vehicles/'+encodeURIComponent(reg)+'/history'),
+      fetch('/api/vehicles/'+encodeURIComponent(reg)+'/last-job'),
+    ]);
+    const histData = await histRes.json();
+    const lastJobData = await lastJobRes.json();
+
+    const history = histData.history || [];
+    if(!history.length){
+      document.getElementById('resultsArea').style.display='none';
+      document.getElementById('emptyState').style.display='block';
+      return;
+    }
+
+    // Summary card
+    document.getElementById('regNoBadge').textContent = reg;
+    if(lastJobData.found){
+      const j = lastJobData.job;
+      document.getElementById('vehicleTitle').textContent = [j.vehicle_year, j.vehicle_make, j.vehicle_model].filter(Boolean).join(' ') || reg;
+      document.getElementById('vehicleSubtitle').textContent = [j.vehicle_color, j.vehicle_vin ? 'VIN: '+j.vehicle_vin : ''].filter(Boolean).join(' · ');
+    }
+    document.getElementById('visitCount').innerHTML = `<span style="background:var(--primary)22;color:var(--primary);border-radius:6px;padding:3px 10px;font-size:13px;font-weight:600">${history.length} service visit${history.length!==1?'s':''}</span>`;
+
+    // Timeline
+    const totalSpend = history.reduce((acc,h)=>acc+parseFloat(h.total_amount||0), 0);
+    document.getElementById('historyTimeline').innerHTML = `
+      <div style="margin-bottom:12px;display:flex;gap:16px;flex-wrap:wrap">
+        <div class="card" style="padding:12px 20px;flex:1;min-width:140px;text-align:center">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:600">Total Visits</div>
+          <div style="font-size:28px;font-weight:800">${history.length}</div>
+        </div>
+        <div class="card" style="padding:12px 20px;flex:1;min-width:140px;text-align:center">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:600">Total Spend</div>
+          <div style="font-size:20px;font-weight:800">${fmtMoney(totalSpend)}</div>
+        </div>
+        <div class="card" style="padding:12px 20px;flex:1;min-width:140px;text-align:center">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:600">First Visit</div>
+          <div style="font-size:15px;font-weight:700">${history[history.length-1]?.service_date||'—'}</div>
+        </div>
+        <div class="card" style="padding:12px 20px;flex:1;min-width:140px;text-align:center">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:600">Last Visit</div>
+          <div style="font-size:15px;font-weight:700">${history[0]?.service_date||'—'}</div>
+        </div>
+      </div>
+      <div style="position:relative">
+        <div style="position:absolute;left:19px;top:0;bottom:0;width:2px;background:var(--border)"></div>
+        ${history.map((h,i)=>`
+          <div style="display:flex;gap:16px;margin-bottom:16px;position:relative">
+            <div style="width:40px;height:40px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;z-index:1;font-size:13px">${history.length-i}</div>
+            <div class="card" style="padding:14px;flex:1">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+                <div>
+                  <div style="font-weight:700;font-size:15px">${h.service_date}</div>
+                  ${h.service_type?`<span style="background:var(--surface-2);color:var(--muted);border-radius:4px;padding:1px 8px;font-size:11px;font-weight:600;text-transform:uppercase">${h.service_type}</span>`:''}
+                </div>
+                <div style="text-align:right">
+                  <div style="font-weight:700;font-size:16px">${fmtMoney(h.total_amount)}</div>
+                  ${h.odometer?`<div style="font-size:11px;color:var(--muted)">Odo: ${parseInt(h.odometer).toLocaleString()} km</div>`:''}
+                </div>
+              </div>
+              <div style="margin-top:8px;font-size:13px;color:var(--muted)">${h.summary||''}</div>
+              <div style="margin-top:8px;display:flex;gap:8px">
+                <a href="/repairs/${h.job_id}/card" target="_blank" class="btn btn-ghost btn-sm" style="font-size:12px">🖨 Job Card</a>
+                <a href="/repairs/${h.job_id}/receipt?auto_print=1" target="_blank" class="btn btn-ghost btn-sm" style="font-size:12px;background:var(--primary);color:#fff">🧾 Receipt</a>
+              </div>
+              <div style="font-size:11px;color:var(--muted);margin-top:4px">Job: ${h.job_number}</div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }catch(e){
+    document.getElementById('historyTimeline').innerHTML=`<div style="color:var(--danger);padding:20px">Failed to load history: ${e}</div>`;
+  }
+}
+
+function clearSearch(){
+  document.getElementById('searchInput').value='';
+  document.getElementById('resultsArea').style.display='none';
+  document.getElementById('emptyState').style.display='none';
+  document.getElementById('suggestions').style.display='none';
+  document.getElementById('initialState').style.display='block';
+}
+</script>
+{% endblock %}

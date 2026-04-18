@@ -1,0 +1,83 @@
+{% macro sidebar(active) %}
+<aside class="sidebar" id="posSidebar">
+  <div class="sidebar-top">
+    <div class="logo">
+      <div class="logo-icon" style="background:linear-gradient(135deg,#F59E0B,#EF4444);font-size:20px">🔧</div>
+      <div class="logo-copy">
+        <div class="logo-text">AutoServ POS</div>
+        <div class="logo-sub">Garage Management System</div>
+      </div>
+    </div>
+
+    <div class="sidebar-header">
+      <button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="Toggle sidebar" onclick="toggleSidebar()">
+        <span class="sidebar-toggle-icon">☰</span>
+        <span class="sidebar-toggle-text">Menu</span>
+      </button>
+    </div>
+  </div>
+
+  <nav class="sidebar-nav" aria-label="Primary navigation">
+    {% set nav_items = [
+      ('dashboard',           'dashboard',        '📊', 'Dashboard'),
+      ('billing',             'billing',          '🧾', 'Billing / Parts Sale'),
+      ('repairs_page',        'repairs',          '🚗', 'Service Jobs'),
+      ('products_page',       'products',         '🔩', 'Parts & Products'),
+      ('inventory',           'inventory',        '🗃️', 'Inventory'),
+      ('customers_page',      'customers',        '👤', 'Customers'),
+      ('vehicle_history_page','vehicle_history',  '📋', 'Vehicle History'),
+      ('returns_page',        'returns',          '🔄', 'Returns'),
+      ('purchases_page',      'purchases',        '🛒', 'Purchases'),
+      ('wholesale',           'wholesale',        '🏪', 'Wholesale / Fleet'),
+      ('reports',             'reports',          '📈', 'Reports'),
+      ('profit_report',       'profit',           '💰', 'Profit Report'),
+      ('brokers_page',        'brokers',          '🤝', 'Brokers'),
+      ('expenses_page',       'expenses',         '💸', 'Expenses'),
+      ('suppliers_page_view', 'suppliers',        '🚚', 'Suppliers'),
+      ('settings',            'settings',         '⚙️', 'Settings'),
+    ] %}
+    {% set _cu = current_user if current_user is defined else None %}
+    {% set _is_cashier = _cu and _cu.is_authenticated and _cu.role in ['Cashier'] %}
+    {% for route, page, icon, label in nav_items %}
+      {% if _is_cashier and page in ['products','reports','settings','wholesale','suppliers','purchases','returns','profit','repairs','vehicle_history','brokers','expenses'] %}
+        {# hidden for cashier #}
+      {% else %}
+        <a href="{{ url_for(route) }}" class="nav-item {{ 'active' if active == page else '' }}">
+          <span class="nav-left">
+            <span class="nav-icon">{{ icon }}</span>
+            <span class="nav-label">{{ label }}</span>
+          </span>
+          {% if page == 'inventory' %}
+            {% set _lsc = g_low_stock_count if g_low_stock_count is defined else 0 %}
+            {% if _lsc > 0 %}
+            <span style="background:var(--danger);color:#fff;border-radius:12px;padding:1px 7px;font-size:10px;font-weight:700;line-height:1.6">{{ _lsc }}</span>
+            {% endif %}
+          {% endif %}
+        </a>
+      {% endif %}
+    {% endfor %}
+  </nav>
+
+  <div class="sidebar-bottom">
+    <div class="user-card">
+      {% set _name = (_cu.full_name if _cu and _cu.is_authenticated else '') %}
+      <div class="flex items-center gap-2 mb-2" style="padding:6px 4px">
+        <div class="user-avatar">
+          {{ _name[:2]|upper if _name else 'US' }}
+        </div>
+        <div class="user-details" style="min-width:0">
+          <div style="font-size:13px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+            {{ _name or 'User' }}
+          </div>
+          <div style="font-size:11px;color:var(--muted)">{{ _cu.role if _cu and _cu.is_authenticated else '' }}</div>
+        </div>
+      </div>
+      <a href="{{ url_for('logout') }}"
+         class="btn btn-sm btn-full"
+         style="background:rgba(239,68,68,.12);color:var(--danger);border:1px solid rgba(239,68,68,.25);justify-content:center;font-size:13px">
+        🚪 Sign Out
+      </a>
+    </div>
+  </div>
+</aside>
+{% endmacro %}

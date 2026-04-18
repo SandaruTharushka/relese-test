@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+{% from "sidebar.html" import sidebar with context %}
+{% block title %} — {{ customer.name }}{% endblock %}
+{% block body %}
+<div class="app-layout">
+  {{ sidebar('wholesale') }}
+  <div class="main-area">
+    <div class="topbar">
+      <div style="display:flex;align-items:center;gap:12px">
+        <a href="{{ url_for('wholesale') }}" class="btn btn-ghost btn-sm">← Back</a>
+        <span style="font-size:18px;font-weight:700">🏪 {{ customer.name }}</span>
+        {% if customer.business %}<span class="badge badge-purple">{{ customer.business }}</span>{% endif %}
+      </div>
+      <div class="flex gap-2">
+        <button class="btn btn-ghost btn-sm" onclick="openModal('editModal')">✏️ Edit</button>
+      </div>
+    </div>
+
+    <div class="page-content fade-in">
+
+      <!-- Balance Banner -->
+      {% if customer.balance < 0 %}
+      <div style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:14px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-weight:800;font-size:16px;color:var(--danger)">⚠️ Outstanding Balance</div>
+          <div style="color:var(--muted);font-size:13px">{{ customer.name }} owes you money</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:28px;font-weight:900;color:var(--danger)">LKR {{ "%.2f"|format(customer.balance|abs) }}</div>
+          <button class="btn btn-danger btn-sm" onclick="openModal('payModal')">💰 Record Payment</button>
+        </div>
+      </div>
+      {% elif customer.balance > 0 %}
+      <div style="background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);border-radius:14px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-weight:800;font-size:16px;color:var(--accent2)">✅ Credit Balance</div>
+          <div style="color:var(--muted);font-size:13px">Overpayment / advance credit</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:28px;font-weight:900;color:var(--accent2)">LKR {{ "%.2f"|format(customer.balance) }}</div>
+        </div>
+      </div>
+      {% else %}
+      <div style="background:rgba(79,108,246,.08);border:1px solid var(--border);border-radius:14px;padding:14px 20px;margin-bottom:20px">
+        <span style="color:var(--muted);font-size:14px">✅ Account is clear — no outstanding balance</span>
+      </div>
+      {% endif %}
+
+      <!-- Stats Row -->
+      <div class="grid-4 mb-6">
+        <div class="stat-card">
+          <div class="text-muted text-xs mb-2">TOTAL PURCHASED</div>
+          <div class="text-xl font-800 text-accent">LKR {{ "%.0f"|format(total_purchased) }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="text-muted text-xs mb-2">TOTAL ORDERS</div>
+          <div class="text-xl font-800">{{ sales|length }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="text-muted text-xs mb-2">CREDIT LIMIT</div>
+          <div class="text-xl font-800">LKR {{ "%.0f"|format(customer.credit_limit) }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="text-muted text-xs mb-2">PHONE</div>
+          <div style="font-size:16px;font-weight:700">{{ customer.phone or '—' }}</div>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="flex gap-2 mb-4" id="tabs">
+        <button class="chip active" onclick="showTab('purchases')">🧾 Purchase History ({{ sales|length }})</button>
+        <button class="chip" onclick="showTab('txns')">💳 Payments & Credits</button>
+      </div>
+
+      <!-- Purchase History -->
+      <div id="tab-purchases">
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr>
+              <th>Invoice</th><th>Date</th><th>Items</th><th>Total</th><th>Status</th>
+            </tr></thead>
+            <tbody>
+              {% for s in sales %}
+              <tr>
+                <td style="font-weight:700;color:var(--accent)">{{ s.invoice_number }}</td>
+                <td class="text-muted text-sm">{{ s.sale_date.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td class="text-sm">{{ s.items|length }} items</td>
+                <td style="font-weight:700">LKR {{ "%.2f"|format(s.total_amount) }}</td>
+                <td><span class="badge badge-success">{{ s.status }}</span></td>
+              </tr>
+              {% else %}
+              <tr><td colspan="5" class="text-muted" style="text-align:center;padding:32px">No purchases yet</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Transactions -->
+      <div id="tab-txns" style="display:none">
+        <div style="margin-bottom:12px;display:flex;justify-content:flex-end">
+          <button class="btn btn-primary btn-sm" onclick="openModal('payModal')">+ Record Payment</button>
+        </div>
+        <div class="table-wrap" id="txnTable">
+          <table class="data-table">
+            <thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Note</th></tr></thead>
+            <tbody id="txnBody">
+              {% for t in transactions %}
+              <tr>
+                <td class="text-muted text-sm">{{ t.date.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td>
+                  {% if t.type == 'payment' %}<span class="badge badge-success">Payment</span>
+                  {% elif t.type == 'sale_credit' %}<span class="badge badge-danger">Sale</span>
+                  {% else %}<span class="badge badge-warning">{{ t.type }}</span>{% endif %}
+                </td>
+                <td style="font-weight:700;color:{% if t.amount > 0 %}var(--accent2){% else %}var(--danger){% endif %}">
+                  {% if t.amount > 0 %}+{% endif %}LKR {{ "%.2f"|format(t.amount) }}
+                </td>
+                <td class="text-muted text-sm">{{ t.note or '—' }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="4" class="text-muted" style="text-align:center;padding:32px">No transactions yet</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Payment Modal -->
+<div class="modal-overlay" id="payModal">
+  <div class="modal" style="width:420px">
+    <div class="modal-title">💰 Record Payment</div>
+    <div class="form-group mb-4">
+      <label class="form-label">Payment Amount (LKR)</label>
+      <div class="flex gap-2">
+        <input class="form-input" id="payAmount" type="number" min="0" step="0.01" placeholder="0.00" style="flex:1">
+        {% if customer.balance < 0 %}
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('payAmount').value='{{ '%.2f'|format(customer.balance|abs) }}'">Fill Balance</button>
+        {% endif %}
+      </div>
+    </div>
+    <div class="form-group mb-4">
+      <label class="form-label">Note (optional)</label>
+      <input class="form-input" id="payNote" placeholder="e.g. Cash received, Bank transfer…">
+    </div>
+    <div class="flex gap-2">
+      <button class="btn btn-ghost" onclick="closeModal('payModal')" style="flex:1">Cancel</button>
+      <button class="btn btn-success" onclick="recordPayment()" style="flex:2">✓ Save Payment</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal" style="width:500px">
+    <div class="modal-title">✏️ Edit Customer</div>
+    <div class="grid-2 mb-4" style="gap:12px">
+      <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="eName" value="{{ customer.name }}"></div>
+      <div class="form-group"><label class="form-label">Business</label><input class="form-input" id="eBusiness" value="{{ customer.business or '' }}"></div>
+      <div class="form-group"><label class="form-label">Phone</label><input class="form-input" id="ePhone" value="{{ customer.phone or '' }}"></div>
+      <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="eEmail" value="{{ customer.email or '' }}"></div>
+      <div class="form-group"><label class="form-label">Credit Limit</label><input class="form-input" id="eCredit" type="number" value="{{ customer.credit_limit or 0 }}"></div>
+    </div>
+    <div class="form-group mb-4"><label class="form-label">Address</label><input class="form-input" id="eAddress" value="{{ customer.address or '' }}"></div>
+    <div class="flex gap-2">
+      <button class="btn btn-ghost" onclick="closeModal('editModal')" style="flex:1">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEdit()" style="flex:2">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+const CID = {{ customer.id }};
+
+function showTab(name) {
+  document.getElementById('tab-purchases').style.display = name === 'purchases' ? 'block' : 'none';
+  document.getElementById('tab-txns').style.display      = name === 'txns'      ? 'block' : 'none';
+  document.querySelectorAll('#tabs .chip').forEach((c, i) => {
+    c.classList.toggle('active', (i === 0 && name === 'purchases') || (i === 1 && name === 'txns'));
+  });
+}
+
+async function recordPayment() {
+  const amount = parseFloat(document.getElementById('payAmount').value);
+  const note   = document.getElementById('payNote').value;
+  if (!amount || amount <= 0) { toast('Enter a valid amount', 'error'); return; }
+  const res = await api(`/api/wholesale-customers/${CID}/payment`, {method:'POST', body:{amount, note}});
+  if (res && res.ok) { toast('Payment recorded!', 'success'); setTimeout(() => location.reload(), 800); }
+  else toast(res?.msg || 'Error', 'error');
+}
+
+async function saveEdit() {
+  const data = {
+    name:         document.getElementById('eName').value,
+    business:     document.getElementById('eBusiness').value,
+    phone:        document.getElementById('ePhone').value,
+    email:        document.getElementById('eEmail').value,
+    credit_limit: parseFloat(document.getElementById('eCredit').value) || 0,
+    address:      document.getElementById('eAddress').value,
+  };
+  const res = await api(`/api/wholesale-customers/${CID}`, {method:'PUT', body:data});
+  if (res && res.id) { toast('Saved!', 'success'); setTimeout(() => location.reload(), 800); }
+  else toast('Error saving', 'error');
+}
+</script>
+{% endblock %}

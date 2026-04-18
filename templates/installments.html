@@ -1,0 +1,466 @@
+{% extends "base.html" %}
+{% from "sidebar.html" import sidebar with context %}
+{% block title %} — Installments{% endblock %}
+{% block body %}
+<div class="app-layout">
+  {{ sidebar('installments') }}
+  <div class="main-area">
+    <div class="topbar" style="justify-content:space-between;gap:12px;align-items:flex-start">
+      <div>
+        <div style="font-size:20px;font-weight:700">💳 Installment Plans</div>
+        <div style="font-size:13px;color:var(--muted)">Complete retail installment lifecycle for device/electronics sales.</div>
+      </div>
+      <button class="btn btn-primary" id="newPlanBtn" onclick="openCreatePlanModal()">Create New Installment Plan</button>
+    </div>
+
+    <div class="content-area" style="display:flex;flex-direction:column;gap:14px">
+      <div class="grid-3" style="grid-template-columns:repeat(6,minmax(140px,1fr));gap:10px">
+        <div class="card stat-card"><div class="stat-label">Active Plans</div><div class="stat-value" id="statPlans">—</div></div>
+        <div class="card stat-card"><div class="stat-label">Due Today</div><div class="stat-value" id="statDueToday">—</div></div>
+        <div class="card stat-card"><div class="stat-label">Overdue Installments</div><div class="stat-value" id="statOverdue">—</div></div>
+        <div class="card stat-card"><div class="stat-label">Total Outstanding</div><div class="stat-value" id="statOutstanding">—</div></div>
+        <div class="card stat-card"><div class="stat-label">Collected This Month</div><div class="stat-value" id="statCollected">—</div></div>
+        <div class="card stat-card"><div class="stat-label">Defaulted Plans</div><div class="stat-value" id="statDefaulted">—</div></div>
+      </div>
+
+      <div class="card" style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+        <div style="min-width:220px;flex:2">
+          <label class="label">Smart Search</label>
+          <input id="searchInput" class="input" placeholder="customer / phone / agreement / invoice / vehicle reg" onkeydown="if(event.key==='Enter')loadPlans()">
+        </div>
+        <div>
+          <label class="label">Status</label>
+          <select id="statusFilter" data-custom-select class="input" onchange="loadPlans()">
+            <option value="">All</option>
+            <option value="active">Active</option>
+            <option value="completed">Completed</option>
+            <option value="defaulted">Defaulted</option>
+          </select>
+        </div>
+        <div>
+          <label class="label">View</label>
+          <select id="bucketFilter" data-custom-select class="input" onchange="loadPlans()">
+            <option value="">All</option>
+            <option value="overdue">Overdue only</option>
+            <option value="due_today">Due today</option>
+            <option value="due_week">Due this week</option>
+            <option value="completed">Completed</option>
+            <option value="defaulted">Defaulted</option>
+          </select>
+        </div>
+        <div>
+          <label class="label">From</label>
+          <input id="dateFrom" type="date" class="input" onchange="loadPlans()">
+        </div>
+        <div>
+          <label class="label">To</label>
+          <input id="dateTo" type="date" class="input" onchange="loadPlans()">
+        </div>
+        <div>
+          <button class="btn btn-ghost" onclick="loadPlans()">Apply</button>
+        </div>
+      </div>
+
+      <div class="card" style="padding:0;overflow:hidden">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Agreement No</th>
+              <th>Customer</th>
+              <th>Phone</th>
+              <th>Product / Device</th>
+              <th>Down Payment</th>
+              <th>Monthly</th>
+              <th>Next Due Date</th>
+              <th>Outstanding</th>
+              <th>Overdue</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="plansTbody">
+            <tr><td colspan="11" style="text-align:center;padding:40px;color:var(--muted)">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="createPlanModal" onclick="closeModal('createPlanModal')">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:980px;max-height:92vh;overflow:auto">
+    <div class="modal-header"><div class="modal-title">Create Installment Plan</div><button class="btn btn-ghost btn-sm" onclick="closeModal('createPlanModal')">✕</button></div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
+      <div class="grid-2" style="gap:10px">
+        <div><label class="label">Agreement No</label><input id="fAgreementNo" class="input" placeholder="Auto if empty"></div>
+        <div><label class="label">Sale / Invoice</label><select id="fSaleId" data-custom-select class="input" onchange="onSaleChange()"></select></div>
+        <div><label class="label">Customer</label><select id="fCustomerId" data-custom-select class="input" onchange="onCustomerChange()"></select></div>
+        <div><label class="label">Invoice Number</label><input id="fInvoiceNo" class="input"></div>
+        <div><label class="label">Product / Device</label><input id="fProductName" class="input"></div>
+        <div><label class="label">Product Details</label><input id="fProductDetails" class="input"></div>
+        <div><label class="label">Vehicle Reg / Reference</label><input id="fImei" class="input"></div>
+        <div><label class="label">Serial Number</label><input id="fSerial" class="input"></div>
+        <div><label class="label">Cash Price</label><input id="fCashPrice" type="number" class="input" step="0.01" min="0" oninput="recalcPlan()"></div>
+        <div><label class="label">Down Payment</label><input id="fDownPayment" type="number" class="input" step="0.01" min="0" oninput="recalcPlan()"></div>
+        <div><label class="label">Financed Amount</label><input id="fFinanced" type="number" class="input" step="0.01" min="0" oninput="recalcPlan()"></div>
+        <div><label class="label">Interest %</label><input id="fInterestRate" type="number" class="input" step="0.01" min="0" oninput="recalcPlan()"></div>
+        <div><label class="label">Service Charge</label><input id="fServiceCharge" type="number" class="input" step="0.01" min="0" value="0" oninput="recalcPlan()"></div>
+        <div><label class="label">Installment Count</label><input id="fInstallments" type="number" class="input" min="1" value="12" oninput="recalcPlan()"></div>
+        <div><label class="label">Payment Frequency</label><select id="fFrequency" data-custom-select class="input"><option value="monthly">Monthly</option><option value="weekly">Weekly</option></select></div>
+        <div><label class="label">Start Date</label><input id="fStartDate" type="date" class="input"></div>
+        <div><label class="label">First Due Date</label><input id="fFirstDueDate" type="date" class="input"></div>
+        <div><label class="label">Customer Phone</label><input id="fPhone" class="input"></div>
+        <div><label class="label">Customer NIC</label><input id="fNic" class="input"></div>
+        <div style="grid-column:1/-1"><label class="label">Customer Address</label><textarea id="fAddress" class="input" rows="2"></textarea></div>
+        <div><label class="label">Guarantor Name (Optional)</label><input id="fGuarantorName" class="input"></div>
+        <div><label class="label">Guarantor Phone</label><input id="fGuarantorPhone" class="input"></div>
+        <div><label class="label">Guarantor NIC</label><input id="fGuarantorNic" class="input"></div>
+        <div style="grid-column:1/-1"><label class="label">Guarantor Address</label><textarea id="fGuarantorAddress" class="input" rows="2"></textarea></div>
+        <div><label class="label">Grace Period (days)</label><input id="fGraceDays" class="input" type="number" min="0" value="0"></div>
+        <div><label class="label">Late Fee</label><div style="display:flex;gap:6px"><select id="fLateType" data-custom-select class="input"><option value="none">None</option><option value="fixed">Fixed Amount</option><option value="percent">Percent</option></select><input id="fLateValue" type="number" class="input" step="0.01" min="0" value="0"></div></div>
+        <div style="grid-column:1/-1"><label class="label">Agreement Terms</label><textarea id="fTerms" class="input" rows="2" placeholder="Customer agrees to pay installments by due dates..."></textarea></div>
+        <div style="grid-column:1/-1"><label class="label">Notes</label><textarea id="fNotes" class="input" rows="2"></textarea></div>
+      </div>
+      <div class="card" style="background:rgba(37,99,235,.08)">Estimated installment amount: <strong id="estInstallment">0.00</strong></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('createPlanModal')">Cancel</button><button class="btn btn-primary" onclick="submitCreatePlan()">Create Plan</button></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="planDetailModal" onclick="closeModal('planDetailModal')">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:1100px;max-height:92vh;overflow:auto">
+    <div class="modal-header"><div class="modal-title" id="planDetailTitle">Installment Plan</div><button class="btn btn-ghost btn-sm" onclick="closeModal('planDetailModal')">✕</button></div>
+    <div class="modal-body" id="planDetailBody">Loading...</div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="payModal" onclick="closeModal('payModal')">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:460px">
+    <div class="modal-header"><div class="modal-title">Collect Payment</div><button class="btn btn-ghost btn-sm" onclick="closeModal('payModal')">✕</button></div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:10px">
+      <input type="hidden" id="payPlanId">
+      <div class="card" style="padding:10px;background:rgba(15,118,110,.08)">
+        Remaining: <strong id="payRemaining">0</strong><br>
+        Due today / overdue: <strong id="payDueSummary">0</strong>
+      </div>
+      <div><label class="label">Amount</label><input id="payAmount" type="number" class="input" min="0.01" step="0.01"></div>
+      <div><label class="label">Method</label><select id="payMethod" data-custom-select class="input"><option value="cash">Cash</option><option value="card">Card</option><option value="bank_transfer">Bank Transfer</option><option value="wallet">Wallet</option></select></div>
+      <div><label class="label">Reference</label><input id="payRef" class="input" placeholder="Txn ID / receipt no"></div>
+      <div><label class="label">Note</label><input id="payNote" class="input" placeholder="Collector note"></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('payModal')">Cancel</button><button class="btn btn-primary" onclick="submitPayment()">Collect</button></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let lookup = { customers: [], sales: [] };
+let currentPlan = null;
+const role = "{{ user_role }}";
+
+function badge(status) {
+  const cls = status === 'completed' ? 'success' : status === 'active' ? 'info' : status === 'defaulted' ? 'danger' : 'warning';
+  return `<span class="badge badge-${cls}">${status}</span>`;
+}
+
+async function loadLookup() {
+  const res = await fetch('/api/installments/lookup');
+  if (!res.ok) return;
+  lookup = await res.json();
+  fillLookupDropdowns();
+  document.getElementById('newPlanBtn').style.display = lookup.can_create ? '' : 'none';
+}
+
+function fillLookupDropdowns() {
+  const cSel = document.getElementById('fCustomerId');
+  const sSel = document.getElementById('fSaleId');
+  cSel.innerHTML = '<option value="">Select customer</option>' + (lookup.customers || []).map(c => `<option value="${c.id}">${c.name} (${c.phone || 'No phone'})</option>`).join('');
+  sSel.innerHTML = '<option value="">Select sale / invoice</option>' + (lookup.sales || []).map(s => `<option value="${s.id}">#${s.id} ${s.invoice_number || ''} - ${fmt(s.total_amount)}</option>`).join('');
+  if (window.CustomSelect) {
+    window.CustomSelect.refresh(cSel);
+    window.CustomSelect.refresh(sSel);
+  }
+}
+
+function onSaleChange() {
+  const saleId = parseInt(document.getElementById('fSaleId').value || '0', 10);
+  const sale = (lookup.sales || []).find(s => s.id === saleId);
+  if (!sale) return;
+  document.getElementById('fCashPrice').value = sale.total_amount || 0;
+  document.getElementById('fInvoiceNo').value = sale.invoice_number || '';
+  document.getElementById('fProductName').value = sale.product_name || '';
+  document.getElementById('fProductDetails').value = sale.product_details || '';
+  document.getElementById('fImei').value = sale.imei || '';
+  document.getElementById('fSerial').value = sale.serial_number || '';
+  if (sale.customer_id) {
+    document.getElementById('fCustomerId').value = sale.customer_id;
+    if (window.CustomSelect) window.CustomSelect.refresh(document.getElementById('fCustomerId'));
+    onCustomerChange();
+  }
+  recalcPlan();
+}
+
+function onCustomerChange() {
+  const cid = parseInt(document.getElementById('fCustomerId').value || '0', 10);
+  const c = (lookup.customers || []).find(x => x.id === cid);
+  if (!c) return;
+  document.getElementById('fPhone').value = c.phone || '';
+  document.getElementById('fNic').value = c.nic || '';
+  document.getElementById('fAddress').value = c.address || '';
+}
+
+function recalcPlan() {
+  const financed = parseFloat(document.getElementById('fFinanced').value || '0');
+  const interest = parseFloat(document.getElementById('fInterestRate').value || '0');
+  const service = parseFloat(document.getElementById('fServiceCharge').value || '0');
+  const count = Math.max(parseInt(document.getElementById('fInstallments').value || '1', 10), 1);
+  const total = financed + service + ((financed * interest) / 100);
+  const monthly = total / count;
+  document.getElementById('estInstallment').textContent = fmt(monthly);
+}
+
+async function submitCreatePlan() {
+  const csrf = document.querySelector('meta[name=csrf-token]').content;
+  const payload = {
+    agreement_no: document.getElementById('fAgreementNo').value.trim(),
+    sale_id: parseInt(document.getElementById('fSaleId').value || '0', 10),
+    customer_id: parseInt(document.getElementById('fCustomerId').value || '0', 10) || null,
+    invoice_number: document.getElementById('fInvoiceNo').value.trim(),
+    product_name: document.getElementById('fProductName').value.trim(),
+    product_details: document.getElementById('fProductDetails').value.trim(),
+    vehicle_ref: document.getElementById('fImei').value.trim(),
+    device_serial: document.getElementById('fSerial').value.trim(),
+    cash_price: parseFloat(document.getElementById('fCashPrice').value || '0'),
+    down_payment: parseFloat(document.getElementById('fDownPayment').value || '0'),
+    financed_amount: parseFloat(document.getElementById('fFinanced').value || '0'),
+    interest_rate: parseFloat(document.getElementById('fInterestRate').value || '0'),
+    service_charge: parseFloat(document.getElementById('fServiceCharge').value || '0'),
+    num_installments: parseInt(document.getElementById('fInstallments').value || '1', 10),
+    payment_frequency: document.getElementById('fFrequency').value,
+    start_date: document.getElementById('fStartDate').value,
+    first_due_date: document.getElementById('fFirstDueDate').value,
+    customer_phone: document.getElementById('fPhone').value.trim(),
+    customer_nic: document.getElementById('fNic').value.trim(),
+    customer_address: document.getElementById('fAddress').value.trim(),
+    guarantor_name: document.getElementById('fGuarantorName').value.trim(),
+    guarantor_phone: document.getElementById('fGuarantorPhone').value.trim(),
+    guarantor_nic: document.getElementById('fGuarantorNic').value.trim(),
+    guarantor_address: document.getElementById('fGuarantorAddress').value.trim(),
+    grace_period_days: parseInt(document.getElementById('fGraceDays').value || '0', 10),
+    late_fee_type: document.getElementById('fLateType').value,
+    late_fee_value: parseFloat(document.getElementById('fLateValue').value || '0'),
+    agreement_terms: document.getElementById('fTerms').value.trim(),
+    notes: document.getElementById('fNotes').value.trim(),
+  };
+  if (!payload.sale_id) { toast('Please select a sale first.', 'error'); return; }
+  const res = await fetch('/api/installments', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) { toast(data.error || 'Could not create plan', 'error'); return; }
+  toast('Installment plan created successfully', 'success');
+  closeModal('createPlanModal');
+  loadPlans();
+  loadStats();
+}
+
+function openCreatePlanModal() {
+  if (!lookup.can_create) return;
+  const today = new Date().toISOString().slice(0, 10);
+  ['fStartDate', 'fFirstDueDate'].forEach(id => document.getElementById(id).value = today);
+  openModal('createPlanModal');
+}
+
+async function loadStats() {
+  const res = await fetch('/api/installments/stats');
+  if (!res.ok) return;
+  const d = await res.json();
+  document.getElementById('statPlans').textContent = d.total_active_plans;
+  document.getElementById('statDueToday').textContent = fmt(d.due_today || 0);
+  document.getElementById('statOverdue').textContent = d.overdue_installments;
+  document.getElementById('statOutstanding').textContent = fmt(d.total_outstanding || 0);
+  document.getElementById('statCollected').textContent = fmt(d.collected_this_month || 0);
+  document.getElementById('statDefaulted').textContent = d.defaulted_plans || 0;
+}
+
+async function loadPlans() {
+  const params = new URLSearchParams();
+  const q = document.getElementById('searchInput').value.trim();
+  const status = document.getElementById('statusFilter').value;
+  const bucket = document.getElementById('bucketFilter').value;
+  const dateFrom = document.getElementById('dateFrom').value;
+  const dateTo = document.getElementById('dateTo').value;
+  if (q) params.set('q', q);
+  if (status) params.set('status', status);
+  if (bucket) params.set('bucket', bucket);
+  if (dateFrom) params.set('date_from', dateFrom);
+  if (dateTo) params.set('date_to', dateTo);
+
+  const res = await fetch(`/api/installments?${params.toString()}`);
+  const data = await res.json();
+  const plans = data.plans || [];
+  const tbody = document.getElementById('plansTbody');
+  if (!plans.length) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="11" style="padding:38px;text-align:center">
+          <div style="font-weight:700;margin-bottom:6px">No installment plans found</div>
+          <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Create your first plan to start collecting scheduled payments.</div>
+          ${lookup.can_create ? '<button class="btn btn-primary" onclick="openCreatePlanModal()">Create New Installment Plan</button>' : ''}
+        </td>
+      </tr>`;
+    return;
+  }
+  tbody.innerHTML = plans.map(p => `
+    <tr>
+      <td>${p.agreement_no || ('AGR-' + p.id)}</td>
+      <td>${p.customer_name || '—'}</td>
+      <td>${p.customer_phone || '—'}</td>
+      <td>${p.product_name || '—'}${p.device_imei ? `<div style="font-size:11px;color:var(--muted)">Ref: ${p.device_imei}</div>` : ''}</td>
+      <td>${fmt(p.down_payment)}</td>
+      <td>${fmt(p.monthly_amount)}</td>
+      <td>${p.next_due_date || '—'}</td>
+      <td style="font-weight:600">${fmt(p.outstanding)}</td>
+      <td style="color:${(p.overdue_amount || 0) > 0 ? 'var(--danger)' : 'inherit'}">${fmt(p.overdue_amount || 0)}</td>
+      <td>${badge(p.status)}</td>
+      <td style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" onclick="viewPlan(${p.id})">View</button>
+        ${(lookup.can_collect && p.status === 'active') ? `<button class="btn btn-ghost btn-sm" onclick='openPayModal(${JSON.stringify(p)})'>Collect</button>` : ''}
+      </td>
+    </tr>
+  `).join('');
+}
+
+function printDoc(planId, type) {
+  // Open the proper print receipt page (auto-prints and closes on completion)
+  const url = `/api/installments/${planId}/print/${type}?auto_print=1`;
+  const w = window.open(url, '_blank', 'width=500,height=700,noopener');
+  if (!w) {
+    // Popup blocked fallback - open without auto_print so user can print manually
+    window.open(`/api/installments/${planId}/print/${type}`, '_blank', 'noopener');
+  }
+}
+
+function openPayModal(plan) {
+  currentPlan = plan;
+  document.getElementById('payPlanId').value = plan.id;
+  document.getElementById('payAmount').value = (plan.due_today > 0 ? plan.due_today : plan.monthly_amount).toFixed(2);
+  document.getElementById('payRemaining').textContent = fmt(plan.outstanding || 0);
+  document.getElementById('payDueSummary').textContent = `${fmt(plan.due_today || 0)} / ${fmt(plan.overdue_amount || 0)}`;
+  document.getElementById('payRef').value = '';
+  document.getElementById('payNote').value = '';
+  openModal('payModal');
+}
+
+async function submitPayment() {
+  const planId = document.getElementById('payPlanId').value;
+  const amount = parseFloat(document.getElementById('payAmount').value || '0');
+  const csrf = document.querySelector('meta[name=csrf-token]').content;
+  const res = await fetch(`/api/installments/${planId}/collect`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+    body: JSON.stringify({
+      amount_paid: amount,
+      payment_method: document.getElementById('payMethod').value,
+      reference: document.getElementById('payRef').value.trim(),
+      notes: document.getElementById('payNote').value.trim(),
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) { toast(data.error || 'Payment failed', 'error'); return; }
+  toast('Payment collected successfully', 'success');
+  closeModal('payModal');
+  loadPlans();
+  loadStats();
+}
+
+async function runPlanAction(planId, action) {
+  const notes = prompt(`Optional note for ${action}:`, '') || '';
+  const csrf = document.querySelector('meta[name=csrf-token]').content;
+  const res = await fetch(`/api/installments/${planId}/actions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+    body: JSON.stringify({ action, notes }),
+  });
+  const data = await res.json();
+  if (!res.ok) { toast(data.error || 'Action failed', 'error'); return; }
+  toast('Action completed', 'success');
+  viewPlan(planId);
+  loadPlans();
+  loadStats();
+}
+
+async function viewPlan(id) {
+  const res = await fetch(`/api/installments/${id}`);
+  if (!res.ok) return;
+  const p = await res.json();
+  document.getElementById('planDetailTitle').textContent = `${p.agreement_no || ('Plan #' + p.id)} — ${p.customer_name || '—'}`;
+  document.getElementById('planDetailBody').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="grid-2" style="gap:10px">
+        <div class="card"><strong>Customer</strong><div>${p.customer_name || '—'} (${p.customer_phone || '—'})</div><div>NIC: ${p.customer_nic || '—'}</div><div>${p.customer_address || ''}</div></div>
+        <div class="card"><strong>Product / Device</strong><div>${p.product_name || '—'}</div><div>${p.product_details || ''}</div><div>Ref: ${p.device_imei || '—'}</div><div>Serial: ${p.device_serial || '—'}</div></div>
+        <div class="card"><strong>Agreement Summary</strong><div>Cash Price: ${fmt(p.cash_price)}</div><div>Down Payment: ${fmt(p.down_payment)}</div><div>Interest: ${p.interest_rate || 0}%</div><div>Service Charge: ${fmt(p.service_charge || 0)}</div><div>Installments: ${p.num_installments} (${p.payment_frequency})</div></div>
+        <div class="card"><strong>Payment Summary</strong><div>Paid: ${fmt(p.paid_so_far)}</div><div>Outstanding: ${fmt(p.outstanding)}</div><div>Due Today: ${fmt(p.due_today || 0)}</div><div>Overdue: ${fmt(p.overdue_amount || 0)}</div><div>Next Due: ${p.next_due_date || '—'}</div><div>Overdue Days: ${p.overdue_days || 0}</div></div>
+      </div>
+
+      <div class="card" style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${(lookup.can_collect && p.status === 'active') ? `<button class="btn btn-primary" onclick='openPayModal(${JSON.stringify(p)})'>Collect Payment</button>` : ''}
+          ${lookup.can_create ? `<button class="btn btn-ghost" onclick="runPlanAction(${p.id},'settle_full_balance')">Settle Full Balance</button>
+          <button class="btn btn-ghost" onclick="runPlanAction(${p.id},'close_early')">Close Early</button>
+          <button class="btn btn-ghost" onclick="runPlanAction(${p.id},'mark_defaulted')">Mark Defaulted</button>
+          <button class="btn btn-ghost" onclick="runPlanAction(${p.id},'reopen')">Reopen</button>
+          <button class="btn btn-ghost" onclick="runPlanAction(${p.id},'mark_repossessed')">Mark Repossessed</button>` : ''}
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-ghost" onclick="printDoc(${p.id},'agreement')">Print Agreement</button>
+          <button class="btn btn-ghost" onclick="printDoc(${p.id},'receipt')">Print Receipt</button>
+          <button class="btn btn-ghost" onclick="printDoc(${p.id},'statement')">Print Statement</button>
+          <button class="btn btn-ghost" onclick="printDoc(${p.id},'overdue_notice')">Print Overdue Notice</button>
+        </div>
+      </div>
+
+      <div>
+        <strong>Installment Schedule</strong>
+        <table class="table" style="margin-top:6px">
+          <thead><tr><th>#</th><th>Due Date</th><th>Due Amount</th><th>Paid Amount</th><th>Paid Date</th><th>Penalty</th><th>Balance</th><th>Status</th></tr></thead>
+          <tbody>
+            ${(p.installments || []).map(i => `
+              <tr style="${i.is_overdue ? 'background:rgba(239,68,68,.06)' : ''}">
+                <td>${i.installment_no}</td><td>${i.due_date}</td><td>${fmt(i.amount_due)}</td><td>${fmt(i.amount_paid)}</td><td>${i.paid_date || '—'}</td><td>${fmt(i.penalty_amount || 0)}</td><td>${fmt(i.balance || 0)}</td><td>${badge(i.status)}${i.is_overdue ? ' <span style="font-size:11px;color:var(--danger)">OVERDUE</span>' : ''}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="grid-2" style="gap:10px">
+        <div>
+          <strong>Payment History</strong>
+          <table class="table" style="margin-top:6px">
+            <thead><tr><th>Date</th><th>Amount</th><th>Method</th><th>Ref</th><th>Note</th></tr></thead>
+            <tbody>${(p.payments || []).map(r => `<tr><td>${r.payment_date}</td><td>${fmt(r.amount)}</td><td>${r.method}</td><td>${r.reference || '—'}</td><td>${r.notes || '—'}</td></tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted)">No payment history</td></tr>'}</tbody>
+          </table>
+        </div>
+        <div>
+          <strong>Status History</strong>
+          <table class="table" style="margin-top:6px">
+            <thead><tr><th>Date</th><th>Status</th><th>Reason</th><th>Note</th></tr></thead>
+            <tbody>${(p.status_history || []).map(h => `<tr><td>${h.created_at}</td><td>${badge(h.status)}</td><td>${h.reason || '—'}</td><td>${h.notes || '—'}</td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--muted)">No status logs</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+  openModal('planDetailModal');
+}
+
+loadLookup().then(() => {
+  loadStats();
+  loadPlans();
+});
+</script>
+{% endblock %}

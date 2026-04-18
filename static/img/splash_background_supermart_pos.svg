@@ -1,0 +1,109 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGradient" x1="140" y1="120" x2="1760" y2="980" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#071425"/>
+      <stop offset="0.5" stop-color="#141A3D"/>
+      <stop offset="1" stop-color="#08182A"/>
+    </linearGradient>
+
+    <radialGradient id="glowTopLeft" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(360 180) rotate(25) scale(760 540)">
+      <stop stop-color="#3AA9FF" stop-opacity="0.24"/>
+      <stop offset="1" stop-color="#3AA9FF" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="glowBottomRight" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1560 930) rotate(-12) scale(680 520)">
+      <stop stop-color="#9B6DFF" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#9B6DFF" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="cloudHalo" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(960 470) rotate(0) scale(620 250)">
+      <stop stop-color="#57D8FF" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#57D8FF" stop-opacity="0"/>
+    </radialGradient>
+
+    <linearGradient id="lineCyan" x1="270" y1="540" x2="1650" y2="540" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#56ECFF" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#56ECFF" stop-opacity="0.7"/>
+      <stop offset="1" stop-color="#56ECFF" stop-opacity="0"/>
+    </linearGradient>
+
+    <linearGradient id="linePurple" x1="260" y1="650" x2="1660" y2="640" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A77AFF" stop-opacity="0"/>
+      <stop offset="0.52" stop-color="#A77AFF" stop-opacity="0.58"/>
+      <stop offset="1" stop-color="#A77AFF" stop-opacity="0"/>
+    </linearGradient>
+
+    <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feBlend mode="screen" in="SourceGraphic" in2="blur"/>
+    </filter>
+
+    <filter id="nodeGlow" x="-200%" y="-200%" width="500%" height="500%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="2" result="blurNode"/>
+      <feMerge>
+        <feMergeNode in="blurNode"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <mask id="centerSafeAreaMask">
+      <rect width="1920" height="1080" fill="white"/>
+      <ellipse cx="960" cy="540" rx="420" ry="210" fill="black"/>
+    </mask>
+  </defs>
+
+  <rect width="1920" height="1080" fill="url(#bgGradient)"/>
+  <rect width="1920" height="1080" fill="url(#glowTopLeft)"/>
+  <rect width="1920" height="1080" fill="url(#glowBottomRight)"/>
+
+  <g opacity="0.26" mask="url(#centerSafeAreaMask)">
+    <path d="M0 250C210 290 370 340 560 290C750 240 910 180 1120 220C1330 260 1500 350 1920 290" stroke="#49B6FF" stroke-width="1.4"/>
+    <path d="M0 320C220 350 430 420 620 360C810 300 930 250 1150 280C1370 310 1580 400 1920 360" stroke="#6F95FF" stroke-width="1.2"/>
+    <path d="M0 740C190 710 410 650 620 700C830 750 1020 810 1250 760C1480 710 1680 630 1920 660" stroke="#66C7FF" stroke-width="1.3"/>
+    <path d="M0 820C180 790 350 730 550 770C750 810 990 890 1220 850C1450 810 1680 740 1920 780" stroke="#9578FF" stroke-width="1.2"/>
+  </g>
+
+  <g filter="url(#softGlow)" stroke-linecap="round" fill="none" mask="url(#centerSafeAreaMask)">
+    <path d="M180 580C380 480 540 490 720 540C900 590 1060 600 1240 540C1420 480 1570 490 1740 560" stroke="url(#lineCyan)" stroke-width="2.2"/>
+    <path d="M240 650C420 590 590 610 760 670C930 730 1080 735 1260 680C1440 625 1610 615 1690 640" stroke="url(#linePurple)" stroke-width="2"/>
+    <path d="M250 430C410 380 580 390 760 435C940 480 1110 485 1300 435C1490 385 1630 390 1690 410" stroke="url(#lineCyan)" stroke-width="1.8" opacity="0.78"/>
+  </g>
+
+  <rect width="1920" height="1080" fill="url(#cloudHalo)"/>
+
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M560 510C590 430 690 390 770 420C815 355 920 332 1005 368C1065 332 1142 340 1195 387C1282 384 1355 446 1368 532C1450 548 1490 603 1483 674H520C516 604 543 548 602 520" stroke="#84D9FF" stroke-opacity="0.5" stroke-width="2.2" filter="url(#softGlow)"/>
+    <path d="M605 540C635 480 705 452 772 466C818 418 903 407 969 438C1029 410 1105 421 1155 465C1233 466 1287 519 1299 584C1352 595 1384 637 1380 680H575C572 626 589 581 630 555" stroke="#8C88FF" stroke-opacity="0.45" stroke-width="1.7" filter="url(#softGlow)"/>
+  </g>
+
+  <g stroke="#85EDFF" stroke-opacity="0.6" stroke-width="1.1" fill="none" mask="url(#centerSafeAreaMask)">
+    <path d="M300 510L490 460L700 510L900 480L1090 520L1300 485L1550 530"/>
+    <path d="M350 690L520 620L730 670L940 640L1160 690L1400 650L1620 710" stroke="#A78AFF" stroke-opacity="0.48"/>
+    <path d="M270 390L470 345L670 390L860 360L1060 400L1280 365L1520 410" stroke="#6ED6FF" stroke-opacity="0.42"/>
+  </g>
+
+  <g filter="url(#nodeGlow)" mask="url(#centerSafeAreaMask)">
+    <circle cx="490" cy="460" r="3" fill="#66E7FF"/>
+    <circle cx="700" cy="510" r="3.2" fill="#6FD2FF"/>
+    <circle cx="900" cy="480" r="2.8" fill="#7ED8FF"/>
+    <circle cx="1090" cy="520" r="3" fill="#78F2FF"/>
+    <circle cx="1300" cy="485" r="2.9" fill="#7FC3FF"/>
+    <circle cx="1550" cy="530" r="3" fill="#74E4FF"/>
+
+    <circle cx="520" cy="620" r="2.8" fill="#A78AFF"/>
+    <circle cx="730" cy="670" r="3" fill="#A78AFF"/>
+    <circle cx="940" cy="640" r="2.8" fill="#9F98FF"/>
+    <circle cx="1160" cy="690" r="3" fill="#B18CFF"/>
+    <circle cx="1400" cy="650" r="3" fill="#B18CFF"/>
+    <circle cx="1620" cy="710" r="2.8" fill="#A78AFF"/>
+
+    <circle cx="470" cy="345" r="2.6" fill="#5FD2FF"/>
+    <circle cx="670" cy="390" r="2.8" fill="#6EC6FF"/>
+    <circle cx="860" cy="360" r="2.6" fill="#5CEBFF"/>
+    <circle cx="1060" cy="400" r="2.8" fill="#5ED6FF"/>
+    <circle cx="1280" cy="365" r="2.6" fill="#67B9FF"/>
+    <circle cx="1520" cy="410" r="2.8" fill="#5DDCFF"/>
+  </g>
+
+  <ellipse cx="960" cy="540" rx="430" ry="220" fill="#D6EEFF" fill-opacity="0.045"/>
+</svg>

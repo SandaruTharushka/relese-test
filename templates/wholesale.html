@@ -1,0 +1,305 @@
+{% extends "base.html" %}
+{% from "sidebar.html" import sidebar with context %}
+{% block title %} — Wholesale{% endblock %}
+{% block body %}
+<div class="app-layout">
+  {{ sidebar('wholesale') }}
+  <div class="main-area">
+    <div class="topbar">
+      <div style="font-size:18px;font-weight:700">🏪 Wholesale Customers</div>
+      <button class="btn btn-primary btn-sm" onclick="openModal('addWsModal')">+ Add Customer</button>
+    </div>
+    <div class="page-content fade-in">
+
+      <!-- Summary cards -->
+      <div class="grid-3 mb-6">
+        <div class="stat-card">
+          <div class="text-muted text-xs mb-2">TOTAL CUSTOMERS</div>
+          <div class="text-xl font-800">{{ customers|length }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="text-muted text-xs mb-2">OUTSTANDING DEBT</div>
+          <div class="text-xl font-800 text-danger">LKR {{ "%.0f"|format(customers|selectattr('balance','lt',0)|map(attribute='balance')|sum|abs) }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="text-muted text-xs mb-2">CREDIT HELD</div>
+          <div class="text-xl font-800 text-success">LKR {{ "%.0f"|format(customers|selectattr('balance','gt',0)|map(attribute='balance')|sum) }}</div>
+        </div>
+      </div>
+
+
+      <div class="mb-4">
+        <input class="form-input" id="wsTableSearch" placeholder="🔍 Search wholesale customers by name, business, phone, email"
+               oninput="filterWholesaleTable()">
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr>
+            <th>Name</th><th>Business</th><th>Phone</th><th>Credit Limit / Usage</th><th>Balance</th><th>Status</th><th>Actions</th>
+          </tr></thead>
+          <tbody id="wsTableBody">
+            {% for c in customers %}
+            {% set usage_pct = ((c.balance|abs / c.credit_limit * 100)|int) if c.credit_limit > 0 else 0 %}
+            <tr class="ws-row">
+              <td style="font-weight:700">{{ c.name }}</td>
+              <td class="text-muted text-sm">{{ c.business or '—' }}</td>
+              <td class="text-sm">{{ c.phone or '—' }}</td>
+              <td style="min-width:160px">
+                <div class="flex justify-between text-xs mb-1">
+                  <span class="text-muted">LKR {{ "%.0f"|format(c.credit_limit) }}</span>
+                  {% if c.credit_limit > 0 %}
+                  <span style="color:{{ 'var(--danger)' if usage_pct >= 90 else 'var(--warning)' if usage_pct >= 60 else 'var(--muted)' }}">{{ [usage_pct, 100]|min }}%</span>
+                  {% endif %}
+                </div>
+                {% if c.credit_limit > 0 %}
+                <div class="progress-bar" style="height:5px">
+                  <div class="progress-fill" style="width:{{ [usage_pct, 100]|min }}%;background:{{ 'var(--danger)' if usage_pct >= 90 else 'var(--warning)' if usage_pct >= 60 else 'var(--accent2)' }}"></div>
+                </div>
+                {% else %}
+                <span class="text-muted text-xs">No limit</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if c.balance < 0 %}
+                  <span style="color:var(--danger);font-weight:700">- LKR {{ "%.2f"|format(c.balance|abs) }}</span>
+                {% elif c.balance > 0 %}
+                  <span style="color:var(--accent2);font-weight:700">+ LKR {{ "%.2f"|format(c.balance) }}</span>
+                {% else %}
+                  <span class="text-muted">Clear</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if c.on_hold %}
+                  <span class="badge badge-danger">🔒 On Hold</span>
+                {% else %}
+                  <span class="badge badge-success">✓ Active</span>
+                {% endif %}
+              </td>
+              <td>
+                <div class="flex gap-2">
+                  <a href="{{ url_for('wholesale_profile', cid=c.id) }}" class="btn btn-ghost btn-sm">👤 Profile</a>
+                  <button class="btn btn-ghost btn-sm" onclick="editCustomerById({{ c.id }})">Edit</button>
+                  <button class="btn btn-sm {{ 'btn-warning' if not c.on_hold else '' }}"
+                          style="{{ 'background:rgba(239,68,68,.1);color:var(--danger)' if c.on_hold else 'background:rgba(245,158,11,.1);color:var(--warning)' }}"
+                          onclick="toggleHold({{ c.id }}, {{ c.on_hold }}, '{{ c.name }}')">
+                    {{ '🔓 Unhold' if c.on_hold else '🔒 Hold' }}
+                  </button>
+                  <button class="btn btn-sm" style="background:rgba(239,68,68,.1);color:var(--danger)" onclick="deleteCustomer({{ c.id }}, '{{ c.name }}')">Del</button>
+                </div>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" class="text-muted" style="text-align:center;padding:40px">No wholesale customers yet. Add your first customer!</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Sales History Modal -->
+      <div class="modal-overlay" id="salesHistoryModal">
+        <div class="modal" style="width:720px;max-height:80vh;overflow-y:auto">
+          <div class="modal-title">🧾 Sales History — <span id="salesHistoryName"></span></div>
+          <div class="overflow-x">
+            <table class="data-table" id="salesHistoryTable">
+              <thead><tr><th>Invoice</th><th>Date</th><th>Items</th><th>Total</th><th>Status</th></tr></thead>
+              <tbody id="salesHistoryBody"><tr><td colspan="5" class="text-muted" style="text-align:center;padding:20px">Loading…</td></tr></tbody>
+            </table>
+          </div>
+          <div class="flex justify-end mt-4">
+            <button class="btn btn-ghost" onclick="closeModal('salesHistoryModal')">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Customer Modal -->
+<div class="modal-overlay" id="addWsModal">
+  <div class="modal" style="width:520px">
+    <div class="modal-title">🏪 Add Wholesale Customer</div>
+    <form id="addWsForm" method="POST" action="/wholesale/customers/add">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="grid-2 mb-4" style="gap:12px">
+        <div class="form-group"><label class="form-label">Name *</label><input class="form-input" id="wsName" name="name" placeholder="Full name"></div>
+        <div class="form-group"><label class="form-label">Business</label><input class="form-input" id="wsBusiness" name="business" placeholder="Company / shop name"></div>
+        <div class="form-group"><label class="form-label">Phone</label><input class="form-input" id="wsPhone" name="phone" placeholder="07X XXXXXXX"></div>
+        <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="wsEmail" name="email" type="email" placeholder="email@example.com"></div>
+        <div class="form-group"><label class="form-label">Credit Limit (LKR)</label><input class="form-input" id="wsCreditLimit" name="credit_limit" type="number" min="0" placeholder="0"></div>
+      </div>
+      <div class="form-group mb-4"><label class="form-label">Address</label><input class="form-input" id="wsAddress" name="address" placeholder="Address"></div>
+      <div class="flex gap-2">
+        <button class="btn btn-ghost" type="button" onclick="closeModal('addWsModal')" style="flex:1">Cancel</button>
+        <button class="btn btn-primary" type="submit" style="flex:2">+ Add Customer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Edit Customer Modal -->
+<div class="modal-overlay" id="editWsModal">
+  <div class="modal" style="width:560px">
+    <div class="modal-title">✏️ Edit Wholesale Customer</div>
+    <input type="hidden" id="eWsId">
+    <div class="grid-2 mb-4" style="gap:12px">
+      <div class="form-group"><label class="form-label">Name *</label><input class="form-input" id="eWsName"></div>
+      <div class="form-group"><label class="form-label">Business</label><input class="form-input" id="eWsBusiness"></div>
+      <div class="form-group"><label class="form-label">Phone</label><input class="form-input" id="eWsPhone"></div>
+      <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="eWsEmail"></div>
+      <div class="form-group"><label class="form-label">Credit Limit (LKR)</label><input class="form-input" id="eWsCredit" type="number" min="0"></div>
+    </div>
+    <div class="form-group mb-3"><label class="form-label">Address</label><input class="form-input" id="eWsAddress"></div>
+    <div class="flex items-center gap-3 mb-4 p-3" style="background:var(--bg);border-radius:8px;border:1px solid var(--border)">
+      <label class="form-label mb-0" style="flex:1;margin:0">🔒 Account On Hold</label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="eWsOnHold" style="width:16px;height:16px">
+        <span class="text-sm text-muted">Block sales to this customer</span>
+      </label>
+    </div>
+    <div class="flex gap-2">
+      <button class="btn btn-ghost" onclick="closeModal('editWsModal')" style="flex:1">Cancel</button>
+      <button class="btn btn-ghost btn-sm" onclick="viewSalesHistory()" style="background:rgba(79,108,246,.1);color:var(--accent)">📊 Sales History</button>
+      <button class="btn btn-primary" onclick="saveWsEdit()" style="flex:2">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+document.getElementById('addWsForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.currentTarget;
+  const formData = new FormData(form);
+
+  if (!String(formData.get('name') || '').trim() || !String(formData.get('phone') || '').trim()) {
+    toast('Name and phone are required', 'error');
+    return;
+  }
+
+  const response = await fetch(form.action, {
+    method: 'POST',
+    body: formData,
+    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  });
+  const res = await response.json();
+
+  if (response.ok && res.success) {
+    toast('Customer added!', 'success');
+    closeModal('addWsModal');
+    form.reset();
+    setTimeout(() => location.reload(), 700);
+  } else {
+    toast(res?.error || 'Error', 'error');
+  }
+});
+
+function editCustomer(c) {
+  document.getElementById('eWsId').value        = c.id;
+  document.getElementById('eWsName').value      = c.name;
+  document.getElementById('eWsBusiness').value  = c.business || '';
+  document.getElementById('eWsPhone').value     = c.phone || '';
+  document.getElementById('eWsEmail').value     = c.email || '';
+  document.getElementById('eWsCredit').value    = c.credit_limit || 0;
+  document.getElementById('eWsAddress').value   = c.address || '';
+  document.getElementById('eWsOnHold').checked  = !!c.on_hold;
+  openModal('editWsModal');
+}
+
+// Fetch customer by ID then open edit modal — avoids broken inline JSON in onclick
+async function editCustomerById(id) {
+  const c = await api(`/api/wholesale-customers/${id}`);
+  if (!c || c.error) { toast('Could not load customer data', 'error'); return; }
+  editCustomer(c);
+}
+
+async function saveWsEdit() {
+  const id = document.getElementById('eWsId').value;
+  if (!id) { toast('No customer selected', 'error'); return; }
+  const name = document.getElementById('eWsName').value.trim();
+  if (!name) { toast('Name is required', 'error'); return; }
+  const data = {
+    name,
+    business:     document.getElementById('eWsBusiness').value.trim(),
+    phone:        document.getElementById('eWsPhone').value.trim(),
+    email:        document.getElementById('eWsEmail').value.trim(),
+    credit_limit: parseFloat(document.getElementById('eWsCredit').value) || 0,
+    address:      document.getElementById('eWsAddress').value.trim(),
+    on_hold:      document.getElementById('eWsOnHold').checked ? 1 : 0,
+  };
+  const res = await api(`/api/wholesale-customers/${id}`, { method: 'PUT', body: data });
+  if (res && res.id) {
+    closeModal('editWsModal');
+    toast('Customer updated!', 'success');
+    setTimeout(() => location.reload(), 700);
+  } else {
+    toast(res?.error || 'Error saving changes', 'error');
+  }
+}
+
+async function toggleHold(id, currentHold, name) {
+  const newHold = currentHold ? 0 : 1;
+  const action  = newHold ? 'put on hold' : 'unhold';
+  const confirmed = await AppDialog.confirm(`${newHold ? '🔒' : '🔓'} ${action === 'put on hold' ? 'Put' : 'Remove hold from'} "${name}"?`, { title: 'Update hold status', confirmText: 'Confirm', variant: 'warning' });
+  if (!confirmed) return;
+  const res = await api(`/api/wholesale-customers/${id}`, { method: 'PUT', body: { on_hold: newHold } });
+  if (res && res.id) { toast(`Customer ${action}!`, newHold ? 'warning' : 'success'); setTimeout(() => location.reload(), 700); }
+  else toast(res?.error || 'Error', 'error');
+}
+
+async function deleteCustomer(id, name) {
+  const confirmed = await AppDialog.confirm(`Remove "${name}" from wholesale list?`, { title: 'Delete wholesale customer', confirmText: 'Delete', variant: 'danger' });
+  if (!confirmed) return;
+  const res = await api(`/api/wholesale-customers/${id}`, { method: 'DELETE' });
+  if (res && res.ok) { toast('Removed', 'success'); setTimeout(() => location.reload(), 600); }
+  else toast('Error', 'error');
+}
+
+// Sales history modal
+let _salesHistoryCid = null;
+function viewSalesHistory() {
+  const id = document.getElementById('eWsId').value;
+  const name = document.getElementById('eWsName').value;
+  if (!id) return;
+  _salesHistoryCid = id;
+  document.getElementById('salesHistoryName').textContent = name;
+  document.getElementById('salesHistoryBody').innerHTML =
+    '<tr><td colspan="5" class="text-muted" style="text-align:center;padding:20px">Loading…</td></tr>';
+  openModal('salesHistoryModal');
+  loadSalesHistory(id);
+}
+
+async function loadSalesHistory(cid) {
+  const data = await api(`/api/wholesale-customers/${cid}/sales`);
+  if (!data || !data.sales) {
+    document.getElementById('salesHistoryBody').innerHTML =
+      '<tr><td colspan="5" class="text-muted" style="text-align:center;padding:20px">No sales found</td></tr>';
+    return;
+  }
+  if (data.sales.length === 0) {
+    document.getElementById('salesHistoryBody').innerHTML =
+      '<tr><td colspan="5" class="text-muted" style="text-align:center;padding:20px">No sales history</td></tr>';
+    return;
+  }
+  document.getElementById('salesHistoryBody').innerHTML = data.sales.map(s => `
+    <tr>
+      <td style="font-weight:700;color:var(--accent)">${s.invoice_number}</td>
+      <td class="text-muted text-sm">${s.sale_date ? s.sale_date.substring(0,16).replace('T',' ') : '—'}</td>
+      <td>${s.items ? s.items.length : '—'}</td>
+      <td style="font-weight:700">LKR ${(s.total_amount||0).toLocaleString('en', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+      <td><span class="badge ${s.status==='completed'?'badge-success':'badge-warning'}">${s.status}</span></td>
+    </tr>
+  `).join('');
+}
+
+function filterWholesaleTable() {
+  const q = (document.getElementById('wsTableSearch')?.value || '').trim().toLowerCase();
+  document.querySelectorAll('#wsTableBody .ws-row').forEach(row => {
+    const txt = row.textContent.toLowerCase();
+    row.style.display = !q || txt.includes(q) ? '' : 'none';
+  });
+}
+
+</script>
+{% endblock %}

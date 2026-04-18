@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Environment / secrets — auto-generated on first run, NEVER commit to version control
+.env
+*.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# PyInstaller — ignore generated spec fragments but track the project spec
+*.spec
+!SuperMartPOS.spec
+!SuperMartPrinterManager.spec
+dist/
+build/
+
+# Logs
+*.log
+
+# Database dumps
+*.sql.bak
+
+# Runtime SQLite database (auto-created on first run, not for version control)
+*.db
+*.db-shm
+*.db-wal
+
+# Java database config
+db.properties
+
+# Runtime-generated invoice code images (created on-demand during billing/tests)
+static/invoice_barcodes/
+static/invoice_qr/
+
+# Windows ProgramData artifacts created by desktop runtime license check
+C:/ProgramData/
+C:\\ProgramData/

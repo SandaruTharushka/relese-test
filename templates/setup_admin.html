@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+{% block title %} — First-Run Setup{% endblock %}
+{% block extra_head %}
+<style>
+/* ── Setup Admin Page ───────────────────────────────────── */
+.login-wrap  { display:flex; min-height:100vh }
+.login-left  { flex:1; background:linear-gradient(135deg,#4F6CF6 0%,#7C3AED 100%);
+               display:flex; flex-direction:column; justify-content:center;
+               align-items:center; padding:60px; position:relative; overflow:hidden }
+.login-right { flex:1; display:flex; flex-direction:column; justify-content:center;
+               align-items:center; padding:60px; background:var(--bg); position:relative }
+.login-box   { width:100%; max-width:440px }
+
+/* Password strength bar */
+.pw-strength { height:4px; border-radius:99px; background:var(--border); margin-top:6px; overflow:hidden }
+.pw-bar      { height:100%; border-radius:99px; transition:width .3s, background .3s }
+
+@keyframes slideUp {
+  from { opacity:0; transform:translateY(16px) }
+  to   { opacity:1; transform:translateY(0) }
+}
+.slide-up { animation:slideUp .35s ease }
+</style>
+{% endblock %}
+{% block body %}
+<div class="login-wrap">
+
+  <!-- ── LEFT BRANDING ─────────────────────────────────────── -->
+  <div class="login-left">
+    <div style="position:absolute;top:-80px;right:-80px;width:300px;height:300px;border-radius:50%;background:rgba(255,255,255,.08)"></div>
+    <div style="position:absolute;bottom:-60px;left:-60px;width:240px;height:240px;border-radius:50%;background:rgba(255,255,255,.06)"></div>
+    <div style="position:relative;text-align:center;color:#fff;max-width:360px">
+      <div style="width:80px;height:80px;background:rgba(255,255,255,.2);border-radius:24px;display:flex;align-items:center;justify-content:center;margin:0 auto 28px;font-size:38px;border:1px solid rgba(255,255,255,.3)">🛒</div>
+      <div style="font-size:38px;font-weight:900;letter-spacing:-1px;margin-bottom:10px">SuperMart POS</div>
+      <div style="font-size:15px;opacity:.85;line-height:1.7">Next-generation point of sale system for modern supermarket operations</div>
+      <div style="margin-top:40px;display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:center;gap:12px;font-size:13px;opacity:.9;background:rgba(255,255,255,.12);padding:9px 16px;border-radius:10px">
+          <span style="font-size:17px">🔐</span> Create your first admin account
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;font-size:13px;opacity:.9;background:rgba(255,255,255,.12);padding:9px 16px;border-radius:10px">
+          <span style="font-size:17px">⚡</span> Blazing fast checkout
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;font-size:13px;opacity:.9;background:rgba(255,255,255,.12);padding:9px 16px;border-radius:10px">
+          <span style="font-size:17px">📊</span> Real-time analytics
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;font-size:13px;opacity:.9;background:rgba(255,255,255,.12);padding:9px 16px;border-radius:10px">
+          <span style="font-size:17px">🔒</span> Enterprise security
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── RIGHT FORM ─────────────────────────────────────────── -->
+  <div class="login-right">
+    <button onclick="toggleTheme()" class="btn btn-ghost btn-sm" id="themeBtn"
+            style="position:absolute;top:28px;right:28px">🌙 Dark</button>
+
+    <div class="login-box slide-up">
+      <div style="margin-bottom:28px">
+        <div style="display:inline-flex;align-items:center;gap:8px;background:rgba(79,108,246,.1);color:var(--accent);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;margin-bottom:14px;letter-spacing:.5px">
+          ✨ FIRST-RUN SETUP
+        </div>
+        <div style="font-size:30px;font-weight:900;margin-bottom:6px">Create Admin Account 🔐</div>
+        <div style="font-size:14px;color:var(--muted)">No users exist yet. Set up the initial administrator account to get started.</div>
+      </div>
+
+      <div class="alert alert-warning" style="margin-bottom:18px;font-size:13px">
+        Welcome. This is the first setup. The first account will become the system administrator.
+      </div>
+
+      <div id="setupAlert" class="alert" style="display:none;margin-bottom:14px"></div>
+
+      <div style="display:flex;flex-direction:column;gap:14px">
+
+        <div class="form-group">
+          <label class="form-label">Shop Name</label>
+          <input class="form-input" id="setup_shop_name" placeholder="Your shop name"
+                 autocomplete="organization"
+                 onkeydown="if(event.key==='Enter')focusNext('setup_full_name')">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Full Name</label>
+          <input class="form-input" id="setup_full_name" placeholder="Store owner or administrator name"
+                 autocomplete="name"
+                 onkeydown="if(event.key==='Enter')focusNext('setup_email')">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input class="form-input" id="setup_email" type="email" placeholder="admin@example.com"
+                 autocomplete="email"
+                 onkeydown="if(event.key==='Enter')focusNext('setup_user')">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Username</label>
+          <input class="form-input" id="setup_user" placeholder="Choose an admin username"
+                 autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false"
+                 onkeydown="if(event.key==='Enter')focusNext('setup_pass')">
+          <div style="font-size:12px;color:var(--muted);margin-top:4px">3–80 characters: letters, numbers, dots, dashes, or underscores</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <div style="position:relative">
+            <input class="form-input" id="setup_pass" type="password" placeholder="Create a strong password"
+                   autocomplete="new-password"
+                   oninput="updateStrength(this.value)"
+                   onkeydown="if(event.key==='Enter')focusNext('setup_confirm_pass')"
+                   style="padding-right:44px">
+            <button onclick="toggleVis('setup_pass',this)" type="button"
+                    style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:var(--muted)">👁</button>
+          </div>
+          <div class="pw-strength"><div class="pw-bar" id="pwBar" style="width:0%;background:var(--danger)"></div></div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px">
+            10+ characters with letters and numbers. Avoid store name, email, or common passwords.
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Confirm Password</label>
+          <div style="position:relative">
+            <input class="form-input" id="setup_confirm_pass" type="password" placeholder="Re-enter your password"
+                   autocomplete="new-password"
+                   onkeydown="if(event.key==='Enter')createAdmin()"
+                   style="padding-right:44px">
+            <button onclick="toggleVis('setup_confirm_pass',this)" type="button"
+                    style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:var(--muted)">👁</button>
+          </div>
+        </div>
+
+        <button class="btn btn-primary btn-full" id="createBtn"
+                style="padding:14px;font-size:15px;border-radius:12px;margin-top:4px"
+                onclick="createAdmin()">
+          🚀 Create Admin Account
+        </button>
+
+      </div><!-- /form fields -->
+    </div><!-- /login-box -->
+  </div><!-- /login-right -->
+</div><!-- /login-wrap -->
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* ─── Password strength meter ─────────────────────────────── */
+function updateStrength(pw) {
+  let score = 0;
+  if (pw.length >= 10) score++;
+  if (pw.length >= 14) score++;
+  if (/[A-Za-z]/.test(pw) && /[0-9]/.test(pw)) score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  const bar = document.getElementById('pwBar');
+  const pct   = [0, 25, 50, 75, 100][score];
+  const color = ['var(--danger)', 'var(--danger)', 'var(--warning)', '#3B82F6', 'var(--accent2)'][score];
+  bar.style.width     = pct + '%';
+  bar.style.background = color;
+}
+
+/* ─── Field navigation helpers ────────────────────────────── */
+function focusNext(id) {
+  const el = document.getElementById(id);
+  if (el) { el.focus(); }
+}
+
+function toggleVis(id, btn) {
+  const el = document.getElementById(id);
+  el.type = el.type === 'password' ? 'text' : 'password';
+  btn.textContent = el.type === 'password' ? '👁' : '🙈';
+}
+
+/* ─── Alert helper ────────────────────────────────────────── */
+function showAlert(type, msg) {
+  const al = document.getElementById('setupAlert');
+  al.className = 'alert alert-' + (type === 'error' ? 'error' : 'success');
+  al.textContent = msg;
+  al.style.display = 'flex';
+  if (type !== 'error') {
+    setTimeout(() => { al.style.display = 'none'; }, 5000);
+  }
+}
+
+/* ─── Create admin ────────────────────────────────────────── */
+async function createAdmin() {
+  const btn         = document.getElementById('createBtn');
+  const shopName    = (document.getElementById('setup_shop_name').value || '').trim();
+  const fullName    = (document.getElementById('setup_full_name').value || '').trim();
+  const email       = (document.getElementById('setup_email').value || '').trim().toLowerCase();
+  const username    = (document.getElementById('setup_user').value || '').trim();
+  const password    = document.getElementById('setup_pass').value || '';
+  const confirmPass = document.getElementById('setup_confirm_pass').value || '';
+
+  if (!shopName)    { showAlert('error', 'Shop name is required.');      return; }
+  if (!fullName)    { showAlert('error', 'Full name is required.');      return; }
+  if (!email)       { showAlert('error', 'Email is required.');           return; }
+  if (!username)    { showAlert('error', 'Username is required.');        return; }
+  if (!password)    { showAlert('error', 'Password is required.');        return; }
+  if (!confirmPass) { showAlert('error', 'Please confirm your password.'); return; }
+  if (password !== confirmPass) {
+    showAlert('error', 'Passwords do not match. Please try again.');
+    document.getElementById('setup_confirm_pass').value = '';
+    document.getElementById('setup_confirm_pass').focus();
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Creating admin account…';
+
+  let result = null;
+  try {
+    const res = await fetch('/setup-admin', {
+      method: 'POST',
+      headers: withCsrfHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ shop_name: shopName, full_name: fullName, email, username, password, confirm_password: confirmPass }),
+    });
+    const contentType = res.headers.get('content-type') || '';
+    result = contentType.includes('application/json') ? await res.json() : null;
+  } catch (_) {
+    showAlert('error', 'Unable to reach the server. Please check the connection and try again.');
+    btn.disabled = false;
+    btn.textContent = '🚀 Create Admin Account';
+    return;
+  }
+
+  if (result && result.ok) {
+    btn.textContent = '✓ Admin created! Redirecting…';
+    window.location.href = result.redirect || '/login';
+  } else {
+    const msg = (result && result.msg) || 'Unable to create the admin account. Please try again.';
+    showAlert('error', msg);
+    btn.disabled = false;
+    btn.textContent = '🚀 Create Admin Account';
+  }
+}
+</script>
+{% endblock %}

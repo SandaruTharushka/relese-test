@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %} — Login{% endblock %}
+{% block extra_head %}
+<style>
+.login-wrap  { display:flex; min-height:100vh }
+.login-left  { flex:1; background:linear-gradient(135deg,#4F6CF6 0%,#7C3AED 100%); display:flex; flex-direction:column; justify-content:center; align-items:center; padding:60px; position:relative; overflow:hidden }
+.login-right { flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; padding:60px; background:var(--bg); position:relative }
+.login-box   { width:100%; max-width:420px }
+
+/* Mode Selection Overlay */
+#modeOverlay {
+  position:fixed; inset:0; z-index:1000;
+  background:rgba(0,0,0,.65);
+  backdrop-filter:blur(6px);
+  display:flex; align-items:center; justify-content:center;
+}
+#modeOverlay .mode-card {
+  background:var(--card);
+  border-radius:24px;
+  padding:48px 40px;
+  text-align:center;
+  max-width:500px;
+  width:92%;
+  box-shadow:0 24px 60px rgba(0,0,0,.3);
+}
+.mode-btn-group { display:flex; gap:16px; justify-content:center; margin-top:32px }
+.mode-btn {
+  flex:1; border-radius:16px; border:2px solid var(--border);
+  background:var(--card); color:var(--text); cursor:pointer;
+  padding:22px 18px; display:flex; flex-direction:column;
+  align-items:center; gap:10px; transition:all .18s;
+}
+.mode-btn:hover { border-color:var(--accent); background:var(--hover); }
+.mode-btn.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+.mode-btn.primary:hover { opacity:.9; }
+.mode-btn .mode-icon { font-size:40px; line-height:1; }
+.mode-btn .mode-title { font-size:15px; font-weight:700; }
+.mode-btn .mode-desc { font-size:12px; opacity:.75; line-height:1.5; }
+
+/* Virtual Keyboard */
+#vKeyboard {
+  position:fixed; bottom:0; left:0; right:0; z-index:900;
+  background:var(--card); border-top:2px solid var(--border);
+  padding:10px 8px 18px; box-shadow:0 -6px 28px rgba(0,0,0,.18);
+  display:none; user-select:none;
+}
+.vk-row { display:flex; justify-content:center; gap:4px; margin-bottom:5px; }
+.vk-key {
+  height:42px; min-width:34px; border-radius:8px;
+  border:1px solid var(--border); background:var(--bg);
+  color:var(--text); font-size:14px; font-weight:500;
+  cursor:pointer; padding:0 8px;
+  transition:background .1s, color .1s;
+  display:flex; align-items:center; justify-content:center;
+  -webkit-tap-highlight-color:transparent;
+}
+.vk-key:active { background:var(--accent); color:#fff; border-color:var(--accent); }
+.vk-key.wide  { min-width:80px; flex:0 0 80px; }
+.vk-key.xwide { flex:1; max-width:160px; }
+.vk-key.action { background:var(--border); font-size:13px; }
+.vk-key.shift-on { background:var(--accent); color:#fff; border-color:var(--accent); }
+.vk-key.enter-key { background:var(--accent); color:#fff; border-color:var(--accent); }
+</style>
+{% endblock %}
+{% block body %}
+
+<!-- Mode Selection Overlay -->
+<div id="modeOverlay">
+  <div class="mode-card">
+    <div style="font-size:26px;font-weight:900;margin-bottom:8px">Choose Input Mode</div>
+    <div style="color:var(--muted);font-size:14px">Select how you will interact with SuperMart POS</div>
+    <div class="mode-btn-group">
+      <button class="mode-btn primary" id="btnTouchMode">
+        <span class="mode-icon">🖐️</span>
+        <span class="mode-title">Touch Screen</span>
+        <span class="mode-desc">Tap to type<br>✨ Touch Optimized</span>
+      </button>
+      <button class="mode-btn" id="btnPcMode">
+        <span class="mode-icon">⌨️</span>
+        <span class="mode-title">PC / Keyboard</span>
+        <span class="mode-desc">Use physical keyboard<br>Standard Mode</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Virtual Keyboard (built by JS) -->
+<div id="vKeyboard"></div>
+
+<div class="login-wrap">
+  <div class="login-left">
+    <div style="position:absolute;top:-80px;right:-80px;width:300px;height:300px;border-radius:50%;background:rgba(255,255,255,.08)"></div>
+    <div style="position:absolute;bottom:-60px;left:-60px;width:240px;height:240px;border-radius:50%;background:rgba(255,255,255,.06)"></div>
+    <div style="position:relative;text-align:center;color:#fff;max-width:360px">
+      <div style="width:80px;height:80px;background:rgba(255,255,255,.2);border-radius:24px;display:flex;align-items:center;justify-content:center;margin:0 auto 28px;font-size:38px;border:1px solid rgba(255,255,255,.3)">🛒</div>
+      <div style="font-size:38px;font-weight:900;letter-spacing:-1px;margin-bottom:10px">SuperMart POS</div>
+      <div style="font-size:15px;opacity:.85;line-height:1.7">Modern, reliable checkout for growing stores.</div>
+    </div>
+  </div>
+
+  <div class="login-right">
+    <button class="btn btn-ghost btn-sm" id="themeBtn" style="position:absolute;top:28px;right:28px">🌙 Dark</button>
+    <button class="btn btn-ghost btn-sm" id="modeBadge" style="position:absolute;top:28px;left:28px;display:none"></button>
+
+    <div class="login-box slide-up">
+      <div style="margin-bottom:28px">
+        <div style="font-size:30px;font-weight:900;margin-bottom:6px">Welcome back 👋</div>
+        <div style="font-size:14px;color:var(--muted)">Sign in with your username or email</div>
+      </div>
+
+      <div id="loginAlert" class="alert" style="display:none;margin-bottom:14px"></div>
+
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="form-group">
+          <label class="form-label">Username or Email</label>
+          <input class="form-input" id="inp_user" placeholder="Enter username or email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <div style="position:relative">
+            <input class="form-input" id="inp_pass" type="password" placeholder="Enter password" style="padding-right:44px">
+            <button id="togglePassBtn" type="button" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;color:var(--muted)">👁</button>
+          </div>
+        </div>
+
+        <a href="{{ url_for('reset_password_page') }}" style="text-align:right;font-size:13px;color:var(--accent);text-decoration:none;margin-top:-6px">Forgot Password?</a>
+
+        <button class="btn btn-primary btn-full" id="loginBtn" style="padding:14px;font-size:15px;border-radius:12px">🔐 Sign In</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/login.js') }}"></script>
+{% endblock %}

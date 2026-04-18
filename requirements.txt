@@ -1,0 +1,50 @@
+# SuperMart POS v3.1 — Python Requirements
+# Required Python version: 3.11
+# Install: pip install -r requirements.txt
+
+# -- Core Web Framework --
+Flask==3.0.3
+Flask-WTF==1.2.2
+Flask-SQLAlchemy==3.1.1
+Flask-Login==0.6.3
+flask-talisman==1.1.0
+Werkzeug==3.0.3
+SQLAlchemy==2.0.36
+
+# -- Production Server --
+waitress==3.0.0
+
+# -- Database --
+# SQLite uses Python's built-in sqlite3 module (no extra driver required)
+# Keep runtime SQLite-only: do not add mysql/mysql-connector packages here.
+
+# -- Desktop Shell --
+# PySide6 Qt WebEngine is the primary desktop shell on Python 3.11.
+# PyWebView is disabled (see is_pywebview_safe() in desktop_runtime.py).
+# Uncomment the line below only if you re-enable PyWebView after testing.
+# pywebview==5.0.5
+PySide6==6.7.2
+
+# -- Email (OTP password reset) --
+# smtplib is built-in Python
+
+# -- Hardware --
+python-escpos==3.1
+pyserial==3.5
+pywin32==306
+
+# -- Utilities --
+requests==2.32.3
+python-dotenv==1.0.1
+APScheduler==3.10.4
+Pillow==10.4.0
+python-barcode==0.15.1
+qrcode==7.4.2
+
+# -- Google Drive Backup (optional — needed for cloud backup feature) --
+# google-auth==2.29.0
+# google-auth-oauthlib==1.2.0
+# google-api-python-client==2.127.0
+
+# -- Build --
+pyinstaller==6.11.1

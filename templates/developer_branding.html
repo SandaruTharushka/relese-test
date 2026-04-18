@@ -1,0 +1,37 @@
+{% macro developer_contact(compact=False) -%}
+  {# Developer credit only: keep these contacts hardcoded; store contact is managed via StoreSettings. #}
+  {% set company_name = 'Cloud Crafter Software Enterprise' %}
+  {% set phone = '0788140255' %}
+  {% set whatsapp = '0788140255' %}
+  {% set email = 'sandarutharushka044@gmail.com' %}
+
+  {% if compact %}
+    <section class="developer-brand developer-brand-compact" aria-label="Developer contact information">
+      <div class="developer-brand-title">Developed by {{ company_name }}</div>
+      <div class="developer-brand-lines">
+        <span>Contact: <a href="tel:{{ phone }}">{{ phone }}</a></span>
+        <span>WhatsApp: <a href="https://wa.me/{{ whatsapp }}" target="_blank" rel="noopener">{{ whatsapp }}</a></span>
+        <span>Email: <a href="mailto:{{ email }}">{{ email }}</a></span>
+      </div>
+    </section>
+  {% else %}
+    <section class="developer-brand developer-brand-card" aria-label="Developer contact information">
+      <div class="developer-brand-eyebrow">Developer Contact</div>
+      <div class="developer-brand-title">Developed by {{ company_name }}</div>
+      <div class="developer-brand-grid">
+        <div class="developer-brand-row">
+          <span class="developer-brand-label">Contact</span>
+          <a href="tel:{{ phone }}">{{ phone }}</a>
+        </div>
+        <div class="developer-brand-row">
+          <span class="developer-brand-label">WhatsApp</span>
+          <a href="https://wa.me/{{ whatsapp }}" target="_blank" rel="noopener">{{ whatsapp }}</a>
+        </div>
+        <div class="developer-brand-row">
+          <span class="developer-brand-label">Email</span>
+          <a href="mailto:{{ email }}">{{ email }}</a>
+        </div>
+      </div>
+    </section>
+  {% endif %}
+{%- endmacro %}

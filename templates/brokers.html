@@ -1,0 +1,466 @@
+{% extends "base.html" %}
+{% from "sidebar.html" import sidebar with context %}
+{% block title %} — Brokers{% endblock %}
+
+{% block extra_head %}
+<style>
+.broker-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+  padding: 20px; transition: box-shadow .18s;
+}
+.broker-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,.12); }
+.broker-stat { text-align:center; }
+.broker-stat .val { font-size:18px; font-weight:800; }
+.broker-stat .lbl { font-size:10px; font-weight:600; color:var(--muted); text-transform:uppercase; margin-top:2px; }
+.badge-active   { background:rgba(16,185,129,.12); color:#10b981; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:700; }
+.badge-inactive { background:rgba(239,68,68,.12); color:var(--danger); padding:2px 10px; border-radius:20px; font-size:11px; font-weight:700; }
+.modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:900; align-items:center; justify-content:center; }
+.modal-overlay.open, .modal-overlay.show { display:flex; opacity:1; pointer-events:all; }
+.modal-box { background:var(--card); border-radius:16px; padding:28px; width:min(580px,95vw); max-height:90vh; overflow-y:auto; }
+.form-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+@media(max-width:540px){ .form-grid2 { grid-template-columns:1fr; } }
+.section-divider { border:none; border-top:1px solid var(--border); margin:18px 0; }
+.profile-pane { display:none; }
+.profile-pane.open { display:block; }
+.payment-row { display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:var(--stat); border-radius:10px; margin-bottom:8px; }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="app-layout">
+  {{ sidebar('brokers') }}
+  <div class="main-area">
+    <div class="topbar">
+      <div>
+        <div style="font-size:18px;font-weight:800">🤝 Broker Management</div>
+        <div style="font-size:12px;color:var(--muted)">Manage referral brokers &amp; track commission payments</div>
+      </div>
+      <div class="flex gap-2">
+        <button class="btn btn-primary" onclick="openBrokerModal()">+ Add Broker</button>
+      </div>
+    </div>
+
+    <div class="page-content fade-in">
+
+      <!-- Search bar -->
+      <div class="flex gap-3 mb-5 flex-wrap">
+        <input id="searchInput" class="form-control" style="max-width:320px"
+               placeholder="Search by name, phone, company…" oninput="loadBrokers()">
+        <label class="flex items-center gap-2" style="font-size:13px;font-weight:600">
+          <input type="checkbox" id="showInactive" onchange="loadBrokers()"> Show inactive
+        </label>
+      </div>
+
+      <!-- Summary strip -->
+      <div class="grid-4 mb-5" id="summaryStrip">
+        <div class="stat-card"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">Total Brokers</div><div style="font-size:22px;font-weight:800;color:var(--accent)" id="sumTotal">—</div></div>
+        <div class="stat-card"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">Total Revenue</div><div style="font-size:22px;font-weight:800;color:var(--accent2)" id="sumRev">—</div></div>
+        <div class="stat-card"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">Commission Due</div><div style="font-size:22px;font-weight:800;color:var(--warning)" id="sumDue">—</div></div>
+        <div class="stat-card"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">Balance Remaining</div><div style="font-size:22px;font-weight:800;color:var(--danger)" id="sumBal">—</div></div>
+      </div>
+
+      <!-- Main content: list + profile -->
+      <div class="flex gap-5" style="align-items:flex-start">
+
+        <!-- Broker list -->
+        <div style="flex:1;min-width:0">
+          <div id="brokerList" class="flex flex-col gap-3"></div>
+          <div id="emptyState" style="display:none;text-align:center;padding:60px 20px;color:var(--muted)">
+            <div style="font-size:40px;margin-bottom:12px">🤝</div>
+            <div style="font-weight:700">No brokers found</div>
+            <div style="font-size:13px;margin-top:6px">Add your first broker to start tracking referrals.</div>
+          </div>
+        </div>
+
+        <!-- Profile panel (appears when clicking a broker) -->
+        <div id="profilePane" class="profile-pane" style="width:min(420px,100%);flex-shrink:0">
+          <div class="broker-card">
+            <div id="profileContent"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ADD / EDIT BROKER MODAL ═══════════════════════════════════════════ -->
+<div class="modal-overlay" id="brokerModal">
+  <div class="modal-box">
+    <div class="flex justify-between items-center mb-5">
+      <div style="font-size:16px;font-weight:800" id="modalTitle">Add Broker</div>
+      <button class="btn btn-sm" onclick="closeModal('brokerModal')">✕</button>
+    </div>
+    <input type="hidden" id="editBrokerId">
+    <div class="form-grid2">
+      <div>
+        <label class="form-label">Full Name *</label>
+        <input id="bkName" class="form-control" placeholder="John Silva">
+      </div>
+      <div>
+        <label class="form-label">Company</label>
+        <input id="bkCompany" class="form-control" placeholder="ABC Motors">
+      </div>
+      <div>
+        <label class="form-label">Phone</label>
+        <input id="bkPhone" class="form-control" placeholder="+94 77 000 0000">
+      </div>
+      <div>
+        <label class="form-label">WhatsApp</label>
+        <input id="bkWhatsapp" class="form-control" placeholder="+94 77 000 0000">
+      </div>
+    </div>
+    <div class="mt-3">
+      <label class="form-label">Address</label>
+      <textarea id="bkAddress" class="form-control" rows="2" placeholder="Street, City"></textarea>
+    </div>
+    <hr class="section-divider">
+    <div style="font-size:13px;font-weight:700;margin-bottom:10px">Default Commission Settings</div>
+    <div class="form-grid2">
+      <div>
+        <label class="form-label">Commission Type</label>
+        <select id="bkCommType" class="form-control" onchange="toggleCommLabel()">
+          <option value="percent">Percentage (%)</option>
+          <option value="fixed">Fixed Amount</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label" id="commValueLabel">Commission Value (%)</label>
+        <input id="bkCommValue" class="form-control" type="number" min="0" step="0.01" placeholder="10">
+      </div>
+      <div>
+        <label class="form-label">Default Cash Price</label>
+        <input id="bkCashPrice" class="form-control" type="number" min="0" step="0.01" placeholder="0.00">
+      </div>
+      <div class="flex items-center gap-2" style="padding-top:22px">
+        <input type="checkbox" id="bkActive" checked>
+        <label for="bkActive" style="font-size:13px;font-weight:600">Active</label>
+      </div>
+    </div>
+    <div class="mt-3">
+      <label class="form-label">Notes</label>
+      <textarea id="bkNotes" class="form-control" rows="2" placeholder="Internal notes…"></textarea>
+    </div>
+    <div class="flex gap-3 mt-5 justify-end">
+      <button class="btn" onclick="closeModal('brokerModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveBroker()">Save Broker</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ RECORD COMMISSION PAYMENT MODAL ═══════════════════════════════════ -->
+<div class="modal-overlay" id="payModal">
+  <div class="modal-box" style="max-width:420px">
+    <div class="flex justify-between items-center mb-5">
+      <div style="font-size:16px;font-weight:800">💰 Record Commission Payment</div>
+      <button class="btn btn-sm" onclick="closeModal('payModal')">✕</button>
+    </div>
+    <input type="hidden" id="payBrokerId">
+    <div>
+      <label class="form-label">Amount</label>
+      <input id="payAmount" class="form-control" type="number" min="0.01" step="0.01" placeholder="0.00">
+    </div>
+    <div class="mt-3">
+      <label class="form-label">Payment Date</label>
+      <input id="payDate" class="form-control" type="date">
+    </div>
+    <div class="mt-3">
+      <label class="form-label">Method</label>
+      <select id="payMethod" class="form-control">
+        <option value="cash">Cash</option>
+        <option value="bank_transfer">Bank Transfer</option>
+        <option value="cheque">Cheque</option>
+        <option value="online">Online</option>
+      </select>
+    </div>
+    <div class="mt-3">
+      <label class="form-label">Reference No.</label>
+      <input id="payRef" class="form-control" placeholder="Transaction / cheque no.">
+    </div>
+    <div class="mt-3">
+      <label class="form-label">Notes</label>
+      <input id="payNotes" class="form-control" placeholder="Optional notes">
+    </div>
+    <div class="flex gap-3 mt-5 justify-end">
+      <button class="btn" onclick="closeModal('payModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitPayment()">Record Payment</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const fmtLKR = v => 'Rs ' + (v||0).toLocaleString('en-LK',{minimumFractionDigits:2,maximumFractionDigits:2});
+let _brokers = [];
+let _activeBrokerId = null;
+
+async function api(url, opts={}){
+  const res = await fetch(url, {
+    headers:{'Content-Type':'application/json','X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content||''},
+    ...opts
+  });
+  return res.json();
+}
+
+function closeModal(id){ const m=document.getElementById(id); if(m){m.classList.remove('open');m.classList.remove('show');} }
+function openModal(id){ const m=document.getElementById(id); if(m){m.classList.add('show');} }
+
+// ── Load & render broker list ─────────────────────────────────────────────
+async function loadBrokers(){
+  const q = document.getElementById('searchInput').value;
+  const inactive = document.getElementById('showInactive').checked ? '0' : '1';
+  const data = await api(`/api/brokers?q=${encodeURIComponent(q)}&active=${inactive}`);
+  if(!Array.isArray(data)){ return; }
+  _brokers = data;
+
+  // Summaries
+  let totalRev=0, totalDue=0, totalBal=0;
+  data.forEach(b=>{ totalRev+=b.total_revenue||0; totalDue+=b.total_commission||0; totalBal+=b.balance_due||0; });
+  document.getElementById('sumTotal').textContent = data.length;
+  document.getElementById('sumRev').textContent   = fmtLKR(totalRev);
+  document.getElementById('sumDue').textContent   = fmtLKR(totalDue);
+  document.getElementById('sumBal').textContent   = fmtLKR(totalBal);
+
+  const list = document.getElementById('brokerList');
+  const empty = document.getElementById('emptyState');
+  if(!data.length){ list.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+
+  list.innerHTML = data.map(b => `
+    <div class="broker-card" style="cursor:pointer;border:2px solid ${_activeBrokerId===b.id?'var(--accent)':'var(--border)'}"
+         onclick="showProfile(${b.id})">
+      <div class="flex justify-between items-start mb-3">
+        <div>
+          <div style="font-size:15px;font-weight:800">${esc(b.name)}</div>
+          ${b.company?`<div style="font-size:12px;color:var(--muted)">${esc(b.company)}</div>`:''}
+          ${b.phone?`<div style="font-size:12px;color:var(--muted)">📞 ${esc(b.phone)}</div>`:''}
+        </div>
+        <span class="${b.is_active?'badge-active':'badge-inactive'}">${b.is_active?'Active':'Inactive'}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;background:var(--stat);border-radius:10px;padding:12px">
+        <div class="broker-stat"><div class="val">${b.job_count||0}</div><div class="lbl">Jobs</div></div>
+        <div class="broker-stat"><div class="val" style="font-size:14px">${fmtLKR(b.total_revenue)}</div><div class="lbl">Revenue</div></div>
+        <div class="broker-stat"><div class="val" style="font-size:14px;color:var(--warning)">${fmtLKR(b.total_commission)}</div><div class="lbl">Commission</div></div>
+        <div class="broker-stat"><div class="val" style="font-size:14px;color:${b.balance_due>0?'var(--danger)':'var(--accent2)'}">${fmtLKR(b.balance_due)}</div><div class="lbl">Balance</div></div>
+      </div>
+      <div class="flex gap-2 mt-3">
+        <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();openPayModal(${b.id})"
+                ${b.balance_due<=0?'disabled':''}>💰 Pay Commission</button>
+        <button class="btn btn-sm" onclick="event.stopPropagation();editBroker(${b.id})">✏️ Edit</button>
+        <button class="btn btn-sm" style="background:rgba(239,68,68,.1);color:var(--danger)"
+                onclick="event.stopPropagation();deleteBroker(${b.id},'${esc(b.name)}')">🗑</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function esc(s){ const d=document.createElement('div');d.textContent=s||'';return d.innerHTML; }
+
+// ── Profile panel ─────────────────────────────────────────────────────────
+async function showProfile(id){
+  _activeBrokerId = id;
+  // Re-highlight selection
+  document.querySelectorAll('#brokerList .broker-card').forEach((el,i)=>{
+    el.style.border = (_brokers[i]?.id===id) ? '2px solid var(--accent)' : '2px solid var(--border)';
+  });
+  document.getElementById('profilePane').classList.add('open');
+  document.getElementById('profileContent').innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">Loading…</div>';
+
+  const b = await api(`/api/brokers/${id}`);
+  if(b.error){ document.getElementById('profileContent').innerHTML=`<div class="text-danger">${b.error}</div>`; return; }
+
+  const paidPct = b.total_commission>0 ? Math.min(100,Math.round(b.total_paid/b.total_commission*100)) : 0;
+
+  document.getElementById('profileContent').innerHTML = `
+    <div class="flex justify-between items-start mb-4">
+      <div>
+        <div style="font-size:17px;font-weight:800">${esc(b.name)}</div>
+        ${b.company?`<div style="font-size:12px;color:var(--muted)">${esc(b.company)}</div>`:''}
+      </div>
+      <span class="${b.is_active?'badge-active':'badge-inactive'}">${b.is_active?'Active':'Inactive'}</span>
+    </div>
+    ${b.phone?`<div style="font-size:13px;margin-bottom:4px">📞 ${esc(b.phone)}</div>`:''}
+    ${b.whatsapp?`<div style="font-size:13px;margin-bottom:4px">💬 ${esc(b.whatsapp)}</div>`:''}
+    ${b.address?`<div style="font-size:13px;margin-bottom:4px;color:var(--muted)">📍 ${esc(b.address)}</div>`:''}
+    <hr class="section-divider">
+
+    <!-- Commission summary -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div class="broker-stat" style="background:var(--stat);border-radius:10px;padding:12px">
+        <div class="val">${b.job_count}</div><div class="lbl">Referred Jobs</div>
+      </div>
+      <div class="broker-stat" style="background:var(--stat);border-radius:10px;padding:12px">
+        <div class="val" style="font-size:15px">${fmtLKR(b.total_revenue)}</div><div class="lbl">Revenue</div>
+      </div>
+      <div class="broker-stat" style="background:rgba(245,158,11,.08);border-radius:10px;padding:12px">
+        <div class="val" style="color:var(--warning)">${fmtLKR(b.total_commission)}</div><div class="lbl">Total Commission</div>
+      </div>
+      <div class="broker-stat" style="background:rgba(16,185,129,.08);border-radius:10px;padding:12px">
+        <div class="val" style="color:var(--accent2)">${fmtLKR(b.total_paid)}</div><div class="lbl">Paid</div>
+      </div>
+    </div>
+    <div style="margin-bottom:14px">
+      <div class="flex justify-between" style="font-size:12px;font-weight:700;margin-bottom:4px">
+        <span>Commission Paid</span><span>${paidPct}%</span>
+      </div>
+      <div style="background:var(--border);border-radius:6px;height:6px">
+        <div style="background:var(--accent2);width:${paidPct}%;height:6px;border-radius:6px"></div>
+      </div>
+    </div>
+    ${b.balance_due>0 ? `
+    <div style="background:rgba(239,68,68,.08);border-radius:10px;padding:12px;margin-bottom:14px;text-align:center">
+      <div style="font-size:12px;font-weight:700;color:var(--muted)">BALANCE REMAINING</div>
+      <div style="font-size:20px;font-weight:800;color:var(--danger)">${fmtLKR(b.balance_due)}</div>
+    </div>` : `
+    <div style="background:rgba(16,185,129,.08);border-radius:10px;padding:10px;margin-bottom:14px;text-align:center;font-size:13px;font-weight:700;color:var(--accent2)">✅ Fully Paid</div>`}
+
+    <button class="btn btn-primary btn-full mb-4" onclick="openPayModal(${b.id})"
+            ${b.balance_due<=0?'disabled':''}>💰 Record Commission Payment</button>
+
+    <!-- Recent Jobs -->
+    ${b.jobs.length ? `
+    <div style="font-size:13px;font-weight:700;margin-bottom:8px">Recent Jobs</div>
+    ${b.jobs.slice(0,5).map(j=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--stat);border-radius:8px;margin-bottom:6px;font-size:12px">
+        <div>
+          <div style="font-weight:700">${esc(j.job_number)}</div>
+          <div style="color:var(--muted)">${esc(j.customer_name)} ${j.vehicle_reg_no?'• '+esc(j.vehicle_reg_no):''}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-weight:700">${fmtLKR(j.total_amount)}</div>
+          <div style="color:var(--warning)">${fmtLKR(j.broker_commission_amount)} comm.</div>
+        </div>
+      </div>`).join('')}` : ''}
+
+    <!-- Payment history -->
+    ${b.commission_payments.length ? `
+    <div style="font-size:13px;font-weight:700;margin:14px 0 8px">Payment History</div>
+    ${b.commission_payments.map(p=>`
+      <div class="payment-row">
+        <div>
+          <div style="font-size:13px;font-weight:700">${fmtLKR(p.amount)}</div>
+          <div style="font-size:11px;color:var(--muted)">${esc(p.payment_date)} • ${esc(p.method)}</div>
+          ${p.reference_no?`<div style="font-size:11px;color:var(--muted)">Ref: ${esc(p.reference_no)}</div>`:''}
+        </div>
+        <button class="btn btn-sm" style="color:var(--danger);background:rgba(239,68,68,.1)"
+                onclick="deletePayment(${b.id},${p.id})">✕</button>
+      </div>`).join('')}` : ''}
+  `;
+}
+
+// ── Add broker modal ──────────────────────────────────────────────────────
+function openBrokerModal(){
+  document.getElementById('editBrokerId').value='';
+  document.getElementById('modalTitle').textContent='Add Broker';
+  ['bkName','bkCompany','bkPhone','bkWhatsapp','bkAddress','bkNotes'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('bkCommType').value='percent';
+  document.getElementById('bkCommValue').value='';
+  document.getElementById('bkCashPrice').value='';
+  document.getElementById('bkActive').checked=true;
+  toggleCommLabel();
+  openModal('brokerModal');
+}
+
+function editBroker(id){
+  const b = _brokers.find(x=>x.id===id);
+  if(!b) return;
+  document.getElementById('editBrokerId').value=id;
+  document.getElementById('modalTitle').textContent='Edit Broker';
+  document.getElementById('bkName').value=b.name||'';
+  document.getElementById('bkCompany').value=b.company||'';
+  document.getElementById('bkPhone').value=b.phone||'';
+  document.getElementById('bkWhatsapp').value=b.whatsapp||'';
+  document.getElementById('bkAddress').value=b.address||'';
+  document.getElementById('bkNotes').value=b.notes||'';
+  document.getElementById('bkCommType').value=b.default_commission_type||'percent';
+  document.getElementById('bkCommValue').value=b.default_commission_value||'';
+  document.getElementById('bkCashPrice').value=b.default_cash_price||'';
+  document.getElementById('bkActive').checked=!!b.is_active;
+  toggleCommLabel();
+  openModal('brokerModal');
+}
+
+function toggleCommLabel(){
+  const t = document.getElementById('bkCommType').value;
+  document.getElementById('commValueLabel').textContent = t==='percent' ? 'Commission Value (%)' : 'Fixed Commission Amount';
+}
+
+async function saveBroker(){
+  const id = document.getElementById('editBrokerId').value;
+  const payload = {
+    name: document.getElementById('bkName').value.trim(),
+    company: document.getElementById('bkCompany').value.trim(),
+    phone: document.getElementById('bkPhone').value.trim(),
+    whatsapp: document.getElementById('bkWhatsapp').value.trim(),
+    address: document.getElementById('bkAddress').value.trim(),
+    notes: document.getElementById('bkNotes').value.trim(),
+    default_commission_type: document.getElementById('bkCommType').value,
+    default_commission_value: parseFloat(document.getElementById('bkCommValue').value)||0,
+    default_cash_price: parseFloat(document.getElementById('bkCashPrice').value)||0,
+    is_active: document.getElementById('bkActive').checked,
+  };
+  if(!payload.name){ alert('Name is required'); return; }
+  const url = id ? `/api/brokers/${id}` : '/api/brokers';
+  const method = id ? 'PUT' : 'POST';
+  const res = await api(url, {method, body:JSON.stringify(payload)});
+  if(!res.ok){ alert(res.error||'Save failed'); return; }
+  closeModal('brokerModal');
+  loadBrokers();
+  if(id) showProfile(parseInt(id));
+}
+
+async function deleteBroker(id, name){
+  if(!confirm(`Remove broker "${name}"?`)) return;
+  const res = await api(`/api/brokers/${id}`, {method:'DELETE'});
+  if(!res.ok){ alert(res.error||'Delete failed'); return; }
+  if(_activeBrokerId===id){
+    document.getElementById('profilePane').classList.remove('open');
+    _activeBrokerId=null;
+  }
+  loadBrokers();
+}
+
+// ── Commission payment modal ───────────────────────────────────────────────
+function openPayModal(id){
+  const b = _brokers.find(x=>x.id===id);
+  document.getElementById('payBrokerId').value=id;
+  document.getElementById('payAmount').value=b?b.balance_due.toFixed(2):'';
+  document.getElementById('payDate').value=new Date().toISOString().split('T')[0];
+  document.getElementById('payMethod').value='cash';
+  document.getElementById('payRef').value='';
+  document.getElementById('payNotes').value='';
+  openModal('payModal');
+}
+
+async function submitPayment(){
+  const bid = document.getElementById('payBrokerId').value;
+  const payload = {
+    amount: parseFloat(document.getElementById('payAmount').value)||0,
+    payment_date: document.getElementById('payDate').value,
+    method: document.getElementById('payMethod').value,
+    reference_no: document.getElementById('payRef').value.trim(),
+    notes: document.getElementById('payNotes').value.trim(),
+  };
+  if(payload.amount<=0){ alert('Enter a valid amount'); return; }
+  const res = await api(`/api/brokers/${bid}/payments`, {method:'POST', body:JSON.stringify(payload)});
+  if(!res.ok){ alert(res.error||'Payment failed'); return; }
+  closeModal('payModal');
+  loadBrokers();
+  if(_activeBrokerId) showProfile(_activeBrokerId);
+}
+
+async function deletePayment(bid, pid){
+  if(!confirm('Delete this payment record?')) return;
+  const res = await api(`/api/brokers/${bid}/payments/${pid}`, {method:'DELETE'});
+  if(!res.ok){ alert(res.error||'Failed'); return; }
+  loadBrokers();
+  if(_activeBrokerId) showProfile(_activeBrokerId);
+}
+
+// Close modal on overlay click
+document.querySelectorAll('.modal-overlay').forEach(el=>{
+  el.addEventListener('click', e=>{ if(e.target===el){ el.classList.remove('open'); el.classList.remove('show'); } });
+});
+
+loadBrokers();
+</script>
+{% endblock %}

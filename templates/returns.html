@@ -1,0 +1,812 @@
+{% extends "base.html" %}
+{% from "sidebar.html" import sidebar with context %}
+{% block title %} — Product Returns{% endblock %}
+
+{% block body %}
+<div class="app-layout">
+  {{ sidebar('returns') }}
+  <div class="main-area">
+    <div class="topbar">
+      <div>
+        <div style="font-size:18px;font-weight:800">🔄 Product Returns</div>
+        <div style="font-size:12px;color:var(--muted)">Process customer returns &amp; restock inventory</div>
+      </div>
+      <button class="btn btn-primary" onclick="openModal('addReturnModal')">+ New Return</button>
+    </div>
+
+    <div class="page-content fade-in">
+
+      <!-- Stats -->
+      <div class="grid-4 mb-6">
+        <div class="stat-card">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Total Returns</div>
+          <div style="font-size:28px;font-weight:800">{{ returns|length }}</div>
+        </div>
+        <div class="stat-card">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">This Month</div>
+          <div style="font-size:28px;font-weight:800;color:var(--warning)" id="statMonth">0</div>
+        </div>
+        <div class="stat-card">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Total Refunded</div>
+          <div style="font-size:22px;font-weight:800;color:var(--danger)" id="statRefunded">LKR 0</div>
+        </div>
+        <div class="stat-card">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Items Returned</div>
+          <div style="font-size:28px;font-weight:800;color:var(--accent2)" id="statItems">0</div>
+        </div>
+      </div>
+
+      <!-- Returns table -->
+      <div class="table-wrap">
+        <div class="table-header">
+          <div style="font-weight:700">Return History</div>
+          <input type="text" class="form-input" id="searchReturn" placeholder="Search return / invoice…"
+                 style="width:240px" oninput="filterTable()">
+        </div>
+        <div class="overflow-x">
+          <table class="data-table" id="returnsTable">
+            <thead>
+              <tr>
+                <th>Return #</th>
+                <th>Date</th>
+                <th>Invoice Ref.</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Items</th>
+                <th>Total Refund</th>
+                <th>Reason</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="returnsBody">
+              {% if returns %}
+                {% for r in returns %}
+                <tr>
+                  <td><span class="badge badge-warning">{{ r.return_number or ('RET-' ~ r.id) }}</span></td>
+                  <td>{{ r.return_date.strftime('%Y-%m-%d %H:%M') if r.return_date else '—' }}</td>
+                  <td>{{ r.sale.invoice_number if r.sale else '—' }}</td>
+                  <td>
+                    {% set rt = (r.return_type or 'refund') | string %}
+                    <span class="badge {{ 'badge-primary' if rt=='refund' else 'badge-warning' if rt=='exchange' else 'badge-success' }}">
+                      {{ '💵 Refund' if rt=='refund' else '🔁 Exchange' if rt=='exchange' else '🏷 Credit' }}
+                    </span>
+                  </td>
+                  <td>
+                    {% if (r.status or 'completed') == 'pending' %}
+                    <span class="badge badge-warning">⏳ Pending</span>
+                    {% else %}
+                    <span class="badge badge-success">✓ Approved</span>
+                    {% endif %}
+                  </td>
+                  <td>{{ r.items|length }} item(s)</td>
+                  <td style="font-weight:700;color:var(--danger)">LKR {{ '{:,.2f}'.format(r.total_amount or 0) }}</td>
+                  <td>{{ r.reason or '—' }}</td>
+                  <td style="display:flex;gap:4px;flex-wrap:wrap">
+                    <button class="btn btn-ghost btn-sm" onclick="viewReturn({{ r.id }})">View</button>
+                    <button class="btn btn-ghost btn-sm js-print-return" data-return-id="{{ r.id }}" title="Print Refund Receipt">🖨 Print</button>
+                    {% if (r.status or 'completed') == 'pending' %}
+                    <button class="btn btn-success btn-sm" onclick="approveReturn({{ r.id }}, '{{ r.return_type }}')">Approve</button>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              {% else %}
+                <tr><td colspan="9" class="empty-state"><div class="empty-icon">🔄</div>No returns yet</td></tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── ADD RETURN MODAL ───────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="addReturnModal">
+  <div class="modal" style="width:720px;max-width:96vw">
+    <div class="flex items-center justify-between mb-4">
+      <div class="modal-title" style="margin-bottom:0">New Product Return</div>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('addReturnModal')">✕</button>
+    </div>
+
+    <div class="grid-2 mb-4">
+      <div class="form-group">
+        <label class="form-label">Original Invoice # (optional)</label>
+        <div class="flex gap-2" style="position:relative">
+          <div style="flex:1;position:relative">
+            <input type="text" class="form-input" id="ret_invoice" placeholder="INV-20240101-0001"
+                   style="flex:1" autocomplete="off">
+            <input type="hidden" id="ret_invoice_id">
+            <div id="retInvoiceResults" class="table-wrap" style="position:absolute;left:0;right:0;top:100%;z-index:30;display:none;max-height:260px;overflow:auto"></div>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="lookupInvoice()">Search</button>
+        </div>
+        <div id="invoiceInfo" style="margin-top:6px;font-size:13px;color:var(--muted)"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Reason for Return</label>
+        <select data-custom-select class="form-select" id="ret_reason_select" onchange="onReasonChange()">
+          <option value="Defective / Not Working">Defective / Not Working</option>
+          <option value="Wrong Item Received">Wrong Item Received</option>
+          <option value="Customer Changed Mind">Customer Changed Mind</option>
+          <option value="Damaged in Transit">Damaged in Transit</option>
+          <option value="Expired / Past Best Before">Expired / Past Best Before</option>
+          <option value="Duplicate Purchase">Duplicate Purchase</option>
+          <option value="Other">Other (specify below)</option>
+        </select>
+        <input type="text" class="form-input" id="ret_reason" placeholder="Describe reason…"
+               style="margin-top:6px;display:none">
+      </div>
+    </div>
+
+    <div class="grid-2 mb-4">
+      <div class="form-group">
+        <label class="form-label">Return Type</label>
+        <select data-custom-select class="form-select" id="ret_return_type">
+          <option value="refund">💵 Refund (cash back)</option>
+          <option value="exchange">🔁 Exchange (swap product)</option>
+          <option value="store_credit">🏷 Store Credit (add to account)</option>
+        </select>
+      </div>
+      <div class="form-group" style="display:flex;align-items:center;gap:12px;padding-top:24px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px">
+          <input type="checkbox" id="ret_restock" checked
+                 style="width:16px;height:16px;accent-color:var(--accent)">
+          <span>♻ Restock returned items into inventory</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Returned product add -->
+    <div class="form-group mb-4">
+      <label class="form-label">Add Item to Return</label>
+      <div class="flex gap-2" style="position:relative">
+        <div style="flex:1;position:relative">
+          <input type="text" class="form-input" id="ret_product_search" placeholder="Search returned product..." autocomplete="off">
+          <input type="hidden" id="ret_product_id">
+          <div id="retProductResults" class="table-wrap" style="position:absolute;left:0;right:0;top:100%;z-index:20;display:none;max-height:220px;overflow:auto"></div>
+        </div>
+        <select data-custom-select class="form-select" id="ret_imei" style="width:220px;display:none">
+          <option value="">Select sold IMEI</option>
+        </select>
+        <input type="number" class="form-input" id="ret_qty" placeholder="Qty" style="width:90px" min="1" value="1">
+        <input type="number" class="form-input" id="ret_price" placeholder="Price" style="width:130px" step="0.01">
+        <button class="btn btn-success btn-sm" onclick="addReturnItem()">+ Add</button>
+      </div>
+      <div id="ret_imei_help" style="display:none;font-size:12px;color:var(--muted);margin-top:6px">
+        IMEI-tracked items require selecting the exact sold IMEI from the invoice.
+      </div>
+    </div>
+
+    <div class="form-group mb-4" id="exchangeAddWrap" style="display:none">
+      <label class="form-label">Add Replacement Item (Exchange)</label>
+      <div class="flex gap-2" style="position:relative">
+        <div style="flex:1;position:relative">
+          <input type="text" class="form-input" id="ex_product_search" placeholder="Search new product..." autocomplete="off">
+          <input type="hidden" id="ex_product_id">
+          <div id="exProductResults" class="table-wrap" style="position:absolute;left:0;right:0;top:100%;z-index:20;display:none;max-height:220px;overflow:auto"></div>
+        </div>
+        <input type="number" class="form-input" id="ex_qty" placeholder="Qty" style="width:90px" min="1" value="1">
+        <input type="number" class="form-input" id="ex_price" placeholder="Price" style="width:130px" step="0.01">
+        <button class="btn btn-primary btn-sm" onclick="addExchangeItem()">+ Add New</button>
+      </div>
+    </div>
+
+    <!-- Items list -->
+    <div class="table-wrap mb-4" id="retItemsWrap" style="display:none">
+      <table class="data-table" id="retItemsTable">
+        <thead>
+          <tr><th>Returned Product</th><th>IMEI</th><th>Qty</th><th>Price</th><th>Total</th><th></th></tr>
+        </thead>
+        <tbody id="retItemsBody"></tbody>
+      </table>
+    </div>
+
+    <div class="table-wrap mb-4" id="exItemsWrap" style="display:none">
+      <table class="data-table" id="exItemsTable">
+        <thead>
+          <tr><th>New Product</th><th>Qty</th><th>Price</th><th>Total</th><th></th></tr>
+        </thead>
+        <tbody id="exItemsBody"></tbody>
+      </table>
+    </div>
+
+    <div class="table-wrap mb-4" id="retSummaryWrap" style="display:none;padding:14px 16px">
+      <div class="grid-2" style="row-gap:8px">
+        <div><strong>Returned Total:</strong> <span id="sumReturned">LKR 0.00</span></div>
+        <div id="sumNewWrap" style="display:none"><strong>New Total:</strong> <span id="sumNew">LKR 0.00</span></div>
+      </div>
+      <div id="sumDiff" style="margin-top:8px;font-weight:800"></div>
+    </div>
+
+    <div id="restockNotice" class="alert alert-warning" style="margin-bottom:16px">
+      ♻ Restock is <strong>ON</strong> — items will be added back to inventory.
+    </div>
+
+    <div class="alert alert-warning" style="margin-bottom:16px;font-size:13px">
+      ⏳ Returns start as <strong>Pending</strong> — a manager must approve them before stock is restocked and credits issued.
+    </div>
+    <div class="flex gap-2 justify-between">
+      <button class="btn btn-ghost" onclick="closeModal('addReturnModal')">Cancel</button>
+      <button class="btn btn-primary" id="saveReturnBtn" onclick="saveReturn()" disabled>Submit RMA</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── VIEW RETURN MODAL ──────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="viewReturnModal">
+  <div class="modal" style="width:660px;max-width:96vw">
+    <div class="flex items-center justify-between mb-4">
+      <div class="modal-title" style="margin-bottom:0" id="viewReturnTitle">Return Detail</div>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('viewReturnModal')">✕</button>
+    </div>
+    <div id="viewReturnContent"></div>
+    <div class="flex gap-2 justify-between" style="margin-top:16px">
+      <button class="btn btn-ghost" onclick="closeModal('viewReturnModal')">Close</button>
+      <button class="btn btn-primary" id="viewReturnPrintBtn" data-return-id="" disabled>
+        🖨 Print Refund Receipt
+      </button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/receipt_print.js') }}"></script>
+<script>
+const retItems = [];
+const exchangeItems = [];
+let saleImeisByProduct = {};
+
+function fmtCurrency(v){ return `LKR ${(Number(v)||0).toFixed(2)}`; }
+
+function onReasonChange() {
+  const sel = document.getElementById('ret_reason_select');
+  const inp = document.getElementById('ret_reason');
+  if (sel.value === 'Other') { inp.style.display = ''; inp.value = ''; inp.focus(); }
+  else { inp.style.display = 'none'; inp.value = sel.value; }
+}
+
+function setupProductSearch({ inputId, hiddenId, resultId, priceId, qtyId, selectedItems }) {
+  const input = document.getElementById(inputId);
+  const hidden = document.getElementById(hiddenId);
+  const results = document.getElementById(resultId);
+  const price = document.getElementById(priceId);
+  const qty = document.getElementById(qtyId);
+  let debounceTimer = null;
+  let currentResults = [];
+  let activeIndex = -1;
+
+  function closeDropdown() {
+    results.style.display = 'none';
+    results.innerHTML = '';
+    activeIndex = -1;
+  }
+
+  function selectProduct(product) {
+    const duplicate = selectedItems.some(item => item.product_id === product.id && !(item.imei || '').trim());
+    if (duplicate) {
+      toast('This product is already in the list', 'error');
+      return;
+    }
+    hidden.value = product.id;
+    input.value = product.name;
+    price.value = Number(product.price || 0).toFixed(2);
+    qty.value = 1;
+    if (hidden.id === 'ret_product_id') {
+      updateReturnImeiOptions(product.id);
+    }
+    closeDropdown();
+  }
+
+  function highlight(index) {
+    activeIndex = index;
+    results.querySelectorAll('.autocomplete-item').forEach((itemEl, idx) => {
+      itemEl.style.background = idx === activeIndex ? 'var(--bg)' : '';
+    });
+  }
+
+  function renderList(items) {
+    if (!items.length) {
+      results.innerHTML = '<div style="padding:8px 12px;color:var(--muted);font-size:13px">No results found</div>';
+      results.style.display = '';
+      activeIndex = -1;
+      return;
+    }
+
+    results.innerHTML = items.map((product, idx) => `
+      <div class="autocomplete-item" data-index="${idx}"
+           style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border)">
+        <div style="font-weight:600">${product.name}</div>
+        <div style="font-size:12px;color:var(--muted)">${fmtCurrency(product.price)}</div>
+      </div>
+    `).join('');
+    results.style.display = '';
+    activeIndex = -1;
+
+    results.querySelectorAll('.autocomplete-item').forEach(itemEl => {
+      itemEl.addEventListener('mouseenter', () => highlight(parseInt(itemEl.dataset.index)));
+      itemEl.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        selectProduct(items[parseInt(itemEl.dataset.index)]);
+      });
+    });
+  }
+
+  async function fetchProducts(query) {
+    const q = query.trim();
+    if (q.length < 2) { closeDropdown(); return; }
+    const res = await api(`/api/products/search?q=${encodeURIComponent(q)}&limit=10`);
+    currentResults = Array.isArray(res) ? res : (res?.products || []);
+    renderList(currentResults);
+  }
+
+  function debouncedFetch() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => fetchProducts(input.value), 300);
+  }
+
+  input.addEventListener('input', () => {
+    hidden.value = '';
+    debouncedFetch();
+  });
+  input.addEventListener('focus', debouncedFetch);
+  input.addEventListener('keydown', (e) => {
+    if (results.style.display === 'none') return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      highlight(Math.min(activeIndex + 1, currentResults.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      highlight(Math.max(activeIndex - 1, 0));
+    } else if (e.key === 'Enter' && activeIndex >= 0) {
+      e.preventDefault();
+      selectProduct(currentResults[activeIndex]);
+    } else if (e.key === 'Escape') {
+      closeDropdown();
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!results.contains(e.target) && e.target !== input) closeDropdown();
+  });
+}
+
+function escapeHtml(v) {
+  return String(v || '').replace(/[&<>'"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','\'':'&#39;','"':'&quot;'}[m]));
+}
+
+function highlightMatch(text, query) {
+  const safeText = escapeHtml(text || '');
+  if (!query) return safeText;
+  const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return safeText.replace(new RegExp(`(${escapedQuery})`, 'ig'), '<mark style="background:#FEF08A;padding:0 2px;border-radius:3px">$1</mark>');
+}
+
+function renderInvoiceInfo(s) {
+  const invoiceNo = s.invoice_number || s.invoice_no || '';
+  const total = s.total_amount ?? s.total ?? 0;
+  const date = (s.sale_date || s.date || '').substring(0, 10);
+  const customer = s.customer || 'Walk-in';
+  document.getElementById('invoiceInfo').innerHTML = `<span style="color:var(--accent2)">✓ Found: ${invoiceNo} — ${fmtCurrency(total)} on ${date} (${customer})</span>`;
+}
+
+function resetReturnImeiSelection() {
+  const imeiSelect = document.getElementById('ret_imei');
+  const imeiHelp = document.getElementById('ret_imei_help');
+  imeiSelect.innerHTML = '<option value="">Select sold IMEI</option>';
+  imeiSelect.value = '';
+  imeiSelect.style.display = 'none';
+  imeiHelp.style.display = 'none';
+  const qtyEl = document.getElementById('ret_qty');
+  qtyEl.value = 1;
+  qtyEl.readOnly = false;
+}
+
+async function loadInvoiceImeiMap(invoiceId) {
+  saleImeisByProduct = {};
+  if (!invoiceId) return;
+  const detail = await api(`/api/invoices/${invoiceId}`);
+  if (!detail || !Array.isArray(detail.items)) return;
+  detail.items.forEach(item => {
+    const pid = Number(item.product_id || 0);
+    const imei = String(item.imei || '').trim();
+    if (!pid || !imei) return;
+    if (!saleImeisByProduct[pid]) saleImeisByProduct[pid] = [];
+    if (!saleImeisByProduct[pid].includes(imei)) saleImeisByProduct[pid].push(imei);
+  });
+}
+
+function updateReturnImeiOptions(productId) {
+  const pid = Number(productId || 0);
+  const imeis = saleImeisByProduct[pid] || [];
+  const imeiSelect = document.getElementById('ret_imei');
+  const imeiHelp = document.getElementById('ret_imei_help');
+  const qtyEl = document.getElementById('ret_qty');
+  imeiSelect.innerHTML = '<option value="">Select sold IMEI</option>';
+  if (!imeis.length) {
+    imeiSelect.value = '';
+    imeiSelect.style.display = 'none';
+    imeiHelp.style.display = 'none';
+    qtyEl.readOnly = false;
+    return;
+  }
+  const selectedImeis = new Set(retItems.map(i => (i.imei || '').trim()).filter(Boolean));
+  imeis.forEach(imei => {
+    if (selectedImeis.has(imei)) return;
+    const opt = document.createElement('option');
+    opt.value = imei;
+    opt.textContent = imei;
+    imeiSelect.appendChild(opt);
+  });
+  imeiSelect.style.display = '';
+  imeiHelp.style.display = '';
+  qtyEl.value = 1;
+  qtyEl.readOnly = true;
+}
+
+async function lookupInvoiceByNumber(invoiceNo) {
+  const inv = (invoiceNo || '').trim();
+  if (!inv) {
+    document.getElementById('invoiceInfo').textContent = '';
+    document.getElementById('ret_invoice_id').value = '';
+    saleImeisByProduct = {};
+    resetReturnImeiSelection();
+    return;
+  }
+  const res = await api(`/api/invoices/search?q=${encodeURIComponent(inv)}&limit=1`);
+  if (!res || !res.length) {
+    document.getElementById('invoiceInfo').innerHTML = '<span style="color:var(--danger)">Invoice not found</span>';
+    document.getElementById('ret_invoice_id').value = '';
+    saleImeisByProduct = {};
+    resetReturnImeiSelection();
+    return;
+  }
+  const s = res[0];
+  document.getElementById('ret_invoice').value = s.invoice_number || s.invoice_no;
+  const invoiceId = s.id || '';
+  document.getElementById('ret_invoice_id').value = invoiceId;
+  await loadInvoiceImeiMap(invoiceId);
+  updateReturnImeiOptions(document.getElementById('ret_product_id').value);
+  renderInvoiceInfo(s);
+}
+
+async function lookupInvoice() {
+  await lookupInvoiceByNumber(document.getElementById('ret_invoice').value);
+}
+
+function setupInvoiceSearch() {
+  const input = document.getElementById('ret_invoice');
+  const hidden = document.getElementById('ret_invoice_id');
+  const results = document.getElementById('retInvoiceResults');
+  let debounceTimer = null;
+  let currentResults = [];
+  let activeIndex = -1;
+
+  function closeDropdown() {
+    results.style.display = 'none';
+    results.innerHTML = '';
+    activeIndex = -1;
+  }
+
+  async function selectInvoice(invoice) {
+    input.value = invoice.invoice_number || invoice.invoice_no || '';
+    hidden.value = invoice.id || '';
+    closeDropdown();
+    await lookupInvoiceByNumber(input.value);
+  }
+
+  function highlight(index) {
+    activeIndex = index;
+    results.querySelectorAll('.invoice-autocomplete-item').forEach((itemEl, idx) => {
+      itemEl.style.background = idx === activeIndex ? 'var(--bg)' : '';
+    });
+  }
+
+  function renderList(items, query) {
+    if (!items.length) {
+      results.innerHTML = '<div style="padding:10px 12px;color:var(--muted);font-size:13px">No invoices found</div>';
+      results.style.display = '';
+      activeIndex = -1;
+      return;
+    }
+    results.innerHTML = items.map((invoice, idx) => {
+      const invoiceNo = invoice.invoice_number || invoice.invoice_no || '';
+      const total = invoice.total_amount ?? invoice.total ?? 0;
+      const date = (invoice.sale_date || invoice.date || '').substring(0, 10);
+      const customer = invoice.customer || 'Walk-in';
+      return `<div class="invoice-autocomplete-item" data-index="${idx}" style="padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--border)">
+        <div style="font-weight:600;font-size:13px">${highlightMatch(invoiceNo, query)}</div>
+        <div style="font-size:12px;color:var(--muted)">${fmtCurrency(total)} | ${date} | ${highlightMatch(customer, query)}</div>
+      </div>`;
+    }).join('');
+    results.style.display = '';
+    activeIndex = -1;
+
+    results.querySelectorAll('.invoice-autocomplete-item').forEach(itemEl => {
+      itemEl.addEventListener('mouseenter', () => highlight(parseInt(itemEl.dataset.index, 10)));
+      itemEl.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        selectInvoice(items[parseInt(itemEl.dataset.index, 10)]);
+      });
+    });
+  }
+
+  async function fetchInvoices() {
+    const q = input.value.trim();
+    const res = await api(`/api/invoices/search?q=${encodeURIComponent(q)}&limit=10`);
+    currentResults = Array.isArray(res) ? res : [];
+    renderList(currentResults, q);
+  }
+
+  function debouncedFetch() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(fetchInvoices, 300);
+  }
+
+  input.addEventListener('input', () => {
+    hidden.value = '';
+    if (!input.value.trim()) document.getElementById('invoiceInfo').textContent = '';
+    debouncedFetch();
+  });
+  input.addEventListener('focus', debouncedFetch);
+  input.addEventListener('keydown', (e) => {
+    if (results.style.display === 'none') return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      highlight(Math.min(activeIndex + 1, currentResults.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      highlight(Math.max(activeIndex - 1, 0));
+    } else if (e.key === 'Enter') {
+      if (activeIndex >= 0) {
+        e.preventDefault();
+        selectInvoice(currentResults[activeIndex]);
+      }
+    } else if (e.key === 'Escape') {
+      closeDropdown();
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!results.contains(e.target) && e.target !== input) closeDropdown();
+  });
+}
+
+function addItem(list, pidField, nameField, qtyField, priceField) {
+  const pid = parseInt(document.getElementById(pidField).value);
+  const name = document.getElementById(nameField).value.trim();
+  const qty = parseFloat(document.getElementById(qtyField).value) || 0;
+  const price = parseFloat(document.getElementById(priceField).value) || 0;
+  const imei = pidField === 'ret_product_id' ? String(document.getElementById('ret_imei').value || '').trim() : '';
+  const productImeis = pidField === 'ret_product_id' ? (saleImeisByProduct[pid] || []) : [];
+  if (!pid || !name || qty <= 0 || price <= 0) { toast('Select product and enter qty & price', 'error'); return; }
+  if (productImeis.length) {
+    if (!document.getElementById('ret_invoice_id').value) { toast('Select invoice first for IMEI-tracked return item', 'error'); return; }
+    if (!imei) { toast('Select the sold IMEI for this return item', 'error'); return; }
+    if (qty !== 1) { toast('IMEI-tracked return qty must be 1 per line', 'error'); return; }
+    if (list.some(i => (i.imei || '').trim() === imei)) { toast('This IMEI is already added to the return', 'error'); return; }
+  }
+  const idx = list.findIndex(i => i.product_id === pid);
+  if (idx >= 0 && !imei) { list[idx].quantity += qty; list[idx].total = list[idx].quantity * list[idx].price; }
+  else { list.push({ product_id: pid, name, imei: imei || '', quantity: qty, price, total: qty*price }); }
+  document.getElementById(pidField).value = '';
+  document.getElementById(nameField).value = '';
+  document.getElementById(qtyField).value = 1;
+  document.getElementById(priceField).value = '';
+  if (pidField === 'ret_product_id') resetReturnImeiSelection();
+  recalcSummary();
+}
+
+function addReturnItem(){ addItem(retItems,'ret_product_id','ret_product_search','ret_qty','ret_price'); }
+function addExchangeItem(){ addItem(exchangeItems,'ex_product_id','ex_product_search','ex_qty','ex_price'); }
+
+function removeRetItem(i){ retItems.splice(i,1); recalcSummary(); }
+function removeExchangeItem(i){ exchangeItems.splice(i,1); recalcSummary(); }
+
+function recalcSummary() {
+  const returnType = document.getElementById('ret_return_type').value;
+  const returnedTotal = retItems.reduce((s,i)=>s + (i.quantity*i.price),0);
+  const newTotal = exchangeItems.reduce((s,i)=>s + (i.quantity*i.price),0);
+
+  document.getElementById('retItemsBody').innerHTML = retItems.map((it, idx) => `<tr><td>${it.name}</td><td>${it.imei || '—'}</td><td><input type="number" min="1" class="form-input" value="${it.quantity}" onchange="retItems[${idx}].quantity=parseFloat(this.value)||1;recalcSummary()" style="width:80px" ${it.imei ? 'readonly' : ''}></td><td>${fmtCurrency(it.price)}</td><td style="font-weight:700;color:var(--danger)">${fmtCurrency(it.quantity*it.price)}</td><td><button class="btn btn-danger btn-sm" onclick="removeRetItem(${idx})">✕</button></td></tr>`).join('');
+  document.getElementById('exItemsBody').innerHTML = exchangeItems.map((it, idx) => `<tr><td>${it.name}</td><td><input type="number" min="1" class="form-input" value="${it.quantity}" onchange="exchangeItems[${idx}].quantity=parseFloat(this.value)||1;recalcSummary()" style="width:80px"></td><td>${fmtCurrency(it.price)}</td><td style="font-weight:700">${fmtCurrency(it.quantity*it.price)}</td><td><button class="btn btn-danger btn-sm" onclick="removeExchangeItem(${idx})">✕</button></td></tr>`).join('');
+
+  document.getElementById('retItemsWrap').style.display = retItems.length ? '' : 'none';
+  document.getElementById('exItemsWrap').style.display = (returnType === 'exchange' && exchangeItems.length) ? '' : 'none';
+  document.getElementById('retSummaryWrap').style.display = retItems.length ? '' : 'none';
+  document.getElementById('sumReturned').textContent = fmtCurrency(returnedTotal);
+  document.getElementById('sumNewWrap').style.display = returnType === 'exchange' ? '' : 'none';
+  document.getElementById('sumNew').textContent = fmtCurrency(newTotal);
+
+  const diffEl = document.getElementById('sumDiff');
+  if (returnType === 'exchange') {
+    const diff = newTotal - returnedTotal;
+    if (diff > 0) { diffEl.innerHTML = `Additional Charge: <span style="color:var(--danger)">${fmtCurrency(diff)}</span>`; }
+    else if (diff < 0) { diffEl.innerHTML = `Refund Amount: <span style="color:var(--accent2)">${fmtCurrency(Math.abs(diff))}</span>`; }
+    else { diffEl.innerHTML = '<span style="color:var(--accent)">Even exchange</span>'; }
+  } else if (returnType === 'store_credit') {
+    diffEl.innerHTML = `Store Credit: <span style="color:var(--accent2)">${fmtCurrency(returnedTotal)}</span>`;
+  } else {
+    diffEl.innerHTML = `Refund Amount: <span style="color:var(--danger)">${fmtCurrency(returnedTotal)}</span>`;
+  }
+  document.getElementById('saveReturnBtn').disabled = retItems.length === 0 || (returnType === 'exchange' && exchangeItems.length === 0);
+  updateReturnImeiOptions(document.getElementById('ret_product_id').value);
+}
+
+async function saveReturn() {
+  const btn = document.getElementById('saveReturnBtn');
+  btn.disabled = true; btn.textContent = 'Submitting…';
+  const sel = document.getElementById('ret_reason_select');
+  const reason = sel.value === 'Other' ? document.getElementById('ret_reason').value.trim() : sel.value;
+  const returnType = document.getElementById('ret_return_type').value;
+  const res = await api('/api/returns', {
+    method: 'POST',
+    body: {
+      invoice_number: document.getElementById('ret_invoice').value.trim(),
+      reason,
+      return_type: returnType,
+      restock: document.getElementById('ret_restock').checked ? 1 : 0,
+      items: retItems,
+      exchange_items: returnType === 'exchange' ? exchangeItems : [],
+    }
+  });
+  btn.disabled = false; btn.textContent = 'Submit RMA';
+  if (res && res.ok) {
+    toast(`RMA submitted: ${res.return_number} (pending approval)`, 'success');
+    retItems.length = 0; exchangeItems.length = 0; recalcSummary();
+    closeModal('addReturnModal');
+    setTimeout(() => location.reload(), 1000);
+  } else toast(res?.error || 'Failed to submit return', 'error');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('ret_reason').value = document.getElementById('ret_reason_select').value;
+  setupInvoiceSearch();
+  setupProductSearch({
+    inputId: 'ret_product_search',
+    hiddenId: 'ret_product_id',
+    resultId: 'retProductResults',
+    priceId: 'ret_price',
+    qtyId: 'ret_qty',
+    selectedItems: retItems
+  });
+  document.getElementById('ret_product_id').addEventListener('change', function() {
+    updateReturnImeiOptions(this.value);
+  });
+  document.getElementById('ret_product_search').addEventListener('input', () => {
+    resetReturnImeiSelection();
+  });
+  setupProductSearch({
+    inputId: 'ex_product_search',
+    hiddenId: 'ex_product_id',
+    resultId: 'exProductResults',
+    priceId: 'ex_price',
+    qtyId: 'ex_qty',
+    selectedItems: exchangeItems
+  });
+
+  document.getElementById('ret_return_type').addEventListener('change', function() {
+    document.getElementById('exchangeAddWrap').style.display = this.value === 'exchange' ? '' : 'none';
+    recalcSummary();
+  });
+  document.getElementById('ret_restock').addEventListener('change', function() {
+    document.getElementById('restockNotice').innerHTML = this.checked
+      ? '♻ Restock is <strong>ON</strong> — items will be added back to inventory.'
+      : '⚠ Restock is <strong>OFF</strong> — inventory will NOT be updated.';
+    document.getElementById('restockNotice').className = this.checked ? 'alert alert-warning' : 'alert alert-danger';
+  });
+  recalcSummary();
+});
+
+
+async function approveReturn(id, returnType) {
+  let exItems = [];
+  if (returnType === 'exchange') {
+    const confirmed = await AppDialog.confirm('This is an Exchange return. Click Continue to approve with no replacement sale items, or Cancel to stop.', { title: 'Exchange return', confirmText: 'Continue', variant: 'warning' });
+    if (!confirmed) return;
+  }
+  const approveConfirmed = await AppDialog.confirm('Approve this return? Items will be restocked only if Restock is enabled.', { title: 'Approve return', confirmText: 'Approve', variant: 'primary' });
+  if (!approveConfirmed) return;
+  const res = await api(`/api/returns/${id}/approve`, {
+    method: 'POST',
+    body: { exchange_items: exItems }
+  });
+  if (res && res.ok) {
+    toast('Return approved successfully.', 'success');
+    setTimeout(() => location.reload(), 900);
+  } else {
+    toast(res?.error || 'Failed to approve return', 'error');
+  }
+}
+
+async function printReturn(returnId, triggerBtn = null) {
+  const parsedId = Number.parseInt(returnId, 10);
+  const modalPrintBtn = document.getElementById('viewReturnPrintBtn');
+  const selectedId = Number.parseInt(modalPrintBtn?.dataset?.returnId || '', 10);
+  const targetReturnId = Number.isInteger(parsedId) && parsedId > 0 ? parsedId : selectedId;
+
+  if (!Number.isInteger(targetReturnId) || targetReturnId <= 0) {
+    toast('Unable to print: no return record selected.', 'error');
+    return;
+  }
+
+  const actionButton = triggerBtn instanceof HTMLElement ? triggerBtn : null;
+  const printUrl = `/print/receipt/return/${targetReturnId}?auto_print=1`;
+
+  try {
+    await window.SuperMartReceiptPrint.printFromUrl({
+      url: printUrl,
+      button: actionButton,
+      busyText: 'Preparing…',
+      frameId: 'refundReceiptPrintFrame',
+      onQueued: () => toast('Return receipt ready to print.', 'success'),
+      onError: (msg) => toast(msg || 'Printing failed to start. Please try again.', 'error'),
+    });
+  } catch (_) {
+    // Friendly error already shown from callback.
+  }
+}
+
+function printRefundReceipt(id) {
+  if (!id) return;
+  printReturn(id);
+}
+
+async function viewReturn(id) {
+  const res = await api(`/api/returns/${id}`);
+  if (!res) return;
+  const printBtn = document.getElementById('viewReturnPrintBtn');
+  if (printBtn) {
+    printBtn.disabled = false;
+    printBtn.dataset.returnId = String(res.id || id || '');
+  }
+  document.getElementById('viewReturnTitle').textContent = `Return: ${res.return_number}`;
+  document.getElementById('viewReturnContent').innerHTML = `
+    <div class="grid-2 mb-4">
+      <div><span class="form-label">Invoice Ref.</span><div style="font-weight:600;margin-top:4px">${res.invoice_number || '—'}</div></div>
+      <div><span class="form-label">Date</span><div style="font-weight:600;margin-top:4px">${res.return_date}</div></div>
+      <div><span class="form-label">Return Type</span><div style="font-weight:600;margin-top:4px">${res.return_type === 'refund' ? '💵 Refund' : res.return_type === 'exchange' ? '🔁 Exchange' : '🏷 Store Credit'}</div></div>
+      <div><span class="form-label">Restock</span><div style="font-weight:600;margin-top:4px">${res.restock ? '♻ Yes — items restocked' : '✗ No — not restocked'}</div></div>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Product</th><th>IMEI</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
+        <tbody>${res.items.map(i => `<tr><td>${i.product_name}</td><td>${i.imei || '—'}</td><td>${i.quantity}</td><td>${fmtCurrency(i.price)}</td><td style="font-weight:700;color:var(--danger)">${fmtCurrency(i.total)}</td></tr>`).join('')}</tbody>
+      </table>
+    </div>`;
+  openModal('viewReturnModal');
+}
+
+document.addEventListener('click', (event) => {
+  const trigger = event.target.closest('.js-print-return, #viewReturnPrintBtn');
+  if (!trigger) return;
+  const rowReturnId = trigger.dataset.returnId;
+  printReturn(rowReturnId, trigger);
+});
+
+function filterTable() {
+  const q = document.getElementById('searchReturn').value.toLowerCase();
+  document.querySelectorAll('#returnsBody tr').forEach(row => { row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none'; });
+}
+
+(function() {
+  const now = new Date();
+  let monthCount = 0, totalRefunded = 0, totalItems = 0;
+  document.querySelectorAll('#returnsBody tr').forEach(row => {
+    const cells = row.querySelectorAll('td');
+    if (cells.length < 7) return;
+    const dateStr = cells[1]?.textContent?.trim();
+    const d = new Date(dateStr);
+    if (!isNaN(d) && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) monthCount++;
+    totalRefunded += parseFloat(cells[6]?.textContent?.replace(/[^0-9.]/g,'') || '0') || 0;
+    totalItems += parseInt(cells[5]?.textContent?.match(/\d+/)?.[0] || '0') || 0;
+  });
+  document.getElementById('statMonth').textContent = monthCount;
+  document.getElementById('statRefunded').textContent = fmtCurrency(totalRefunded);
+  document.getElementById('statItems').textContent = totalItems;
+})();
+</script>
+
+{% endblock %}

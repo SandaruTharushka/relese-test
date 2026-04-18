@@ -1,0 +1,3374 @@
+{% extends "base.html" %}
+{% from "sidebar.html" import sidebar with context %}
+{% from "developer_branding.html" import developer_contact %}
+{% block title %} — Settings{% endblock %}
+{% block extra_head %}
+<style>
+/* ══ Desktop Software Look ══════════════════════════════════════════════ */
+.s-wrap   { display:flex; height:calc(100vh - 65px); overflow:hidden; background:var(--bg) }
+.s-nav    { width:200px; background:var(--sidebar); border-right:1px solid var(--border);
+            padding:8px; overflow-y:auto; flex-shrink:0; display:flex; flex-direction:column; gap:1px }
+.s-body   { flex:1; overflow-y:auto; padding:0 }
+.s-page   { display:none; animation:fadeIn .18s }
+.s-page.show { display:block }
+
+/* Nav items */
+.nav-section { font-size:10px; font-weight:700; color:var(--muted); text-transform:uppercase;
+               letter-spacing:.7px; padding:10px 10px 4px; margin-top:4px }
+.sn { display:flex; align-items:center; gap:9px; padding:8px 10px; border-radius:8px;
+      cursor:pointer; font-size:13px; font-weight:500; color:var(--muted);
+      border:none; background:none; width:100%; text-align:left; transition:all .12s; line-height:1.3 }
+.sn:hover { background:var(--hover); color:var(--text) }
+.sn.on    { background:rgba(79,108,246,.15); color:var(--accent); font-weight:600 }
+.sn .ico  { font-size:15px; width:22px; text-align:center; flex-shrink:0 }
+
+/* Content area */
+.s-header { padding:18px 24px 0; border-bottom:1px solid var(--border); background:var(--card); position:sticky; top:0; z-index:10 }
+.s-htitle { font-size:18px; font-weight:800; margin-bottom:2px }
+.s-hsub   { font-size:12px; color:var(--muted); padding-bottom:14px }
+.s-inner  { padding:20px 24px }
+
+/* Sections */
+.cfg-block  { background:var(--card); border:1px solid var(--border); border-radius:12px;
+              margin-bottom:16px; overflow:hidden }
+.cfg-head   { padding:12px 16px; border-bottom:1px solid var(--border);
+              display:flex; align-items:center; justify-content:space-between;
+              background:var(--stat) }
+.cfg-htxt   { font-size:13px; font-weight:700; display:flex; align-items:center; gap:7px }
+.cfg-row    { display:flex; align-items:center; justify-content:space-between;
+              padding:11px 16px; border-bottom:1px solid var(--border); gap:12px }
+.cfg-row:last-child { border-bottom:none }
+.cfg-lbl    { font-size:13px; font-weight:500 }
+.cfg-sub    { font-size:11px; color:var(--muted); margin-top:1px }
+.cfg-right  { display:flex; align-items:center; gap:8px; flex-shrink:0 }
+
+/* Counter */
+.ctr { display:flex; align-items:center; gap:5px }
+.ctr-btn { width:26px; height:26px; border-radius:6px; border:1px solid var(--border);
+           background:var(--stat); font-size:16px; font-weight:700; line-height:1;
+           display:flex; align-items:center; justify-content:center;
+           cursor:pointer; color:var(--text); transition:background .12s }
+.ctr-btn:hover { background:var(--hover) }
+.ctr-val { font-weight:700; min-width:28px; text-align:center; font-size:14px }
+
+/* Device card */
+.device-card { display:flex; align-items:center; gap:12px; padding:12px 14px;
+               background:var(--card); border:1px solid var(--border); border-radius:10px;
+               margin-bottom:8px; transition:border-color .15s }
+.device-card:hover  { border-color:var(--accent) }
+.device-card.active { border-color:var(--accent2); background:rgba(16,185,129,.04) }
+.device-icon { width:42px; height:42px; border-radius:10px; background:var(--stat);
+               display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0 }
+.device-info { flex:1; min-width:0 }
+.device-name { font-size:13px; font-weight:700 }
+.device-desc { font-size:11px; color:var(--muted) }
+.device-status { font-size:11px; font-weight:700; padding:3px 10px; border-radius:99px }
+.status-ok     { background:rgba(16,185,129,.15); color:var(--accent2) }
+.status-off    { background:var(--stat); color:var(--muted) }
+.status-err    { background:rgba(239,68,68,.15); color:var(--danger) }
+
+/* Tab strip */
+.tab-strip { display:flex; background:var(--stat); padding:3px; border-radius:9px;
+             gap:2px; margin-bottom:16px; width:fit-content }
+.ts-btn { padding:6px 16px; border-radius:7px; border:none; font-size:12px; font-weight:500;
+          color:var(--muted); cursor:pointer; background:none; font-family:'Outfit',sans-serif;
+          transition:all .12s }
+.ts-btn.on { background:var(--card); color:var(--text); font-weight:700;
+             box-shadow:0 1px 4px rgba(0,0,0,.1) }
+
+/* Barcode preview box */
+.bc-preview { background:var(--input); border:1px solid var(--border); border-radius:8px;
+              padding:12px; text-align:center; min-height:80px;
+              display:flex; align-items:center; justify-content:center }
+.bc-preview img { max-height:70px; max-width:100% }
+
+/* Status light */
+.dot { width:8px; height:8px; border-radius:50%; display:inline-block; flex-shrink:0 }
+.dot-green  { background:#10B981; box-shadow:0 0 6px #10B98180 }
+.dot-red    { background:#EF4444; box-shadow:0 0 6px #EF444480 }
+.dot-yellow { background:#F59E0B }
+.dot-grey   { background:#94A3B8 }
+
+/* Card visual */
+.card-visual { width:200px; height:120px; border-radius:12px; background:linear-gradient(135deg,#1a1a2e,#16213e);
+               padding:14px; color:#fff; display:flex; flex-direction:column; justify-content:space-between;
+               flex-shrink:0; box-shadow:0 8px 24px rgba(0,0,0,.3) }
+.card-chip    { width:28px; height:20px; background:linear-gradient(135deg,#d4af37,#f5d675); border-radius:4px }
+.card-num     { font-size:12px; letter-spacing:3px; font-family:monospace }
+.card-brand   { font-size:11px; font-weight:700; text-align:right }
+
+/* Info banner */
+.info-banner { padding:10px 14px; border-radius:9px; font-size:12px;
+               display:flex; align-items:flex-start; gap:8px; margin-bottom:12px }
+.info-blue   { background:rgba(79,108,246,.1); border:1px solid rgba(79,108,246,.25); color:var(--accent) }
+.info-green  { background:rgba(16,185,129,.1); border:1px solid rgba(16,185,129,.25); color:var(--accent2) }
+.info-yellow { background:rgba(245,158,11,.1); border:1px solid rgba(245,158,11,.25); color:var(--warning) }
+.info-red    { background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.3); color:var(--danger) }
+
+/* Input row */
+.inp-row { display:flex; align-items:center; gap:8px }
+.lbl-sm  { font-size:12px; font-weight:600; color:var(--muted); min-width:90px }
+.pw-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; }
+.pw-help { font-size:12px; color:var(--muted); margin-top:8px; }
+.pw-validation { display:none; margin-top:12px; }
+.pw-validation.show { display:block; }
+.pw-validation ul { margin:8px 0 0 18px; font-size:12px; color:var(--muted); }
+
+/* Printer and barcode section polish */
+.printer-layout { display:grid; gap:18px; }
+.printer-meta { font-size:12px; color:var(--muted); margin-top:4px; }
+.device-card-wrap { padding:14px; }
+.device-card { border-radius:12px; padding:14px 16px; margin-bottom:0; background:linear-gradient(180deg,var(--card),var(--stat)); display:flex; align-items:center; gap:12px; }
+.device-icon { font-size:26px; flex-shrink:0; }
+.device-info { flex:1; min-width:0; }
+.device-name { font-size:14px; font-weight:700; margin-bottom:2px; }
+.device-desc { font-size:12px; }
+.device-status { font-size:11px; font-weight:700; padding:4px 11px; border-radius:999px; border:1px solid transparent; white-space:nowrap; }
+.status-ok   { background:rgba(16,185,129,.16); color:#047857; border-color:rgba(16,185,129,.3); }
+.status-err  { background:rgba(239,68,68,.14); color:#b91c1c; border-color:rgba(239,68,68,.3); }
+.status-off  { background:var(--stat); color:var(--muted); border-color:var(--border); }
+.status-warn { background:rgba(245,158,11,.15); color:#92400e; border-color:rgba(245,158,11,.3); }
+.cfg-row { padding:13px 16px; }
+.printer-actions { display:flex; flex-wrap:wrap; gap:10px; }
+.printer-actions .btn { min-width:128px; }
+.btn-printer-save { font-weight:700; box-shadow:0 4px 14px rgba(79,108,246,.22); }
+.printer-subgroup {
+  margin: 10px 14px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--card);
+}
+.printer-subgroup-title {
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: .25px;
+  background: var(--stat);
+  border-bottom: 1px solid var(--border);
+}
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="app-layout">
+  {{ sidebar('settings') }}
+  <div class="main-area">
+    <div class="topbar">
+      <div style="font-size:18px;font-weight:700">⚙️ System Settings</div>
+      <div class="flex items-center gap-2">
+        <span id="saveStatus" class="text-muted text-sm"></span>
+        {% if is_admin %}<button type="button" class="btn btn-primary btn-sm" onclick="saveAllSettings()">💾 Save All</button>{% endif %}
+      </div>
+    </div>
+
+    <div class="s-wrap">
+
+      <!-- ══ LEFT NAV ══════════════════════════════════════════════ -->
+      <nav class="s-nav">
+        {% if is_admin %}
+        <div class="nav-section">General</div>
+        <button type="button" class="sn on"  onclick="show('general')"  id="n-general"><span class="ico">🏠</span>General</button>
+        <button type="button" class="sn"     onclick="show('company')"  id="n-company"><span class="ico">🏪</span>Company Info</button>
+
+        <div class="nav-section">Hardware</div>
+        <button type="button" class="sn"     onclick="show('printers')" id="n-printers"><span class="ico">🖨️</span>Printer Settings</button>
+        <button type="button" class="sn"     onclick="show('rcpt-layout')" id="n-rcpt-layout"><span class="ico">🧾</span>Receipt Layout</button>
+        <button type="button" class="sn"     onclick="show('barcode')"  id="n-barcode"><span class="ico">🏷️</span>Barcode / Scanner</button>
+        <button type="button" class="sn"     onclick="show('card')"     id="n-card"><span class="ico">💳</span>Card Payment</button>
+        <button type="button" class="sn"     onclick="show('drawer')"   id="n-drawer"><span class="ico">💰</span>Cash Drawer</button>
+
+        <div class="nav-section">Sales</div>
+        <button type="button" class="sn"     onclick="show('payment')"  id="n-payment"><span class="ico">💵</span>Payment Options</button>
+        <button type="button" class="sn"     onclick="show('tax')"      id="n-tax"><span class="ico">📊</span>Tax & Pricing</button>
+        <button type="button" class="sn"     onclick="show('discount')" id="n-discount"><span class="ico">🏷️</span>Discounts</button>
+
+        <div class="nav-section">System</div>
+        <button type="button" class="sn"     onclick="show('users')"    id="n-users"><span class="ico">👥</span>Users</button>
+        <button type="button" class="sn"     onclick="show('audit')"    id="n-audit"><span class="ico">📋</span>Audit Log</button>
+        <button type="button" class="sn"     onclick="show('sessions')" id="n-sessions"><span class="ico">🔌</span>Sessions</button>
+        <button type="button" class="sn"     onclick="show('returns-cfg')" id="n-returns-cfg"><span class="ico">🔄</span>Return Policy</button>
+        <button type="button" class="sn"     onclick="show('database')" id="n-database"><span class="ico">🗄️</span>Database</button>
+        <button type="button" class="sn"     onclick="show('gdrive')"   id="n-gdrive"><span class="ico">☁️</span>Cloud Backup</button>
+        <button type="button" class="sn"     onclick="show('about')"    id="n-about"><span class="ico">ℹ️</span>About</button>
+        {% else %}
+        <div class="nav-section">Account</div>
+        <button type="button" class="sn on" onclick="show('users')" id="n-users"><span class="ico">🔐</span>Change Password</button>
+        {% endif %}
+      </nav>
+
+      <!-- ══ MAIN CONTENT ═══════════════════════════════════════════ -->
+      <div class="s-body">
+
+        <!-- ─────────────── GENERAL ─────────────── -->
+        <div class="s-page show" id="p-general">
+          <div class="s-header"><div class="s-htitle">🏠 General Settings</div><div class="s-hsub">Appearance, language, and behavior</div></div>
+          <div class="s-inner">
+
+            <div class="cfg-block">
+              <div class="cfg-head"><span class="cfg-htxt">🎨 Appearance</span></div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Color Theme</div><div class="cfg-sub">Light / Dark mode for the interface</div></div>
+                <div class="cfg-right">
+                  <button class="btn btn-ghost btn-sm" onclick="applyTheme('light')" id="btn-light">☀️ Light</button>
+                  <button class="btn btn-ghost btn-sm" onclick="applyTheme('dark')"  id="btn-dark">🌙 Dark</button>
+                </div>
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Language</div></div>
+                <select data-custom-select class="form-select" id="s_lang" style="width:150px;padding:7px 12px" onchange="sp('lang',this.value)">
+                  <option value="en">English</option><option value="si">සිංහල</option><option value="ta">தமிழ்</option>
+                </select>
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Currency</div></div>
+                <select data-custom-select class="form-select" id="s_currency" style="width:150px;padding:7px 12px" onchange="sp('currency',this.value)">
+                  <option value="LKR">LKR — Sri Lankan Rupee</option>
+                  <option value="USD">USD — US Dollar</option>
+                  <option value="GBP">GBP — British Pound</option>
+                </select>
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Date Format</div></div>
+                <select data-custom-select class="form-select" id="s_datefmt" style="width:170px;padding:7px 12px" onchange="sp('datefmt',this.value)">
+                  <option value="dd/mm/yyyy">DD/MM/YYYY (11/03/2026)</option>
+                  <option value="mm/dd/yyyy">MM/DD/YYYY (03/11/2026)</option>
+                  <option value="yyyy-mm-dd">YYYY-MM-DD (2026-03-11)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="cfg-block">
+              <div class="cfg-head"><span class="cfg-htxt">🛒 Billing Screen</span></div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Product Grid Columns</div><div class="cfg-sub">Number of product buttons per row</div></div>
+                <div class="ctr">
+                  <button class="ctr-btn" onclick="adj('gridCols',-1,3,8)">−</button>
+                  <span class="ctr-val" id="v_gridCols">5</span>
+                  <button class="ctr-btn" onclick="adj('gridCols',1,3,8)">+</button>
+                </div>
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Search Barcode On Billing Start</div></div>
+                <div class="toggle on" id="t_autoSearch" onclick="tog(this,'autoSearch')"></div>
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Play Beep Sound on Scan</div></div>
+                <div class="toggle" id="t_beep" onclick="tog(this,'beep')"></div>
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Block Sale if Stock = 0</div><div class="cfg-sub">Prevent selling out-of-stock items</div></div>
+                <div class="toggle" id="t_noNegStock" onclick="tog(this,'noNegStock')"></div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ─────────────── PRINTERS ─────────────── -->
+        <div class="s-page" id="p-printers">
+          <div class="s-header">
+            <div class="s-htitle">🖨️ Printer Settings</div>
+            <div class="s-hsub">Keep receipt printing in POS. Open Printer Manager for barcode/label printers.</div>
+          </div>
+          <div class="s-inner">
+            <div class="printer-layout">
+
+            <!-- Receipt Printer -->
+
+              <div class="cfg-block">
+                <div class="cfg-head"><span class="cfg-htxt">🧾 Receipt Printer</span></div>
+                <div class="device-card-wrap">
+                  <div class="device-card" id="rcpt-device-card">
+                    <div class="device-icon">🖨️</div>
+                    <div class="device-info">
+                      <div class="device-name" id="rcpt-device-name">Not configured</div>
+                      <div class="device-desc" id="rcpt-device-desc">No receipt printer selected</div>
+                      <div class="printer-meta">Used for sales &amp; service receipt printing</div>
+                    </div>
+                    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+                      <span class="device-status status-off" id="rcpt-status-badge">Not checked</span>
+                      <span style="font-size:11px;color:var(--muted)" id="rcpt-status-hint">Select a printer and save to connect</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cfg-block">
+                <div class="cfg-head"><span class="cfg-htxt">⚙️ Receipt Printer Configuration</span></div>
+
+                <div class="cfg-row">
+                  <div><div class="cfg-lbl">Printer Type</div></div>
+                  <select class="form-select" id="s_printerType" style="width:220px;padding:7px 12px"
+                          onchange="toggleReceiptPrinterMode(this.value)">
+                    <option value="windows">Windows Printer (USB / Driver)</option>
+                    <option value="network">Network / ESC-POS (TCP/IP)</option>
+                  </select>
+                </div>
+
+                <div class="printer-subgroup">
+                  <div class="printer-subgroup-title">Connection</div>
+                  <div id="rcpt-windows-row">
+                    <div class="cfg-row">
+                      <div><div class="cfg-lbl">Printer Name</div><div class="cfg-sub">Select from installed Windows printers</div></div>
+                      <div style="display:flex;gap:8px;align-items:center">
+                        <select class="form-select" id="s_printerName" style="width:240px;padding:7px 12px"
+                                onchange="updateReceiptDeviceCard()">
+                          <option value="">— Select printer —</option>
+                        </select>
+                        <button class="btn btn-ghost btn-sm" onclick="refreshPrinterList(this)" title="Refresh printer list">↺</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div id="rcpt-network-row" style="display:none">
+                    <div class="cfg-row">
+                      <div><div class="cfg-lbl">Printer IP Address</div></div>
+                      <input class="form-input" id="s_printerIp" placeholder="192.168.1.100"
+                             style="width:190px;padding:7px 12px" oninput="updateReceiptDeviceCard()">
+                    </div>
+                    <div class="cfg-row">
+                      <div><div class="cfg-lbl">Port</div><div class="cfg-sub">Default: 9100</div></div>
+                      <input class="form-input" id="s_printerPort" placeholder="9100" type="number"
+                             style="width:100px;padding:7px 12px">
+                    </div>
+                  </div>
+                </div>
+
+                <div class="cfg-row">
+                  <div><div class="cfg-lbl">Paper Codepage</div><div class="cfg-sub">Character encoding for ESC/POS output</div></div>
+                  <select class="form-select" id="s_rcptCodepage" style="width:160px;padding:7px 12px">
+                    <option value="cp437">CP437 (Standard)</option>
+                    <option value="cp850">CP850 (Western Europe)</option>
+                    <option value="utf-8">UTF-8</option>
+                  </select>
+                </div>
+
+                <div class="cfg-row">
+                  <div><div class="cfg-lbl">Auto Cut Paper</div><div class="cfg-sub">Send cut command after each receipt</div></div>
+                  <div class="toggle on" id="t_cutPaper" onclick="tog(this,'cutPaper')"></div>
+                </div>
+                <div class="cfg-row">
+                  <div><div class="cfg-lbl">Auto Print After Sale</div><div class="cfg-sub">Automatically print the sales receipt immediately after checkout</div></div>
+                  <div class="toggle on" id="t_autoPrintReceipt" onclick="tog(this,'autoPrintReceipt')"></div>
+                </div>
+
+                <div class="cfg-row">
+                  <div></div>
+                  <div class="printer-actions">
+                    <button class="btn btn-ghost btn-sm" onclick="checkReceiptPrinterStatus()">🔍 Check Status</button>
+                    <button class="btn btn-ghost btn-sm" onclick="testReceiptPrinter()">🧪 Test Print</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cfg-block">
+                <div class="cfg-head"><span class="cfg-htxt">🏷️ Barcode / Label Printer Manager</span></div>
+                <div class="device-card-wrap">
+                  <div class="device-card" id="label-device-card">
+                    <div class="device-icon">🏷️</div>
+                    <div class="device-info">
+                      <div class="device-name" id="label-device-name">Managed by Printer Manager</div>
+                      <div class="device-desc" id="label-device-desc">No label printer selected</div>
+                      <div class="printer-meta">Use the standalone SuperMart Printer Manager for label/barcode setup, status, and test print</div>
+                    </div>
+                    <span class="device-status status-off" id="label-status-badge">Not checked</span>
+                  </div>
+                </div>
+                <div class="cfg-row">
+                  <div><div class="cfg-lbl">Current Label Printer</div><div class="cfg-sub" id="printer-manager-summary">Not selected yet</div></div>
+                  <div class="printer-actions">
+                    <button class="btn btn-ghost btn-sm" onclick="checkLabelPrinterStatus()">🔍 Check Status</button>
+                    <button class="btn btn-primary btn-sm" onclick="openPrinterManager()">🚀 Open Printer Manager</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cfg-block">
+                <div class="cfg-row">
+                  <div><div class="cfg-lbl">Save Receipt Settings</div><div class="cfg-sub">Saves receipt printer + POS receipt behavior only</div></div>
+                  <div class="printer-actions">
+                    <button class="btn btn-primary btn-sm btn-printer-save" onclick="savePrinterSettings()">💾 Save Receipt Settings</button>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+
+        <!-- ─────────────── RECEIPT LAYOUT ─────────────── -->
+        <div class="s-page" id="p-rcpt-layout">
+          <div class="s-header">
+            <div class="s-htitle">🧾 Receipt Layout Settings</div>
+            <div class="s-hsub">Configure what appears on printed receipts — header, body, totals, barcode, and footer</div>
+          </div>
+          <div class="s-inner">
+            <div class="printer-layout">
+
+            <div class="info-banner info-blue">
+              <span>ℹ️</span>
+              <div>These settings control the <strong>content and layout</strong> of every printed receipt. Changes take effect immediately on the next print. The receipt printer itself is configured in <strong>Printer Settings</strong>.</div>
+            </div>
+
+            <!-- Layout type tabs -->
+            <div class="cfg-block">
+              <div class="cfg-head"><span class="cfg-htxt">🖨️ Layout Type</span></div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Receipt Format</div><div class="cfg-sub">Choose the printer type to optimise layout</div></div>
+                <select class="form-select" id="rl_layoutType" style="width:230px;padding:7px 12px">
+                  <option value="thermal">Thermal (58mm / 80mm roll)</option>
+                  <option value="terminal">Dot Matrix / Terminal</option>
+                  <option value="a4">A4 / Full-Page Invoice</option>
+                </select>
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Characters per Line (CPL)</div><div class="cfg-sub">48 = 80mm · 32 = 58mm · 80 = wide thermal</div></div>
+                <input class="form-input" id="rl_cpl" type="number" min="24" max="120" value="48" style="width:90px;padding:7px 12px">
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Compact Mode (58mm)</div><div class="cfg-sub">Reduces spacing for narrow 58mm paper</div></div>
+                <div class="toggle" id="t_rl_compact" onclick="tog(this,'_rl_compact')"></div>
+              </div>
+            </div>
+
+            <!-- Header -->
+            <div class="cfg-block">
+              <div class="cfg-head"><span class="cfg-htxt">🏪 Header — Store Info</span></div>
+              <div class="cfg-row"><div><div class="cfg-lbl">Store Name</div></div><div class="toggle on" id="t_rl_storeName" onclick="tog(this,'_rl_storeName')"></div></div>
+              <div class="cfg-row"><div><div class="cfg-lbl">Branch</div></div><div class="toggle on" id="t_rl_branch" onclick="tog(this,'_rl_branch')"></div></div>
+              <div class="cfg-row"><div><div class="cfg-lbl">Address</div></div><div class="toggle" id="t_rl_address" onclick="tog(this,'_rl_address')"></div></div>
+              <div class="cfg-row"><div><div class="cfg-lbl">Phone Number</div></div><div class="toggle on" id="t_rl_phone" onclick="tog(this,'_rl_phone')"></div></div>
+              <div class="cfg-row"><div><div class="cfg-lbl">Email</div></div><div class="toggle" id="t_rl_email" onclick="tog(this,'_rl_email')"></div></div>
+              <div class="cfg-row"><div><div class="cfg-lbl">Tax / VAT Number</div></div><div class="toggle" id="t_rl_taxNumber" onclick="tog(this,'_rl_taxNumber')"></div></div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Header Alignment</div></div>
+                <select class="form-select" id="rl_headerAlign" style="width:130px;padding:7px 12px">
+                  <option value="center">Center</option>
+                  <option value="left">Left</option>
+                  <option value="right">Right</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Invoice Details -->
+            <div class="cfg-block">
+              <div class="cfg-head"><span class="cfg-htxt">📋 Invoice Details</span></div>
+              <div class="cfg-row"><div><div class="cfg-lbl">Invoice Number</div></div><div class="toggle on" id="t_rl_invoice" onclick="tog(this,'_rl_invoice')"></div></div>
+              <div class="cfg-row"><div><div class="cfg-lbl">Date &amp; Time</div></div><div class="toggle on" id="t_rl_datetime" onclick="tog(this,'_rl_datetime')"></div></div>
+              <div class="cfg-row"><div><div class="cfg-lbl">Cashier Name</div></div><div class="toggle on" id="t_rl_cashier" onclick="tog(this,'_rl_cashier')"></div></div>
+              <div class="cfg-row"><div><div class="cfg-lbl">Customer Name</div></div><div class="toggle on" id="t_rl_customer" onclick="tog(this,'_rl_customer')"></div></div>
+              <div class="cfg-row"><div><div class="cfg-lbl">Customer Phone</div></div><div class="toggle" id="t_rl_customerPhone" onclick="tog(this,'_rl_customerPhone')"></div></div>
+              <div class="cfg-row"><div><div class="cfg-lbl">Payment Method</div></div><div class="toggle on" id="t_rl_paymentMethod" onclick="tog(this,'_rl_paymentMethod')"></div></div>
+            </div>
+
+            <!-- Line Items -->
+            <div class="cfg-block">
+              <div class="cfg-head"><span class="cfg-htxt">🛒 Line Items</span></div>
+              <div class="cfg-row"><div><div class="cfg-lbl">Quantity Column</div></div><div class="toggle on" id="t_rl_qty" onclick="tog(this,'_rl_qty')"></div></div>
+              <div class="cfg-row"><div><div class="cfg-lbl">Unit Price Column</div></div><div class="toggle on" id="t_rl_unitPrice" onclick="tog(this,'_rl_unitPrice')"></div></div>
+              <div class="cfg-row"><div><div class="cfg-lbl">Discount Column</div></div><div class="toggle on" id="t_rl_discount" onclick="tog(this,'_rl_discount')"></div></div>
+              <div class="cfg-row"><div><div class="cfg-lbl">Line Total Column</div></div><div class="toggle on" id="t_rl_lineTotal" onclick="tog(this,'_rl_lineTotal')"></div></div>
+              <div class="cfg-row"><div><div class="cfg-lbl">SKU / Barcode</div><div class="cfg-sub">Show product barcode below item name</div></div><div class="toggle" id="t_rl_sku" onclick="tog(this,'_rl_sku')"></div></div>
+              <div class="cfg-row"><div><div class="cfg-lbl">Wrap Long Names</div><div class="cfg-sub">Word-wrap product names that exceed line width</div></div><div class="toggle on" id="t_rl_wrapNames" onclick="tog(this,'_rl_wrapNames')"></div></div>
+            </div>
+
+            <!-- Totals -->
+            <div class="cfg-block">
+              <div class="cfg-head"><span class="cfg-htxt">💰 Totals Section</span></div>
+              <div class="cfg-row"><div><div class="cfg-lbl">Subtotal</div></div><div class="toggle on" id="t_rl_subtotal" onclick="tog(this,'_rl_subtotal')"></div></div>
+              <div class="cfg-row"><div><div class="cfg-lbl">Discount Total</div></div><div class="toggle on" id="t_rl_discountTotal" onclick="tog(this,'_rl_discountTotal')"></div></div>
+              <div class="cfg-row"><div><div class="cfg-lbl">Tax Amount</div></div><div class="toggle on" id="t_rl_tax" onclick="tog(this,'_rl_tax')"></div></div>
+              <div class="cfg-row"><div><div class="cfg-lbl">Grand Total</div></div><div class="toggle on" id="t_rl_grandTotal" onclick="tog(this,'_rl_grandTotal')"></div></div>
+              <div class="cfg-row"><div><div class="cfg-lbl">Amount Tendered</div></div><div class="toggle on" id="t_rl_paid" onclick="tog(this,'_rl_paid')"></div></div>
+              <div class="cfg-row"><div><div class="cfg-lbl">Change Due</div></div><div class="toggle on" id="t_rl_change" onclick="tog(this,'_rl_change')"></div></div>
+            </div>
+
+            <!-- Barcode -->
+            <div class="cfg-block">
+              <div class="cfg-head"><span class="cfg-htxt">🔲 Invoice Barcode</span></div>
+              <div class="info-banner info-green" style="margin:10px 14px 0">
+                A Code128 barcode is printed at the bottom of every receipt. Scanning it opens the invoice instantly for reprint or return.
+              </div>
+              <div class="cfg-row"><div><div class="cfg-lbl">Enable Barcode on Receipt</div><div class="cfg-sub">Print scannable barcode at receipt bottom</div></div><div class="toggle on" id="t_rl_enableBarcode" onclick="tog(this,'_rl_enableBarcode')"></div></div>
+              <div class="cfg-row"><div><div class="cfg-lbl">Show Barcode Text</div><div class="cfg-sub">Display invoice number below the barcode</div></div><div class="toggle on" id="t_rl_barcodeText" onclick="tog(this,'_rl_barcodeText')"></div></div>
+            </div>
+
+            <!-- Footer -->
+            <div class="cfg-block">
+              <div class="cfg-head"><span class="cfg-htxt">📝 Footer</span></div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Footer / Thank You Text</div><div class="cfg-sub">Printed below the totals section</div></div>
+                <input class="form-input" id="rl_footerText" placeholder="Thank you for shopping!" style="width:260px;padding:7px 12px">
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Footer Alignment</div></div>
+                <select class="form-select" id="rl_footerAlign" style="width:130px;padding:7px 12px">
+                  <option value="center">Center</option>
+                  <option value="left">Left</option>
+                  <option value="right">Right</option>
+                </select>
+              </div>
+              <div class="cfg-row"><div><div class="cfg-lbl">Show Thank You Message</div></div><div class="toggle on" id="t_rl_thankyou" onclick="tog(this,'_rl_thankyou')"></div></div>
+              <div class="cfg-row"><div><div class="cfg-lbl">Show Return Policy Note</div></div><div class="toggle" id="t_rl_returnPolicy" onclick="tog(this,'_rl_returnPolicy')"></div></div>
+              <div class="cfg-row"><div><div class="cfg-lbl">Show "Powered by SuperMart POS"</div></div><div class="toggle" id="t_rl_poweredBy" onclick="tog(this,'_rl_poweredBy')"></div></div>
+            </div>
+
+            <!-- Actions -->
+            <div class="cfg-block">
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Receipt Layout</div><div class="cfg-sub">Save layout settings or reset to defaults</div></div>
+                <div class="printer-actions">
+                  <button class="btn btn-ghost btn-sm" onclick="resetReceiptLayout()">↺ Reset Defaults</button>
+                  <button class="btn btn-primary btn-sm btn-printer-save" onclick="saveReceiptLayout()">💾 Save Layout</button>
+                </div>
+              </div>
+            </div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- ─────────────── BARCODE ─────────────── -->
+        <div class="s-page" id="p-barcode">
+          <div class="s-header">
+            <div class="s-htitle">🏷️ Barcode / Scanner Settings</div>
+            <div class="s-hsub">Barcode behavior, scanner configuration, and quick label print tools</div>
+          </div>
+          <div class="s-inner">
+            <div class="printer-layout">
+            <div class="info-banner info-blue">
+              <span>ℹ️</span>
+              <div>Label printer connection is managed in <strong>Printer Settings</strong>. Barcode and scanner tools use that saved label printer configuration as the single source of truth.</div>
+            </div>
+            <div style="display:flex;justify-content:flex-end;margin:10px 0 14px">
+              <a class="btn btn-primary btn-sm" href="/settings/barcode-scanner">🚀 Open Barcode & Scanner Management</a>
+            </div>
+
+            <!-- Barcode Settings -->
+            <div class="cfg-block">
+              <div class="cfg-head"><span class="cfg-htxt">📷 Barcode Settings</span></div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Barcode Type</div><div class="cfg-sub">Default format for generated and printed barcodes</div></div>
+                <select class="form-select" id="s_labelBarcodeType" style="width:160px;padding:7px 12px">
+                  <option value="code128">CODE-128</option>
+                  <option value="ean13">EAN-13</option>
+                  <option value="ean8">EAN-8</option>
+                  <option value="code39">CODE-39</option>
+                  <option value="qr">QR Code</option>
+                </select>
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Auto-generate barcode</div><div class="cfg-sub">Automatically create barcode values for products without one</div></div>
+                <div class="toggle on" id="t_autoBarcodeGenerate" onclick="tog(this,'autoBarcodeGenerate')"></div>
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Scan Behavior</div><div class="cfg-sub">How scanned barcode input is processed at checkout</div></div>
+                <select data-custom-select class="form-select" id="s_scanType" style="width:230px;padding:7px 12px"
+                        onchange="sp('scanType',this.value);toggleScanType(this.value)">
+                  <option value="usb_hid">USB HID (Keyboard Wedge)</option>
+                  <option value="serial">Serial / COM Port</option>
+                </select>
+              </div>
+              <div class="cfg-row" id="row_scanSerial" style="display:none">
+                <div><div class="cfg-lbl">Serial Port</div></div>
+                <div class="cfg-right">
+                  <select data-custom-select class="form-select" id="s_scanCom" style="width:110px;padding:7px 12px" onchange="sp('scanCom',this.value)">
+                    <option>COM1</option><option>COM2</option><option>COM3</option><option>COM4</option><option>COM5</option>
+                  </select>
+                  <select data-custom-select class="form-select" id="s_scanBaud" style="width:110px;padding:7px 12px" onchange="sp('scanBaud',this.value)">
+                    <option>9600</option><option>19200</option><option>38400</option><option>115200</option>
+                  </select>
+                </div>
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Scan Suffix / Terminator</div></div>
+                <select data-custom-select class="form-select" id="s_scanSfx" style="width:180px;padding:7px 12px" onchange="sp('scanSfx',this.value)">
+                  <option value="\r">Enter ↵ (default)</option>
+                  <option value="\t">Tab ⇥</option>
+                  <option value="\n">Newline</option>
+                  <option value="">None</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Label Print Options -->
+            <div class="cfg-block">
+              <div class="cfg-head"><span class="cfg-htxt">🧾 Label Print Options</span></div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Label Width (mm)</div></div>
+                <input class="form-input" id="s_labelWidth" type="number" step="0.5" placeholder="30" style="width:90px;padding:7px 12px">
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Label Height (mm)</div></div>
+                <input class="form-input" id="s_labelHeight" type="number" step="0.5" placeholder="20" style="width:90px;padding:7px 12px">
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Gap (mm)</div></div>
+                <input class="form-input" id="s_labelGap" type="number" step="0.1" placeholder="2" style="width:90px;padding:7px 12px">
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Print Copies</div></div>
+                <input class="form-input" id="s_labelCopies" type="number" min="1" max="50" value="1" style="width:90px;padding:7px 12px">
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Sample Barcode Value</div><div class="cfg-sub">Used for quick sample and barcode label prints</div></div>
+                <input class="form-input" id="s_labelSampleBarcode" placeholder="SM-SAMPLE-001" style="width:220px;padding:7px 12px">
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Sample Product Name</div></div>
+                <input class="form-input" id="s_labelSampleName" placeholder="Sample Label" style="width:220px;padding:7px 12px">
+              </div>
+              <div class="cfg-row">
+                <div></div>
+                <div class="printer-actions">
+                  <button class="btn btn-ghost btn-sm" onclick="printSampleLabel()">🧪 Print Sample Label</button>
+                  <button class="btn btn-ghost btn-sm" onclick="printBarcodeLabel()">🏷️ Print Barcode Label</button>
+                </div>
+              </div>
+            </div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- ─────────────── CARD PAYMENT ─────────────── -->
+        <div class="s-page" id="p-card">
+          <div class="s-header">
+            <div class="s-htitle">💳 Card Payment Settings</div>
+            <div class="s-hsub">Configure card terminal, accepted card types, and payment gateway</div>
+          </div>
+          <div class="s-inner">
+
+            <div class="tab-strip">
+              <button class="ts-btn on" onclick="cTab('terminal')" id="ct-terminal">🖥️ Card Terminal</button>
+              <button class="ts-btn"    onclick="cTab('types')"    id="ct-types">💳 Card Types</button>
+              <button class="ts-btn"    onclick="cTab('payhere')"  id="ct-payhere">🌐 Gateway / Online</button>
+            </div>
+
+            <!-- TERMINAL -->
+            <div id="ctab-terminal">
+              <div class="cfg-block">
+                <div class="cfg-head">
+                  <span class="cfg-htxt">🖥️ Card Terminal / EDC Machine</span>
+                  <button class="btn btn-primary btn-sm" onclick="openModal('modalAddTerminal')">+ Add Terminal</button>
+                </div>
+                <div style="padding:12px" id="terminalList">
+                  <div class="device-card" id="term-manual">
+                    <div class="device-icon">💳</div>
+                    <div class="device-info">
+                      <div class="device-name">Manual Entry (Record Only)</div>
+                      <div class="device-desc">Cashier enters amount on external terminal · POS records the payment</div>
+                    </div>
+                    <span class="device-status status-ok">✓ Active</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cfg-block">
+                <div class="cfg-head"><span class="cfg-htxt">⚙️ Terminal Configuration</span></div>
+                <div class="cfg-row">
+                  <div><div class="cfg-lbl">Terminal Type</div></div>
+                  <select data-custom-select class="form-select" id="s_termType" style="width:230px;padding:7px 12px"
+                          onchange="sp('termType',this.value);toggleTermType(this.value)">
+                    <option value="manual_record_only">Manual Record Only</option>
+                    <option value="lan_ip_terminal">LAN / IP Terminal</option>
+                    <option value="usb_serial_terminal">USB / Serial Terminal</option>
+                    <option value="android_smart_pos">Android Smart POS</option>
+                    <option value="payment_gateway_api">Payment Gateway / API</option>
+                  </select>
+                </div>
+                <div class="cfg-row">
+                  <div><div class="cfg-lbl">Enable Card Payments</div></div>
+                  <div class="toggle on" id="t_cardEnabled" onclick="tog(this,'cardEnabled')"></div>
+                </div>
+                <div class="cfg-row">
+                  <div><div class="cfg-lbl">Auto Reconnect</div><div class="cfg-sub">Automatically reconnect terminal on login/page load</div></div>
+                  <div class="toggle on" id="t_cardAutoConnect" onclick="tog(this,'cardAutoConnect')"></div>
+                </div>
+                <div class="cfg-row">
+                  <div><div class="cfg-lbl">Terminal Status</div></div>
+                  <span class="device-status status-err" id="cardTerminalStatus">✖ Disconnected</span>
+                </div>
+                <div class="cfg-row">
+                  <div><div class="cfg-lbl">Provider / Bank Name</div></div>
+                  <input class="form-input" id="s_cardProvider" placeholder="Bank / PSP provider" style="width:220px;padding:7px 12px" onchange="sp('cardProvider',this.value)">
+                </div>
+                <div id="termSerialRow" style="display:none">
+                  <div class="cfg-row">
+                    <div><div class="cfg-lbl">COM Port</div><div class="cfg-sub">Terminal serial connection</div></div>
+                    <select data-custom-select class="form-select" id="s_termCom" style="width:120px;padding:7px 12px" onchange="sp('termCom',this.value)">
+                      <option>COM1</option><option>COM2</option><option>COM3</option><option>COM4</option><option>COM5</option>
+                    </select>
+                  </div>
+                  <div class="cfg-row">
+                    <div><div class="cfg-lbl">Baud Rate</div></div>
+                    <select data-custom-select class="form-select" id="s_termBaud" style="width:120px;padding:7px 12px" onchange="sp('termBaud',this.value)">
+                      <option>9600</option><option>19200</option><option>38400</option><option>115200</option>
+                    </select>
+                  </div>
+                </div>
+                <div id="termNetRow" style="display:none">
+                  <div class="cfg-row">
+                    <div><div class="cfg-lbl">Terminal IP Address</div></div>
+                    <input class="form-input" id="s_termIp" placeholder="192.168.1.200" style="width:180px;padding:7px 12px" onchange="sp('termIp',this.value)">
+                  </div>
+                  <div class="cfg-row">
+                    <div><div class="cfg-lbl">Port</div></div>
+                    <input class="form-input" id="s_termPort" placeholder="8080" type="number" style="width:100px;padding:7px 12px" onchange="sp('termPort',this.value)">
+                  </div>
+                </div>
+                <div class="cfg-row">
+                  <div><div class="cfg-lbl">Connection Mode</div></div>
+                  <select data-custom-select class="form-select" id="s_cardConnMode" style="width:200px;padding:7px 12px" onchange="sp('cardConnMode',this.value)">
+                    <option value="manual">Manual</option>
+                    <option value="integrated">Integrated</option>
+                  </select>
+                </div>
+                <div class="cfg-row">
+                  <div><div class="cfg-lbl">Merchant ID / MID</div><div class="cfg-sub">From your bank / payment provider</div></div>
+                  <input class="form-input" id="s_mid" placeholder="e.g. 123456789" style="width:200px;padding:7px 12px" onchange="sp('mid',this.value)">
+                </div>
+                <div class="cfg-row">
+                  <div><div class="cfg-lbl">Terminal ID / TID</div></div>
+                  <input class="form-input" id="s_tid" placeholder="e.g. T000001" style="width:200px;padding:7px 12px" onchange="sp('tid',this.value)">
+                </div>
+                <div class="cfg-row">
+                  <div><div class="cfg-lbl">Branch / Store ID</div></div>
+                  <input class="form-input" id="s_cardBranchId" placeholder="BR-001" style="width:200px;padding:7px 12px" onchange="sp('cardBranchId',this.value)">
+                </div>
+                <div class="cfg-row">
+                  <div><div class="cfg-lbl">Currency</div></div>
+                  <input class="form-input" id="s_cardCurrency" placeholder="LKR" style="width:120px;padding:7px 12px" onchange="sp('cardCurrency',this.value)">
+                </div>
+                <div class="cfg-row">
+                  <div><div class="cfg-lbl">API Key / Secret / Pairing Key</div></div>
+                  <input class="form-input" id="s_cardApiKey" placeholder="Optional secure key" style="width:230px;padding:7px 12px" onchange="sp('cardApiKey',this.value)">
+                </div>
+                <div class="cfg-row">
+                  <div><div class="cfg-lbl">Transaction Timeout (seconds)</div></div>
+                  <div class="ctr">
+                    <button class="ctr-btn" onclick="adj('termTimeout',-5,10,180)">−</button>
+                    <span class="ctr-val" id="v_termTimeout">60</span>
+                    <button class="ctr-btn" onclick="adj('termTimeout',5,10,180)">+</button>
+                  </div>
+                </div>
+                <div class="cfg-row">
+                  <div></div>
+                  <div class="flex gap-2">
+                    <button class="btn btn-ghost btn-sm" onclick="testCardTerminal()">🧪 Test Connection</button>
+                    <button class="btn btn-primary btn-sm" onclick="saveCardConfig()">💾 Save Terminal Config</button>
+                  </div>
+                </div>
+              </div>
+              <div class="cfg-block">
+                <div class="cfg-head"><span class="cfg-htxt">🧭 Payment Rules</span></div>
+                <div class="cfg-row"><div><div class="cfg-lbl">Auto-send amount to terminal</div></div><div class="toggle on" id="t_cardAutoSend" onclick="tog(this,'cardAutoSend')"></div></div>
+                <div class="cfg-row"><div><div class="cfg-lbl">Wait for terminal response</div></div><div class="toggle on" id="t_cardWaitResponse" onclick="tog(this,'cardWaitResponse')"></div></div>
+                <div class="cfg-row"><div><div class="cfg-lbl">Allow manual fallback</div></div><div class="toggle on" id="t_cardManualFallback" onclick="tog(this,'cardManualFallback')"></div></div>
+                <div class="cfg-row"><div><div class="cfg-lbl">Allow split payments</div></div><div class="toggle" id="t_cardSplit" onclick="tog(this,'cardSplit')"></div></div>
+                <div class="cfg-row"><div><div class="cfg-lbl">Allow mixed payments</div></div><div class="toggle on" id="t_cardMixed" onclick="tog(this,'cardMixed')"></div></div>
+                <div class="cfg-row"><div><div class="cfg-lbl">Require approval code</div></div><div class="toggle on" id="t_cardRequireApproval" onclick="tog(this,'cardRequireApproval')"></div></div>
+                <div class="cfg-row"><div><div class="cfg-lbl">Require last 4 digits</div></div><div class="toggle on" id="t_cardRequireLast4" onclick="tog(this,'cardRequireLast4')"></div></div>
+                <div class="cfg-row"><div><div class="cfg-lbl">Require card reference / RRN</div></div><div class="toggle on" id="t_cardRequireRrn" onclick="tog(this,'cardRequireRrn')"></div></div>
+                <div class="cfg-row"><div><div class="cfg-lbl">Show card details on receipt</div></div><div class="toggle on" id="t_cardRcptDetails" onclick="tog(this,'cardRcptDetails')"></div></div>
+              </div>
+            </div>
+
+            <!-- CARD TYPES -->
+            <div id="ctab-types" style="display:none">
+              <div class="cfg-block">
+                <div class="cfg-head"><span class="cfg-htxt">💳 Accepted Card Types</span></div>
+                <div style="padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                  {% for brand, icon, color, on in [
+                    ('Visa',            '💳', '#1a1f71', True),
+                    ('Mastercard',      '💳', '#eb001b', True),
+                    ('Amex',            '💳', '#007bc1', True),
+                    ('Debit',           '💳', '#2563eb', True),
+                    ('Credit',          '💳', '#9333ea', True),
+                    ('Wallet / QR',     '📱', '#0ea5e9', False),
+                  ] %}
+                  <div class="device-card {{ 'active' if on }}" id="card-{{ brand|lower|replace(' ','-') }}"
+                       onclick="toggleCardBrand(this,'{{ brand|lower|replace(' ','-') }}')" style="cursor:pointer">
+                    <div class="device-icon" style="background:{{ color }}22;font-size:22px">💳</div>
+                    <div class="device-info">
+                      <div class="device-name">{{ brand }}</div>
+                    </div>
+                    <div class="toggle {{ 'on' if on }}" id="t_card_{{ brand|lower|replace(' ','-') }}"></div>
+                  </div>
+                  {% endfor %}
+                </div>
+              </div>
+
+              <!-- Visual card mockup -->
+              <div class="cfg-block">
+                <div class="cfg-head"><span class="cfg-htxt">🔍 Card Number Detection Test</span></div>
+                <div style="padding:16px;display:flex;gap:20px;align-items:center;flex-wrap:wrap">
+                  <div class="card-visual">
+                    <div class="card-chip"></div>
+                    <div class="card-num" id="cardVisualNum">•••• •••• •••• ••••</div>
+                    <div class="card-brand" id="cardVisualBrand">CARD</div>
+                  </div>
+                  <div style="flex:1;min-width:200px">
+                    <div class="form-group mb-3">
+                      <label class="form-label">Enter Card Number (for detection test)</label>
+                      <input class="form-input" id="testCardNum" maxlength="19"
+                             placeholder="4111 1111 1111 1111"
+                             oninput="formatCardNum(this);detectCardType(this.value)"
+                             style="font-family:monospace;letter-spacing:2px;font-size:16px">
+                    </div>
+                    <div id="cardTypeResult" style="font-size:14px;font-weight:600;color:var(--accent)"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- PAYHERE -->
+            <div id="ctab-payhere" style="display:none">
+              <div class="info-banner info-blue">
+                🌐 <span>PayHere is Sri Lanka's leading payment gateway. Accept Visa, Mastercard, online banking, eZCash, and mCash.</span>
+              </div>
+              <div id="payhereSandboxWarning" class="info-banner info-red" style="margin-top:10px;display:none;font-size:13px;font-weight:700">
+                ⚠ PayHere is in SANDBOX (TEST) mode. Real payments will NOT be processed. Disable sandbox mode in your .env file before going live.
+              </div>
+              <div class="cfg-block">
+                <div class="cfg-head"><span class="cfg-htxt">🌐 PayHere Configuration</span></div>
+                <div class="cfg-row">
+                  <div><div class="cfg-lbl">Merchant ID</div><div class="cfg-sub">PayHere dashboard → Integrations</div></div>
+                  <input class="form-input" id="s_phMid" placeholder="e.g. 1211149" style="width:200px;padding:7px 12px" onchange="sp('phMid',this.value)">
+                </div>
+                <div class="cfg-row">
+                  <div><div class="cfg-lbl">Merchant Secret</div><div class="cfg-sub">PayHere → Domains & Credentials → Secret</div></div>
+                  <div class="cfg-right">
+                    <input class="form-input" id="s_phSecret" type="password" placeholder="Merchant secret key"
+                           style="width:200px;padding:7px 12px" onchange="sp('phSecret',this.value)">
+                    <button class="btn btn-ghost btn-sm" onclick="togglePass('s_phSecret')">👁</button>
+                  </div>
+                </div>
+                <div class="cfg-row">
+                  <div>
+                    <div class="cfg-lbl">Sandbox / Test Mode</div>
+                    <div class="cfg-sub">Use sandbox.payhere.lk for testing — turn OFF for real payments</div>
+                  </div>
+                  <div class="toggle on" id="t_phSandbox" onclick="tog(this,'phSandbox');updatePayhereSandboxWarning()"></div>
+                </div>
+                <div class="cfg-row">
+                  <div><div class="cfg-lbl">Callback URLs</div><div class="cfg-sub">Enter these in your PayHere merchant dashboard</div></div>
+                  <div>
+                    {% for label, path in [('Notify','notify'),('Return','return'),('Cancel','cancel')] %}
+                    <div class="inp-row" style="margin-bottom:5px">
+                      <span class="lbl-sm">{{ label }}:</span>
+                      <code style="background:var(--stat);padding:4px 9px;border-radius:6px;font-size:11px;color:var(--accent)">
+                        http://localhost:5000/payment/{{ path }}
+                      </code>
+                    </div>
+                    {% endfor %}
+                  </div>
+                </div>
+                <div class="cfg-row">
+                  <div></div>
+                  <div class="flex gap-2">
+                    <a href="https://www.payhere.lk/merchants/register" target="_blank" class="btn btn-ghost btn-sm">🔗 Register</a>
+                    <button class="btn btn-primary btn-sm" onclick="savePayHereConfig()">💾 Save PayHere Config</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ─────────────── CASH DRAWER ─────────────── -->
+        <div class="s-page" id="p-drawer">
+          <div class="s-header"><div class="s-htitle">💰 Cash Drawer Settings</div><div class="s-hsub">Configure and test cash drawer</div></div>
+          <div class="s-inner">
+            <div class="cfg-block">
+              <div class="cfg-head"><span class="cfg-htxt">💰 Cash Drawer</span></div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Open Drawer on Cash Payment</div></div>
+                <div class="toggle on" id="t_drawerCash" onclick="tog(this,'drawerCash')"></div>
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Drawer Connection</div><div class="cfg-sub">Choose how the drawer is connected</div></div>
+                <select data-custom-select class="form-select" id="s_drawerConn" style="width:220px;padding:7px 12px" onchange="sp('drawerConn',this.value)">
+                  <option value="serial">Direct Serial / COM Port</option>
+                  <option value="usb">Direct USB</option>
+                </select>
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Open Pulse Pin</div><div class="cfg-sub">ESC/POS pin 2 or pin 5</div></div>
+                <select data-custom-select class="form-select" id="s_drawerPin" style="width:120px;padding:7px 12px" onchange="sp('drawerPin',this.value)">
+                  <option value="2">Pin 2</option>
+                  <option value="5">Pin 5</option>
+                </select>
+              </div>
+              <div class="cfg-row">
+                <div></div>
+                <button class="btn btn-primary" onclick="testCashDrawer()">💰 Open Cash Drawer (Test)</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ─────────────── PAYMENT OPTIONS ─────────────── -->
+        <div class="s-page" id="p-payment">
+          <div class="s-header"><div class="s-htitle">💵 Payment Options</div><div class="s-hsub">Configure available payment methods</div></div>
+          <div class="s-inner">
+            <div class="cfg-block">
+              <div class="cfg-head"><span class="cfg-htxt">💵 Enable Payment Methods</span></div>
+              {% for m, icon, on in [
+                ('Cash',    '💵', True),
+                ('Card',    '💳', True),
+                ('QR Code', '📱', True),
+                ('PayHere', '🌐', False),
+                ('Credit',  '📋', False),
+                ('Cheque',  '📄', False),
+              ] %}
+              <div class="cfg-row">
+                <div class="flex items-center gap-3">
+                  <span style="font-size:18px">{{ icon }}</span>
+                  <div><div class="cfg-lbl">{{ m }}</div></div>
+                </div>
+                <div class="toggle {{ 'on' if on }}" id="t_pay_{{ m|lower|replace(' ','_') }}"
+                     onclick="tog(this,'pay_{{ m|lower|replace(' ','_') }}')"></div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+
+        <!-- ─────────────── TAX ─────────────── -->
+        <div class="s-page" id="p-tax">
+          <div class="s-header"><div class="s-htitle">📊 Tax & Pricing</div><div class="s-hsub">Configure tax rates applied to sales</div></div>
+          <div class="s-inner">
+            <div class="cfg-block">
+              <div class="cfg-head"><span class="cfg-htxt">📊 Tax Settings</span></div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Enable Tax</div><div class="cfg-sub">Use store tax settings for all billing calculations</div></div>
+                <div class="toggle on" id="t_taxEnabled" onclick="tog(this,'taxEnabled')"></div>
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Tax Name</div></div>
+                <input class="form-input" id="s_taxName" value="VAT" style="width:130px;padding:7px 12px" onchange="sp('taxName',this.value)">
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Tax Rate (%)</div></div>
+                <input class="form-input" id="s_taxRate" type="number" value="5" min="0" max="100" style="width:100px;padding:7px 12px" onchange="sp('taxRate',this.value)">
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Prices Include Tax</div><div class="cfg-sub">Tag prices already include tax amount</div></div>
+                <div class="toggle on" id="t_taxIncl" onclick="tog(this,'taxIncl')"></div>
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Show Tax on Receipt</div></div>
+                <div class="toggle on" id="t_taxRcpt" onclick="tog(this,'taxRcpt')"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ─────────────── DISCOUNT ─────────────── -->
+        <div class="s-page" id="p-discount">
+          <div class="s-header"><div class="s-htitle">🏷️ Discount Settings</div><div class="s-hsub">Rules for applying discounts</div></div>
+          <div class="s-inner">
+            <div class="cfg-block">
+              <div class="cfg-head"><span class="cfg-htxt">🏷️ Discount Configuration</span></div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Default Discount Type</div></div>
+                <select data-custom-select class="form-select" id="s_discType" style="width:200px;padding:7px 12px" onchange="sp('discType',this.value)">
+                  <option value="pct">Percentage (%)</option>
+                  <option value="fixed">Fixed Amount (LKR)</option>
+                </select>
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Max Discount (%)</div><div class="cfg-sub">Cashiers cannot exceed this limit</div></div>
+                <div class="ctr">
+                  <button class="ctr-btn" onclick="adj('maxDisc',-5,0,100)">−</button>
+                  <span class="ctr-val" id="v_maxDisc">20</span>
+                  <button class="ctr-btn" onclick="adj('maxDisc',5,0,100)">+</button>
+                </div>
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Require Manager Approval Above</div></div>
+                <div class="ctr">
+                  <button class="ctr-btn" onclick="adj('discApproval',-5,0,100)">−</button>
+                  <span class="ctr-val" id="v_discApproval">10</span>
+                  <button class="ctr-btn" onclick="adj('discApproval',5,0,100)">+</button>
+                  <span class="text-muted text-sm">%</span>
+                </div>
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Allow Item-Level Discounts</div></div>
+                <div class="toggle on" id="t_itemDisc" onclick="tog(this,'itemDisc')"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ─────────────── COMPANY ─────────────── -->
+        <div class="s-page" id="p-company">
+          <div class="s-header"><div class="s-htitle">🏪 Company Information</div><div class="s-hsub">Your business details — used on receipts and invoices</div></div>
+          <div class="s-inner">
+            <div class="cfg-block">
+              <div class="cfg-head"><span class="cfg-htxt">🏪 Business Details</span></div>
+              <div style="padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div class="form-group"><label class="form-label">Store Name *</label>
+                  <input class="form-input" id="co_name" value="SuperMart"></div>
+                <div class="form-group"><label class="form-label">Branch Name</label>
+                  <input class="form-input" id="co_branch" placeholder="Main Branch"></div>
+                <div class="form-group" style="grid-column:1/-1"><label class="form-label">Address</label>
+                  <textarea class="form-input" id="co_addr" rows="2">123 Main Street, Colombo 03</textarea></div>
+                <div class="form-group"><label class="form-label">Phone</label>
+                  <input class="form-input" id="co_phone" value="+94 11 234 5678"></div>
+                <div class="form-group"><label class="form-label">Email</label>
+                  <input class="form-input" id="co_email" value="info@supermart.lk"></div>
+                <div class="form-group"><label class="form-label">Business Reg / VAT No.</label>
+                  <input class="form-input" id="co_reg" placeholder="BRN / VAT number"></div>
+                <div class="form-group"><label class="form-label">Receipt Header</label>
+                  <input class="form-input" id="co_header" value="" placeholder="e.g. Welcome to our store"></div>
+                <div class="form-group" style="grid-column:1/-1"><label class="form-label">Receipt Footer</label>
+                  <input class="form-input" id="co_footer" value="" placeholder="e.g. Thank you for shopping with us! | Tel: 011-234-5678"></div>
+              </div>
+              <div class="cfg-row"><div></div>
+                <button class="btn btn-primary btn-sm" onclick="saveCompanyInfo()">💾 Save Company Info</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ─────────────── USERS ─────────────── -->
+        <div class="s-page" id="p-users">
+          <div class="s-header"><div class="s-htitle">👥 Users & Security</div><div class="s-hsub">Manage user accounts and access roles</div></div>
+          <div class="s-inner">
+            <div class="cfg-block">
+              <div class="cfg-head"><span class="cfg-htxt">🔐 Change Password</span></div>
+              <div style="padding:16px">
+                {% if password_change_required %}
+                <div class="info-banner info-yellow" style="margin-bottom:16px">
+                  <div>⚠</div>
+                  <div>This account is still using a default or temporary password. You can keep using the app, but please update it now to remove the warning banner.</div>
+                </div>
+                {% else %}
+                <div class="info-banner info-blue" style="margin-bottom:16px">
+                  <div>ℹ️</div>
+                  <div>Change your password here at any time. Your current password is required before the new password is saved.</div>
+                </div>
+                {% endif %}
+                <div class="pw-grid">
+                  <div class="form-group">
+                    <label class="form-label">Current Password</label>
+                    <input class="form-input" id="cp_current" type="password" autocomplete="current-password" placeholder="Enter your current password">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">New Password</label>
+                    <input class="form-input" id="cp_new" type="password" autocomplete="new-password" placeholder="Enter a new password">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Confirm Password</label>
+                    <input class="form-input" id="cp_confirm" type="password" autocomplete="new-password" placeholder="Repeat the new password">
+                  </div>
+                </div>
+                <div class="pw-help">Enter a new password. You can use any length (including 1 character).</div>
+                <div id="changePasswordValidation" class="alert alert-warning pw-validation"></div>
+                <div class="flex gap-2" style="margin-top:14px">
+                  <button class="btn btn-primary" id="changePasswordSettingsBtn" onclick="submitPasswordChange()">🔐 Update Password</button>
+                  <button class="btn btn-ghost" type="button" onclick="resetPasswordChangeForm()">Reset</button>
+                </div>
+              </div>
+            </div>
+            {% if is_admin %}
+            <div class="cfg-block">
+              <div class="cfg-head">
+                <span class="cfg-htxt">👥 User Accounts</span>
+                <button class="btn btn-primary btn-sm" onclick="openModal('modalAddUser')">+ Add User</button>
+              </div>
+              <table class="data-table">
+                <thead><tr><th>User</th><th>Username</th><th>Role</th><th>Status</th><th>Action</th></tr></thead>
+                <tbody>
+                  {% for u in users %}
+                  <tr>
+                    <td>
+                      <div class="flex items-center gap-2">
+                        <div class="user-avatar">{{ u.full_name[:2]|upper }}</div>
+                        <span class="font-bold">{{ u.full_name }}</span>
+                      </div>
+                    </td>
+                    <td style="font-family:monospace;font-size:12px">@{{ u.username }}</td>
+                    <td><span class="badge {{ 'badge-danger' if u.role=='Admin' else 'badge-primary' if u.role=='Manager' else 'badge-success' if u.role=='Operator' else 'badge-success' }}">{{ u.role }}</span></td>
+                    <td><span class="badge {{ 'badge-success' if u.status=='active' else 'badge-warning' }}">{{ '✓ Active' if u.status=='active' else 'Inactive' }}</span></td>
+                    <td>
+                      {% if u.id != current_user.id %}
+                      <button class="btn btn-sm btn-danger" onclick="delUser({{ u.id }},this)">✕ Remove</button>
+                      {% else %}<span class="text-muted text-xs">(You)</span>{% endif %}
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            <div class="cfg-block">
+              <div class="cfg-head"><span class="cfg-htxt">🔒 Security</span></div>
+              {% for k,l,desc,on in [
+                ('reqMgrRefund','Require Manager for Refunds','Manager PIN needed before any refund',True),
+                ('logActivity','Log All Activity','Record every user action in audit log',True),
+                ('autoLock','Auto-Lock After Inactivity','Lock screen after 30 min of no activity',False),
+              ] %}
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">{{ l }}</div><div class="cfg-sub">{{ desc }}</div></div>
+                <div class="toggle {{ 'on' if on }}" id="t_{{ k }}" onclick="tog(this,'{{ k }}')"></div>
+              </div>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- ─────────────── DATABASE / BACKUP ─────────────── -->
+        <div class="s-page" id="p-database">
+          <div class="s-header">
+            <div class="s-htitle">🗄️ Database & Backup</div>
+            <div class="s-hsub">Create backups, restore data, and configure auto-backup</div>
+          </div>
+          <div class="s-inner">
+
+            <!-- Quick actions -->
+            <div class="cfg-block">
+              <div class="cfg-head"><span class="cfg-htxt">📦 Backup Now</span></div>
+              <div class="cfg-row">
+                <div>
+                  <div class="cfg-lbl">Manual Backup</div>
+                  <div class="cfg-sub" id="lastBackupInfo">Loading backup info…</div>
+                </div>
+                <div class="flex gap-2">
+                  <button class="btn btn-primary" onclick="createBackup()" id="btnBackup">💾 Backup Now</button>
+                  <button class="btn btn-ghost" onclick="openBackupFolder()">📂 Open Folder</button>
+                </div>
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Last Successful Backup</div><div class="cfg-sub" id="backupLastSuccess">—</div></div>
+                <div><div class="cfg-lbl">Backup Status</div><div class="cfg-sub" id="backupStatus">Ready</div></div>
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Next Scheduled Backup</div><div class="cfg-sub" id="backupNextRun">—</div></div>
+                <div><div class="cfg-lbl">Backup Health</div><div class="cfg-sub" id="backupHealth">Healthy</div></div>
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Backup Location</div></div>
+                <div class="flex gap-2" style="flex:1;max-width:400px">
+                  <input class="form-input" id="s_backupDir" style="flex:1;padding:7px 12px;font-size:12px"
+                         placeholder="Documents\SuperMartPOS\Backups" onchange="sp('backupDir',this.value)">
+                  <button class="btn btn-ghost btn-sm" onclick="saveBackupCfg()">Save</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Auto Backup -->
+            <div class="cfg-block">
+              <div class="cfg-head"><span class="cfg-htxt">⏰ Automatic Backup</span></div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Enable Auto Backup</div><div class="cfg-sub">Daily scheduled backup</div></div>
+                <div class="toggle" id="t_autoBackup" onclick="tog(this,'autoBackup');saveBackupCfg()"></div>
+              </div>
+              <div class="cfg-row">
+                <div>
+                  <div class="cfg-lbl">Daily Backup Time</div>
+                  <div class="cfg-sub">Backup runs once per day at this time (24-hour format, e.g. 22:00)</div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <input type="time" class="form-input" id="s_backupTime" value="22:00"
+                         style="width:130px;padding:7px 10px;font-size:14px;font-family:monospace"
+                         onchange="sp('backupTime',this.value);saveBackupCfg();toast('Backup time set to '+this.value,'success')">
+                  <span class="text-muted text-xs" id="backupTimeLabel">10:00 PM</span>
+                </div>
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Keep Last N Backups</div><div class="cfg-sub">Older backups auto-deleted</div></div>
+                <div class="ctr">
+                  <button class="ctr-btn" onclick="adj('keepBackups',-1,1,30)">−</button>
+                  <span class="ctr-val" id="v_keepBackups">7</span>
+                  <button class="ctr-btn" onclick="adj('keepBackups',1,1,30)">+</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Backup files list -->
+            <div class="cfg-block">
+              <div class="cfg-head">
+                <span class="cfg-htxt">📋 Backup Files</span>
+                <button class="btn btn-ghost btn-sm" onclick="loadBackupList()">🔄 Refresh</button>
+              </div>
+              <div id="backupFileList" style="padding:12px">
+                <div class="text-muted text-sm" style="padding:8px">Loading backups…</div>
+              </div>
+            </div>
+
+            <!-- Restore -->
+            <div class="cfg-block" style="border-color:rgba(245,158,11,.3)">
+              <div class="cfg-head" style="background:rgba(245,158,11,.05)">
+                <span class="cfg-htxt" style="color:var(--warning)">⚠️ Restore Database</span>
+              </div>
+              <div class="info-banner info-yellow" style="margin:12px 16px 0">
+                ⚠️ Restoring a backup will replace the current data. Continue?
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Select Backup to Restore</div><div class="cfg-sub">Choose from existing backups</div></div>
+                <div class="flex gap-2">
+                  <select data-custom-select class="form-select" data-custom-select-search="true" id="s_restoreFile" style="width:260px;padding:7px 12px">
+                    <option value="">— Select backup file —</option>
+                  </select>
+                  <button class="btn btn-sm" style="background:var(--warning);color:#fff;border:none"
+                          onclick="confirmRestore()">🔄 Restore</button>
+                </div>
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Upload Backup File</div><div class="cfg-sub">Restore from a SuperMart backup .zip file</div></div>
+                <div class="flex gap-2">
+                  <input type="file" id="restoreUploadFile" accept=".zip" class="form-input" style="width:260px;padding:5px 10px">
+                  <button class="btn btn-sm" style="background:var(--warning);color:#fff;border:none"
+                          onclick="uploadAndRestore()">⬆ Upload & Restore</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Danger zone -->
+            <div class="cfg-block" style="border-color:rgba(239,68,68,.3)">
+              <div class="cfg-head" style="background:rgba(239,68,68,.06)"><span class="cfg-htxt" style="color:var(--danger)">⚠ Danger Zone</span></div>
+              {% if not g_destructive_admin_tools_enabled %}
+              <div class="info-banner info-yellow" style="margin:12px 16px 0">
+                Destructive admin tools are disabled in this runtime. Deep wipe actions (supplier-only reset and legacy reset-all) require <code>ENABLE_DESTRUCTIVE_ADMIN_TOOLS=1</code> only for controlled support/development.
+              </div>
+              {% endif %}
+              <div class="info-banner info-blue" style="margin:12px 16px 0">
+                Reset modes: <strong>Reset All Data</strong> (keeps users/settings/license) and <strong>Factory Reset</strong> (keeps license only). A separate developer-only full wipe can delete license data.
+              </div>
+              <div class="cfg-row" style="background:rgba(239,68,68,.03)">
+                <div>
+                  <div class="cfg-lbl" style="color:var(--danger)">Reset All Suppliers</div>
+                  <div class="cfg-sub">Delete ALL suppliers and transaction history. Products will be unlinked.</div>
+                </div>
+                {% if g_destructive_admin_tools_enabled %}
+                <button class="btn btn-sm btn-danger" onclick="resetSuppliers()">🗑 Reset Suppliers</button>
+                {% else %}
+                <button class="btn btn-sm btn-danger" disabled title="Enable ENABLE_DESTRUCTIVE_ADMIN_TOOLS=1 to use this action">🗑 Disabled</button>
+                {% endif %}
+              </div>
+              <div class="cfg-row" style="background:rgba(239,68,68,.03)">
+                <div><div class="cfg-lbl" style="color:var(--danger)">Reset All Data</div>
+                  <div class="cfg-sub">Delete operational data (sales, purchases, stock movements, customers, suppliers, invoices, repairs, IMEI operational history). Keep users, settings, and license data.</div></div>
+                {% if g_destructive_admin_tools_enabled %}
+                <button class="btn btn-sm btn-danger" onclick="resetAllData()">🗑 Reset</button>
+                {% else %}
+                <button class="btn btn-sm btn-danger" disabled title="Enable ENABLE_DESTRUCTIVE_ADMIN_TOOLS=1 to use this action">🗑 Disabled</button>
+                {% endif %}
+              </div>
+              <div class="cfg-row" style="background:rgba(239,68,68,.06);border-top:1px solid rgba(239,68,68,.2)">
+                <div>
+                  <div class="cfg-lbl" style="color:var(--danger);font-size:15px">⚠ Factory Reset</div>
+                  <div class="cfg-sub">Delete operational data, users, company settings, sessions, and app state. <strong>Activation/license remains intact.</strong> App returns to first-run setup.</div>
+                </div>
+                <button class="btn btn-sm btn-danger" onclick="factoryReset()"
+                        data-factory-mode="{{ g_factory_reset_mode }}"
+                        style="white-space:nowrap">🔄 Factory Reset</button>
+              </div>
+              <div class="cfg-row" style="background:rgba(239,68,68,.12);border-top:1px solid rgba(239,68,68,.25)">
+                <div>
+                  <div class="cfg-lbl" style="color:var(--danger);font-size:15px">☠ Full Factory Reset (Delete License)</div>
+                  <div class="cfg-sub"><strong>Developer access required:</strong> Deletes everything including activation/license files, clears all sessions, and restarts as a true fresh install.</div>
+                </div>
+                {% if g_full_factory_reset_unlocked %}
+                <button class="btn btn-sm btn-danger" onclick="fullFactoryReset()" style="white-space:nowrap">☠ Full Factory Reset</button>
+                {% else %}
+                <button class="btn btn-sm btn-danger" disabled title="Developer or destructive-admin access required">☠ Locked</button>
+                {% endif %}
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ─────────────── CLAUDE BACKUP (Google Drive) ─────────────── -->
+        <div class="s-page" id="p-gdrive">
+          <div class="s-header">
+            <div class="s-htitle">☁️ Claude Backup — Google Drive</div>
+            <div class="s-hsub">Automatically back up your POS database to Google Drive</div>
+          </div>
+          <div class="s-inner">
+
+            <!-- Status banner -->
+            <div id="gdriveStatusBanner" class="info-banner info-blue" style="margin-bottom:16px">
+              ⏳ Checking Google Drive connection…
+            </div>
+
+            <!-- Enable / Connection -->
+            <div class="cfg-block">
+              <div class="cfg-head"><span class="cfg-htxt">🔗 Google Drive Connection</span></div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Enable Google Drive Backup</div>
+                  <div class="cfg-sub">Automatically upload .sql backups to Drive</div></div>
+                <div class="toggle" id="t_gdriveEnabled" onclick="tog(this,'gdriveEnabled')"></div>
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Connection Status</div></div>
+                <div class="cfg-right">
+                  <span id="gdriveConnStatus" class="device-status status-off">Not Connected</span>
+                  <button class="btn btn-primary btn-sm" id="btnGdriveConnect" onclick="connectGDrive()">
+                    🔐 Connect Google Account
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- OAuth2 Credentials (needed to create a Google Cloud project) -->
+            <div class="cfg-block">
+              <div class="cfg-head">
+                <span class="cfg-htxt">🔑 Google API Credentials</span>
+                <button class="btn btn-ghost btn-sm" onclick="openModal('gdriveHelpModal')">? Help</button>
+              </div>
+              <div class="info-banner info-yellow" style="margin:12px 16px 0">
+                ⚠️ You need a Google Cloud project with Drive API enabled.
+                <button type="button" class="btn btn-link" onclick="openModal('gdriveHelpModal')" style="color:var(--warning);padding:0;border:none;background:transparent;font:inherit">Setup guide →</button>
+              </div>
+              <div class="cfg-row">
+                <div class="cfg-lbl lbl-sm">Client ID</div>
+                <input class="form-input" id="gdrive_client_id" placeholder="xxxxx.apps.googleusercontent.com"
+                       style="flex:1;padding:7px 12px;font-size:12px">
+              </div>
+              <div class="cfg-row">
+                <div class="cfg-lbl lbl-sm">Client Secret</div>
+                <input class="form-input" id="gdrive_client_secret" type="password"
+                       placeholder="GOCSPX-…" style="flex:1;padding:7px 12px;font-size:12px">
+              </div>
+              <div class="cfg-row">
+                <div class="cfg-lbl lbl-sm">Folder ID</div>
+                <input class="form-input" id="gdrive_folder_id"
+                       placeholder="Google Drive folder ID (optional)"
+                       style="flex:1;padding:7px 12px;font-size:12px">
+              </div>
+              <div class="cfg-row" style="justify-content:flex-end">
+                <button class="btn btn-primary btn-sm" onclick="saveGDriveConfig()">💾 Save Credentials</button>
+              </div>
+            </div>
+
+            <!-- Schedule -->
+            <div class="cfg-block">
+              <div class="cfg-head"><span class="cfg-htxt">⏰ Backup Schedule</span></div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Backup Frequency</div></div>
+                <select data-custom-select class="form-select" id="gdrive_freq" style="width:160px;padding:7px 12px"
+                        onchange="sp('gdrive_freq',this.value)">
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="manual">Manual Only</option>
+                </select>
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Manual Backup</div>
+                  <div class="cfg-sub">Creates .sql dump and uploads to Google Drive</div></div>
+                <div class="cfg-right">
+                  <button class="btn btn-primary" id="btnGdriveTrigger" onclick="triggerGDriveBackup()">
+                    ☁️ Backup Now
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Backup History -->
+            <div class="cfg-block">
+              <div class="cfg-head">
+                <span class="cfg-htxt">📋 Backup History</span>
+                <button class="btn btn-ghost btn-sm" onclick="loadGDriveLogs()">🔄 Refresh</button>
+              </div>
+              <div id="gdriveLogList" style="padding:12px">
+                <div class="text-muted text-sm" style="padding:8px">Loading backup history…</div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ─────────────── AUDIT LOG ─────────────── -->
+        <div class="s-page" id="p-audit">
+          <div class="s-header"><div class="s-htitle">📋 Audit Log</div><div class="s-hsub">View all user actions recorded in the system</div></div>
+          <div class="s-inner">
+            <div class="cfg-block">
+              <div class="cfg-head">
+                <span class="cfg-htxt">🔍 Filter Logs</span>
+                <div class="flex gap-2">
+                  <input class="form-input" id="auditSearch" placeholder="Search action…" style="width:180px;padding:6px 12px" oninput="loadAuditLogs()">
+                  <button class="btn btn-ghost btn-sm" onclick="loadAuditLogs()">🔄 Refresh</button>
+                </div>
+              </div>
+              <div style="overflow-x:auto">
+                <table class="data-table" id="auditTable">
+                  <thead>
+                    <tr><th>Date / Time</th><th>User</th><th>Action</th><th>IP</th></tr>
+                  </thead>
+                  <tbody id="auditBody">
+                    <tr><td colspan="4" class="text-muted" style="text-align:center;padding:20px">Loading…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="cfg-row" id="auditPagination" style="justify-content:center;gap:8px"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ─────────────── SESSIONS ─────────────── -->
+        <div class="s-page" id="p-sessions">
+          <div class="s-header"><div class="s-htitle">🔌 Active Sessions</div><div class="s-hsub">View and manage logged-in users</div></div>
+          <div class="s-inner">
+            <div class="cfg-block">
+              <div class="cfg-head">
+                <span class="cfg-htxt">Active Sessions</span>
+                <div class="flex gap-2">
+                  <button class="btn btn-ghost btn-sm" onclick="loadSessions()">🔄 Refresh</button>
+                  <button class="btn btn-danger btn-sm" onclick="logoutAllSessions()">⚡ Logout All Others</button>
+                </div>
+              </div>
+              <div id="sessionsBody" style="padding:12px">
+                <div class="text-muted" style="text-align:center;padding:20px">Loading…</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ─────────────── RETURN POLICY ─────────────── -->
+        <div class="s-page" id="p-returns-cfg">
+          <div class="s-header"><div class="s-htitle">🔄 Return Policy</div><div class="s-hsub">Configure return period and RMA workflow</div></div>
+          <div class="s-inner">
+            <div class="cfg-block">
+              <div class="cfg-head"><span class="cfg-htxt">Return Period</span></div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Maximum Return Period (Days)</div><div class="cfg-sub">0 = no time limit on returns</div></div>
+                <input class="form-input" id="s_returnPeriod" type="number" min="0" value="0"
+                       style="width:100px;padding:7px 12px">
+              </div>
+              <div class="cfg-row">
+                <div class="cfg-lbl"></div>
+                <button class="btn btn-primary btn-sm" onclick="saveReturnPolicy()">💾 Save Policy</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ─────────────── ABOUT ─────────────── -->
+        <div class="s-page" id="p-about">
+          <div class="s-header"><div class="s-htitle">ℹ️ About SuperMart POS</div><div class="s-hsub">Version and system information</div></div>
+          <div class="s-inner">
+            <div style="text-align:center;padding:20px 0">
+              <div style="width:72px;height:72px;background:linear-gradient(135deg,var(--accent),#7C3AED);border-radius:18px;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;font-size:36px">🛒</div>
+              <div style="font-size:24px;font-weight:900">SuperMart POS</div>
+              <div style="font-size:13px;color:var(--muted);margin-top:4px">Version 2.0.0 · Build 2026.03.11</div>
+            </div>
+            <div class="cfg-block">
+              <div class="cfg-head"><span class="cfg-htxt">System Info</span></div>
+              {% for l,v in [('Version','2.0.0'),('Build Date','2026-03-11'),('Framework','Python Flask + SQLite (default)'),
+                ('Logged in as',current_user.full_name+' ('+current_user.role+')')] %}
+              <div class="cfg-row">
+                <div class="cfg-lbl">{{ l }}</div>
+                <span style="font-weight:600;color:var(--accent)">{{ v }}</span>
+              </div>
+              {% endfor %}
+            </div>
+            <div class="cfg-block">
+              <div class="cfg-head">
+                <span class="cfg-htxt">🔑 Activation Information</span>
+                <span id="licBadge" class="device-status status-off">Loading…</span>
+              </div>
+              <div id="licInfoSection">
+                <div class="cfg-row"><div class="cfg-lbl" style="color:var(--muted)">Loading activation info…</div></div>
+              </div>
+              {% if current_user.role == 'Admin' %}
+              <div class="cfg-row" style="border-top:1px solid var(--border);margin-top:4px">
+                <div><div class="cfg-lbl">Manual Activation Key</div><div class="cfg-sub">Use format SMPOS-XXXXXXXX-XXXXXXXX-XXXXXXXX</div></div>
+                <div class="cfg-right">
+                  <input class="form-input" id="newLicKey" placeholder="SMPOS-XXXXXXXX-XXXXXXXX-XXXXXXXX"
+                         style="width:230px;padding:7px 12px;font-family:monospace;letter-spacing:1px;text-transform:uppercase"
+                         oninput="this.value=this.value.toUpperCase()">
+                  <button class="btn btn-primary btn-sm" onclick="activateLicense()">⚡ Activate</button>
+                </div>
+              </div>
+              {% endif %}
+            </div>
+            <div class="cfg-block">
+              <div class="cfg-head"><span class="cfg-htxt">👨‍💻 Developer Contact</span></div>
+              <div style="padding:18px">{{ developer_contact() }}</div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- end s-body -->
+    </div><!-- end s-wrap -->
+  </div>
+</div>
+
+<!-- ══ MODALS ══════════════════════════════════════════════════════════ -->
+
+<!-- Google Drive Setup Help Modal -->
+<div class="modal-overlay" id="gdriveHelpModal">
+  <div class="modal" style="width:560px">
+    <div class="modal-title">☁️ Google Drive Setup Guide</div>
+    <div style="font-size:13px;line-height:1.8;color:var(--text)">
+      <p style="margin-bottom:12px">To enable automatic Google Drive backups, you need to create a Google Cloud project:</p>
+      <ol style="padding-left:20px;margin-bottom:16px">
+        <li>Go to <strong>console.cloud.google.com</strong> and create a new project</li>
+        <li>Enable the <strong>Google Drive API</strong> in the library</li>
+        <li>Go to <strong>Credentials → Create OAuth 2.0 Client ID</strong></li>
+        <li>Choose <em>Web Application</em> as the type</li>
+        <li>Add Authorized Redirect URI:<br>
+          <code style="background:var(--stat);padding:3px 8px;border-radius:5px;font-size:11px">
+            http://localhost:5000/api/backup/gdrive/callback
+          </code>
+        </li>
+        <li>Copy the <strong>Client ID</strong> and <strong>Client Secret</strong></li>
+        <li>Paste them in the settings above and click <strong>Save Credentials</strong></li>
+        <li>Then click <strong>Connect Google Account</strong> and grant permission</li>
+      </ol>
+      <div class="info-banner info-blue" style="font-size:12px">
+        💡 <strong>Folder ID</strong> (optional): Open a Drive folder and copy the ID from the URL:
+        <code style="font-size:11px">drive.google.com/drive/folders/<strong>THIS_IS_THE_ID</strong></code>
+      </div>
+    </div>
+    <div style="margin-top:16px">
+      <button class="btn btn-ghost btn-full" onclick="closeModal('gdriveHelpModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+
+<script>
+/* ══ NAVIGATION ══════════════════════════════════════════════════════════ */
+function show(id) {
+  const body = document.querySelector('.s-body');
+  if (body) {
+    const current = document.querySelector('.s-page.show')?.id?.replace(/^p-/, '');
+    if (current) saveSettingsScroll(current, body.scrollTop);
+  }
+  document.querySelectorAll('.s-page').forEach(p => p.classList.remove('show'));
+  document.querySelectorAll('.sn').forEach(n => n.classList.remove('on'));
+  document.getElementById('p-'+id)?.classList.add('show');
+  document.getElementById('n-'+id)?.classList.add('on');
+  if (body) {
+    window.requestAnimationFrame(() => {
+      body.scrollTop = getSettingsScroll(id);
+    });
+  }
+  if (id === 'audit')    safelyInvoke(() => loadAuditLogs(1), 'loadAuditLogs');
+  if (id === 'sessions') safelyInvoke(loadSessions, 'loadSessions');
+  if (id === 'rcpt-layout') safelyInvoke(getWindowFunction('loadReceiptLayout'), 'loadReceiptLayout');
+  if (id === 'printers')   safelyInvoke(getWindowFunction('loadHardwareSettings'), 'loadHardwareSettings');
+}
+
+function safelyInvoke(fn, label = 'anonymous') {
+  try {
+    if (typeof fn !== 'function') {
+      console.warn(`Skipped non-function call: ${label}`);
+      return;
+    }
+    return fn();
+  } catch (error) {
+    console.error(`Critical JS call failed: ${label}`, error);
+  }
+}
+
+function getWindowFunction(name) {
+  if (!name || typeof name !== 'string') return null;
+  const ref = window[name];
+  return typeof ref === 'function' ? ref : null;
+}
+
+function withCsrfHeaders(headers = {}) {
+  const merged = { ...(headers || {}) };
+  const token =
+    window.__csrfToken ||
+    document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
+    document.cookie.split('; ').find(part => part.startsWith('csrf_token='))?.split('=')[1] ||
+    document.cookie.split('; ').find(part => part.startsWith('csrftoken='))?.split('=')[1];
+  if (token && !merged['X-CSRFToken']) merged['X-CSRFToken'] = token;
+  return merged;
+}
+
+const SETTINGS_SCROLL_KEY = 'supermart:settings:scroll:v1';
+function readSettingsScrollMap() {
+  try {
+    const raw = sessionStorage.getItem(SETTINGS_SCROLL_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (_) {
+    return {};
+  }
+}
+function saveSettingsScroll(id, top) {
+  if (!id) return;
+  const map = readSettingsScrollMap();
+  map[id] = Math.max(0, Math.round(Number(top) || 0));
+  try { sessionStorage.setItem(SETTINGS_SCROLL_KEY, JSON.stringify(map)); } catch (_) {}
+}
+function getSettingsScroll(id) {
+  const value = readSettingsScrollMap()[id];
+  return Number.isFinite(value) ? value : 0;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const body = document.querySelector('.s-body');
+  if (!body) return;
+  body.addEventListener('scroll', () => {
+    const active = document.querySelector('.s-page.show')?.id?.replace(/^p-/, '');
+    if (active) saveSettingsScroll(active, body.scrollTop);
+  }, { passive: true });
+  const active = document.querySelector('.s-page.show')?.id?.replace(/^p-/, '');
+  if (active) body.scrollTop = getSettingsScroll(active);
+});
+
+/* ══ PREFS ═══════════════════════════════════════════════════════════════ */
+const PK = 'supermart_prefs';
+function gp(k, def) { try { const p=JSON.parse(localStorage.getItem(PK)||'{}'); return k in p?p[k]:def; } catch{return def;} }
+function sp(k, v)   { try { const p=JSON.parse(localStorage.getItem(PK)||'{}'); p[k]=v; localStorage.setItem(PK,JSON.stringify(p)); markSaved(); } catch{} }
+
+function tog(el, k) { el.classList.toggle('on'); sp(k, el.classList.contains('on')); }
+function adj(k, d, mn=0, mx=999) {
+  const el = document.getElementById('v_'+k); if(!el)return;
+  const v  = Math.min(mx, Math.max(mn, (parseInt(el.textContent)||0)+d));
+  el.textContent = v; sp(k, v);
+}
+
+function markSaved() {
+  const el = document.getElementById('saveStatus');
+  if(el){ el.textContent='● Saved'; el.style.color='var(--accent2)'; setTimeout(()=>el.textContent='',2000); }
+}
+function setSaveStatus(message, tone = 'info') {
+  const el = document.getElementById('saveStatus');
+  if (!el) return;
+  el.textContent = message || '';
+  el.style.color =
+    tone === 'success' ? 'var(--accent2)' :
+    tone === 'error' ? 'var(--danger)' :
+    tone === 'warning' ? 'var(--warning)' :
+    'var(--muted)';
+}
+
+async function fetchJsonWithDiagnostics(url, options = {}, fallbackMessage = 'Request failed') {
+  let response;
+  try {
+    response = await fetch(url, options);
+  } catch (error) {
+    throw new Error(`${fallbackMessage}: network error`);
+  }
+
+  let data = null;
+  try {
+    data = await response.json();
+  } catch (error) {
+    if (!response.ok) throw new Error(`${fallbackMessage}: server returned ${response.status}`);
+    throw new Error(`${fallbackMessage}: invalid server response`);
+  }
+
+  if (!response.ok || data?.ok === false) {
+    throw new Error(data?.msg || data?.error || fallbackMessage);
+  }
+  return data;
+}
+
+window.loadCompanyInfo = async function() {
+  try {
+    const settings = await fetchJsonWithDiagnostics('/api/settings', {}, 'Failed to load company info');
+    const setValue = (id, value) => {
+      const el = document.getElementById(id);
+      if (el) el.value = value || '';
+    };
+    setValue('co_name', settings.store_name || 'SuperMart');
+    setValue('co_branch', settings.store_branch);
+    setValue('co_addr', settings.store_address);
+    setValue('co_phone', settings.store_phone);
+    setValue('co_email', settings.store_email);
+    setValue('co_reg', settings.store_reg);
+    setValue('co_header', settings.receipt_header);
+    setValue('co_footer', settings.receipt_footer);
+  } catch (error) {
+    console.error('Failed to load company info:', error);
+    toast(error.message || 'Failed to load company info.', 'error');
+  }
+};
+
+async function saveCompanyInfo() {
+  try {
+    const payload = {
+      store_name: document.getElementById('co_name')?.value?.trim() || '',
+      store_branch: document.getElementById('co_branch')?.value?.trim() || '',
+      store_address: document.getElementById('co_addr')?.value?.trim() || '',
+      store_phone: document.getElementById('co_phone')?.value?.trim() || '',
+      store_email: document.getElementById('co_email')?.value?.trim() || '',
+      store_reg: document.getElementById('co_reg')?.value?.trim() || '',
+      receipt_header: document.getElementById('co_header')?.value?.trim() || '',
+      receipt_footer: document.getElementById('co_footer')?.value?.trim() || '',
+    };
+
+    if (!payload.store_name) {
+      toast('Store name is required.', 'error');
+      return false;
+    }
+
+    await fetchJsonWithDiagnostics('/api/settings', {
+      method: 'POST',
+      headers: withCsrfHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload),
+    }, 'Failed to save company info');
+
+    toast('Company information saved successfully.', 'success');
+    return true;
+  } catch (error) {
+    console.error('Failed to save company info:', error);
+    toast(error.message || 'Failed to save company info.', 'error');
+    return false;
+  }
+}
+
+async function saveAllSettings() {
+  setSaveStatus('Saving settings…', 'info');
+  // 1. Save company info to database
+  const companySaved = await saveCompanyInfo();
+  // 2. Build body from direct form values (source of truth) with localStorage as fallback
+  const prefs = JSON.parse(localStorage.getItem(PK) || '{}');
+  const tog = (id) => document.getElementById(id)?.classList.contains('on') ? 'true' : 'false';
+  const val = (id, fb) => { const e=document.getElementById(id); return e ? e.value : (prefs[fb]!==undefined ? String(prefs[fb]) : ''); };
+  const ctr = (id, fb) => { const e=document.getElementById(id); return e ? e.textContent : (prefs[fb]!==undefined ? String(prefs[fb]) : ''); };
+  const body = {
+    pref_lang:         val('s_lang',         'lang'),
+    pref_currency:     val('s_currency',     'currency'),
+    pref_datefmt:      val('s_datefmt',      'datefmt'),
+    pref_theme:        localStorage.getItem('theme') || prefs['theme'] || 'light',
+    pref_gridCols:     ctr('v_gridCols',     'gridCols'),
+    pref_cpl:          ctr('v_cpl',          'cpl'),
+    pref_autoSearch:   tog('t_autoSearch'),
+    pref_beep:         tog('t_beep'),
+    pref_noNegStock:   tog('t_noNegStock'),
+    tax_enabled:       tog('t_taxEnabled'),
+    tax_name:          val('s_taxName',      'taxName'),
+    tax_rate:          val('s_taxRate',      'taxRate'),
+    pref_taxIncl:      tog('t_taxIncl'),
+    pref_taxRcpt:      tog('t_taxRcpt'),
+    pref_discType:     val('s_discType',     'discType'),
+    pref_maxDisc:      ctr('v_maxDisc',      'maxDisc'),
+    pref_discApproval: ctr('v_discApproval', 'discApproval'),
+    pref_itemDisc:     tog('t_itemDisc'),
+    pref_backupDir:    val('s_backupDir',    'backupDir'),
+    pref_autoBackup:   tog('t_autoBackup'),
+    pref_backupTime:   val('s_backupTime',   'backupTime'),
+    pref_keepBackups:  ctr('v_keepBackups',  'keepBackups'),
+    pref_card_enable_card_payments: tog('t_cardEnabled'),
+    pref_card_terminal_type: val('s_termType', 'termType'),
+    pref_card_provider_name: val('s_cardProvider', 'cardProvider'),
+    pref_card_merchant_id: val('s_mid', 'mid'),
+    pref_card_terminal_id: val('s_tid', 'tid'),
+    pref_card_branch_store_id: val('s_cardBranchId', 'cardBranchId'),
+    pref_card_currency: val('s_cardCurrency', 'cardCurrency'),
+    pref_card_transaction_timeout: ctr('v_termTimeout', 'termTimeout'),
+    pref_card_connection_mode: val('s_cardConnMode', 'cardConnMode'),
+    pref_card_ip_address: val('s_termIp', 'termIp'),
+    pref_card_port: val('s_termPort', 'termPort'),
+    pref_card_com_port: val('s_termCom', 'termCom'),
+    pref_card_baud_rate: val('s_termBaud', 'termBaud'),
+    pref_card_api_key: val('s_cardApiKey', 'cardApiKey'),
+    pref_card_auto_send_amount: tog('t_cardAutoSend'),
+    pref_card_wait_for_response: tog('t_cardWaitResponse'),
+    pref_card_allow_manual_fallback: tog('t_cardManualFallback'),
+    pref_card_allow_split_payments: tog('t_cardSplit'),
+    pref_card_allow_mixed_payments: tog('t_cardMixed'),
+    pref_card_require_approval_code: tog('t_cardRequireApproval'),
+    pref_card_require_last4: tog('t_cardRequireLast4'),
+    pref_card_require_rrn_reference: tog('t_cardRequireRrn'),
+    pref_card_receipt_show_details: tog('t_cardRcptDetails'),
+  };
+  // Remove empty-string entries to avoid overwriting DB values with blank
+  Object.keys(body).forEach(k => { if(body[k] === '') delete body[k]; });
+  try {
+    const d = await fetchJsonWithDiagnostics('/api/settings', {
+      method:'POST',
+      headers: withCsrfHeaders({'Content-Type':'application/json'}),
+      body:JSON.stringify(body)
+    }, 'Failed to save settings');
+    if (companySaved === false) {
+      setSaveStatus('Some settings failed to save', 'warning');
+      toast('Some settings failed to save. Review the messages above and try again.', 'error');
+      return;
+    }
+    toast(d.msg || 'Settings saved successfully! ✓','success');
+    setSaveStatus('✓ Saved to database', 'success');
+    setTimeout(()=>setSaveStatus('', 'info'),3000);
+  } catch(e) {
+    console.error('Settings save error:', e);
+    setSaveStatus('Settings save failed', 'error');
+    toast(e.message || 'Settings save failed','error');
+  }
+}
+
+/* ══ THEME ═══════════════════════════════════════════════════════════════ */
+function applyTheme(t) {
+  const nextTheme = window.applyGlobalTheme ? window.applyGlobalTheme(t, { persist: true }) : t;
+  updateThemeBtn();
+  sp('theme', nextTheme);
+  toast('Switched to '+t+' mode','success');
+}
+
+/* ══ PRINTERS ════════════════════════════════════════════════════════════ */
+function toggleReceiptPrinterMode(v) {
+  document.getElementById('rcpt-windows-row').style.display = v === 'windows' ? 'block' : 'none';
+  document.getElementById('rcpt-network-row').style.display = v === 'network' ? 'block' : 'none';
+  updateReceiptDeviceCard();
+}
+
+function toggleLabelPrinterMode(v) {
+  document.getElementById('label-windows-row').style.display = v === 'windows' ? 'block' : 'none';
+  document.getElementById('label-network-row').style.display = v === 'network' ? 'block' : 'none';
+  updateLabelDeviceCard();
+}
+
+function updateReceiptDeviceCard() {
+  const type = document.getElementById('s_printerType')?.value || 'windows';
+  let name, desc;
+  if (type === 'network') {
+    const ip   = document.getElementById('s_printerIp')?.value.trim()  || '';
+    const port = document.getElementById('s_printerPort')?.value.trim() || '9100';
+    name = ip || 'Network printer';
+    desc = ip ? `ESC/POS network · ${ip}:${port}` : 'No IP address configured';
+  } else {
+    name = document.getElementById('s_printerName')?.value || '';
+    desc = name ? 'Windows printer · USB or driver-based' : 'No printer selected';
+  }
+  const el = document.getElementById('rcpt-device-name');
+  const de = document.getElementById('rcpt-device-desc');
+  if (el) el.textContent = name || 'Not configured';
+  if (de) de.textContent = desc;
+}
+
+function updateLabelDeviceCard() {
+  const type = document.getElementById('s_labelPrinterType')?.value || 'windows';
+  let name, desc;
+  if (type === 'network') {
+    const ip   = document.getElementById('s_labelPrinterIp')?.value.trim()  || '';
+    const port = document.getElementById('s_labelPrinterPort')?.value.trim() || '9100';
+    name = ip || 'Network label printer';
+    desc = ip ? `ESC/POS network · ${ip}:${port}` : 'No IP address configured';
+  } else {
+    name = document.getElementById('s_labelPrinterName')?.value || '';
+    desc = name ? 'Windows printer · USB or driver-based' : 'No printer selected';
+  }
+  const el = document.getElementById('label-device-name');
+  const de = document.getElementById('label-device-desc');
+  if (el) el.textContent = name || 'Not configured';
+  if (de) de.textContent = desc;
+}
+
+function _setPrinterSelectValue(id, value) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  // Try to match by value; if not found keep first option (—Select—)
+  const opt = Array.from(el.options).find(o => o.value === value);
+  el.value = opt ? value : '';
+}
+
+let _printerStatusPollTimer = null;
+
+function _updatePrinterSelectOptions(selectId, printers) {
+  const select = document.getElementById(selectId);
+  if (!select) return;
+  const opts = ['<option value="">— Select printer —</option>'];
+  (printers || []).forEach(p => {
+    const name = String(p.name || '').trim();
+    if (!name) return;
+    const status = (p.status || 'unknown').toLowerCase();
+    const tag = status === 'online' ? 'online' : (status === 'offline' ? 'offline' : 'unknown');
+    const safeName = name.replace(/"/g, '&quot;');
+    opts.push(`<option value="${safeName}">${name} (${tag})</option>`);
+  });
+  select.innerHTML = opts.join('');
+}
+
+async function refreshPrinterStatus({silent = true} = {}) {
+  try {
+    const r = await fetch('/api/printer/status');
+    const d = await r.json();
+    if (!d.ok) {
+      if (!silent) toast('Printer status check failed', 'error');
+      return null;
+    }
+    _updateStatusBadge('rcpt-status-badge', d.receipt || {connected:false});
+    _updateStatusBadge('label-status-badge', d.label || {connected:false});
+    return d;
+  } catch (e) {
+    if (!silent) toast('Status check failed: ' + e.message, 'error');
+    return null;
+  }
+}
+
+function startPrinterStatusPolling() {
+  if (_printerStatusPollTimer) return;
+  _printerStatusPollTimer = setInterval(() => {
+    const printersPage = document.getElementById('p-printers');
+    if (!printersPage || printersPage.style.display === 'none') return;
+    refreshPrinterStatus({silent:true});
+  }, 5000);
+}
+
+window.loadHardwareSettings = async function() {
+  try {
+    const [sRes, lRes, mRes] = await Promise.all([
+      fetch('/api/printer/settings'),
+      fetch('/api/printer/list'),
+      fetch('/api/printer-manager/summary'),
+    ]);
+    const sData = sRes.ok ? await sRes.json() : {};
+    const lData = lRes.ok ? await lRes.json() : {};
+    const s = sData.settings || {};
+    const printers = lData.items || (lData.printers || []).map((name) => ({name, status:'unknown'}));
+
+    // Populate receipt printer dropdown with live installed printer metadata
+    _updatePrinterSelectOptions('s_printerName', printers);
+
+    // ── Receipt printer ──────────────────────────────────────
+    const rcptType = s.printer_type || 'windows';
+    const rcptTypeEl = document.getElementById('s_printerType');
+    if (rcptTypeEl) rcptTypeEl.value = rcptType;
+    _setPrinterSelectValue('s_printerName', s.printer_name || '');
+    const rcptIpEl   = document.getElementById('s_printerIp');
+    const rcptPortEl = document.getElementById('s_printerPort');
+    if (rcptIpEl)   rcptIpEl.value   = s.printer_ip   || '';
+    if (rcptPortEl) rcptPortEl.value = s.printer_port  || '9100';
+    toggleReceiptPrinterMode(rcptType);
+
+    const rcptCodeEl = document.getElementById('s_rcptCodepage');
+    if (rcptCodeEl) rcptCodeEl.value = s.receipt_codepage || 'cp437';
+    const cutEl = document.getElementById('t_cutPaper');
+    if (cutEl) { cutEl.classList.toggle('on', s.cut_paper !== 'false'); }
+    const autoPrintEl = document.getElementById('t_autoPrintReceipt');
+    if (autoPrintEl) autoPrintEl.classList.toggle('on', String(s.pref_auto_print_receipt || 'false').toLowerCase() === 'true');
+
+    const mData = mRes.ok ? await mRes.json() : {};
+    const managerSummary = document.getElementById('printer-manager-summary');
+    if (managerSummary && mData?.ok) {
+      const status = mData.label_status?.connected ? 'Connected' : (mData.label_status?.reason || 'Disconnected');
+      managerSummary.textContent = `${mData.label_printer || 'Not selected'} · ${status}`;
+    }
+
+    updateReceiptDeviceCard();
+    await refreshPrinterStatus({silent:true});
+    startPrinterStatusPolling();
+  } catch(e) {
+    console.error('loadHardwareSettings failed:', e);
+  }
+};
+
+async function savePrinterSettings() {
+  const tog = id => {
+    const el = document.getElementById(id);
+    if (!el) return '';
+    return el.classList.contains('on') ? 'true' : 'false';
+  };
+  const val = id => document.getElementById(id)?.value || '';
+
+  const payload = {
+    // Receipt printer
+    printer_type:          val('s_printerType'),
+    printer_name:          val('s_printerName'),
+    printer_ip:            val('s_printerIp'),
+    printer_port:          val('s_printerPort'),
+    receipt_codepage:      val('s_rcptCodepage'),
+    cut_paper:             tog('t_cutPaper'),
+    pref_auto_print_receipt: tog('t_autoPrintReceipt'),
+  };
+
+  // Drop empty strings — don't overwrite existing DB values with blank
+  Object.keys(payload).forEach(k => { if (payload[k] === '') delete payload[k]; });
+  console.log('[printer] savePrinterSettings payload', payload);
+
+  try {
+    const r = await fetch('/api/printer/settings', {
+      method: 'POST',
+      headers: withCsrfHeaders({'Content-Type': 'application/json'}),
+      body: JSON.stringify(payload),
+    });
+    console.log('[printer] POST /api/printer/settings status', r.status, r.statusText);
+    let d = {};
+    try {
+      d = await r.json();
+    } catch (parseErr) {
+      console.error('[printer] Failed to parse /api/printer/settings response JSON', parseErr);
+      toast('Save failed: invalid server response', 'error');
+      return false;
+    }
+    console.log('[printer] POST /api/printer/settings response', d);
+    if (!r.ok) {
+      toast(d.msg || `Failed to save printer settings (${r.status})`, 'error');
+      return false;
+    }
+    if (d.ok) {
+      _updateStatusBadge('rcpt-status-badge', d.receipt || {connected:false});
+      _updateStatusBadge('label-status-badge', d.label || {connected:false});
+      if (d.validation_ok) {
+        toast('Printer settings saved — printer connected ✓', 'success');
+      } else {
+        // Settings ARE saved, printer just isn't reachable right now
+        const rcpt = d.receipt || {};
+        const reasons = [];
+        if (rcpt.name && !rcpt.connected) {
+          reasons.push(rcpt.reason || 'Receipt printer not reachable');
+        }
+        const msg = reasons.length
+          ? `Settings saved. ${reasons.join(' | ')} — check cable/power and use 🔍 Check Status.`
+          : 'Settings saved. Printer not reachable — check connection.';
+        toast(msg, 'warning');
+      }
+      await refreshPrinterStatus({silent:true});
+      return true;
+    } else {
+      toast(d.msg || 'Failed to save printer settings', 'error');
+      return false;
+    }
+  } catch(e) {
+    toast('Save failed: ' + e.message, 'error');
+    return false;
+  }
+}
+
+async function openPrinterManager() {
+  try {
+    const r = await fetch('/api/printer-manager/open', {
+      method: 'POST',
+      headers: withCsrfHeaders({}),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ok) {
+      toast(d.msg || 'Failed to open Printer Manager', 'error');
+      return;
+    }
+    toast(d.msg || 'Opening Printer Manager…', 'success');
+  } catch (e) {
+    toast('Printer Manager launch failed: ' + e.message, 'error');
+  }
+}
+
+function _updateStatusBadge(badgeId, resolved) {
+  const el = document.getElementById(badgeId);
+  if (!el) return;
+  const hintEl = badgeId === 'rcpt-status-badge' ? document.getElementById('rcpt-status-hint') : null;
+  if (resolved.connected) {
+    el.className = 'device-status status-ok';
+    el.textContent = '✓ Connected';
+    el.title = resolved.name || '';
+    if (hintEl) hintEl.textContent = 'Printer is online and ready';
+  } else if (!resolved.name && !resolved.reason) {
+    el.className = 'device-status status-off';
+    el.textContent = 'Not configured';
+    el.title = '';
+    if (hintEl) hintEl.textContent = 'Select a printer and save to connect';
+  } else {
+    el.className = 'device-status status-off';
+    el.textContent = '✖ Not connected';
+    el.title = resolved.reason || 'Printer not reachable';
+    if (hintEl) hintEl.textContent = resolved.reason || 'Check cable/power and use 🔍 Check Status';
+  }
+}
+
+async function refreshPrinterList(btn) {
+  const orig = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const r = await fetch('/api/printer/list');
+    const d = r.ok ? await r.json() : {};
+    const printers = d.items || (d.printers || []).map(name => ({name, status:'unknown'}));
+    const current = document.getElementById('s_printerName')?.value || '';
+    _updatePrinterSelectOptions('s_printerName', printers);
+    // Restore previous selection if still available
+    const sel = document.getElementById('s_printerName');
+    if (sel && current) sel.value = current;
+    updateReceiptDeviceCard();
+    toast(`Found ${printers.length} printer${printers.length !== 1 ? 's' : ''}`, 'success');
+  } catch(e) {
+    toast('Could not refresh printer list', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = orig; }
+  }
+}
+
+async function checkReceiptPrinterStatus() {
+  const d = await refreshPrinterStatus({silent:false});
+  if (!d) return;
+  if (d.receipt.connected) {
+    toast(`Receipt printer connected ✓ (${d.receipt.name || 'OK'})`, 'success');
+  } else {
+    const reason = d.receipt.reason || 'Not connected';
+    const name = d.receipt.name ? `"${d.receipt.name}" — ` : '';
+    toast(`${name}${reason}. Check cable/power and try again.`, 'warning');
+  }
+}
+
+async function checkLabelPrinterStatus() {
+  const d = await refreshPrinterStatus({silent:false});
+  if (!d) return;
+  if (d.label.connected) {
+    toast(`Label printer connected ✓ (${d.label.name || 'OK'})`, 'success');
+  } else {
+    const reason = d.label.reason || 'Not connected';
+    const name = d.label.name ? `"${d.label.name}" — ` : '';
+    toast(`${name}${reason}. Use Printer Manager to configure.`, 'warning');
+  }
+}
+
+async function testReceiptPrinter() {
+  toast('Sending test print to receipt printer…', 'info');
+  console.log('[printer] POST /api/printer/test/receipt start');
+  try {
+    const r = await fetch('/api/printer/test/receipt', {
+      method: 'POST', headers: withCsrfHeaders({}),
+    });
+    console.log('[printer] POST /api/printer/test/receipt status', r.status, r.statusText);
+    let d = {};
+    try {
+      d = await r.json();
+    } catch (parseErr) {
+      console.error('[printer] Failed to parse /api/printer/test/receipt response JSON', parseErr);
+      toast('Test print failed: invalid server response', 'error');
+      return;
+    }
+    console.log('[printer] POST /api/printer/test/receipt response', d);
+    if (!r.ok) {
+      toast(d.msg || `Test print failed (${r.status})`, 'error');
+      return;
+    }
+    if (d.ok) toast(d.msg || 'Test receipt sent!', 'success');
+    else toast(d.msg || 'Test print failed', 'error');
+  } catch(e) {
+    console.error('[printer] POST /api/printer/test/receipt error', e);
+    toast('Test print error: ' + e.message, 'error');
+  }
+}
+
+async function testLabelPrinter() {
+  toast('Sending test label to label printer…', 'info');
+  try {
+    const r = await fetch('/api/printer/test/label', {
+      method: 'POST', headers: withCsrfHeaders({}),
+    });
+    let d = {};
+    try {
+      d = await r.json();
+    } catch (parseErr) {
+      console.error('[printer] Failed to parse /api/printer/test/label response JSON', parseErr);
+      toast('Test label failed: invalid server response', 'error');
+      return;
+    }
+    if (!r.ok) {
+      toast(d.msg || `Test label failed (${r.status})`, 'error');
+      return;
+    }
+    if (d.ok) toast(d.msg || 'Test label sent!', 'success');
+    else toast(d.msg || 'Test print failed', 'error');
+  } catch(e) {
+    toast('Test label error: ' + e.message, 'error');
+  }
+}
+
+async function printSampleLabel() {
+  const saved = await savePrinterSettings();
+  if (!saved) return;
+  const barcode = (document.getElementById('s_labelSampleBarcode')?.value || '').trim() || 'SM-SAMPLE-001';
+  const name = (document.getElementById('s_labelSampleName')?.value || '').trim() || 'Sample Label';
+  const copies = Math.max(1, parseInt(document.getElementById('s_labelCopies')?.value || '1', 10));
+  toast('Sending sample label to label printer…', 'info');
+  try {
+    const r = await fetch('/api/barcode-label/sample', {
+      method: 'POST',
+      headers: withCsrfHeaders({'Content-Type': 'application/json'}),
+      body: JSON.stringify({ barcode, name, copies, sell_price: '0.00' }),
+    });
+    const d = await r.json();
+    if (d.ok) toast(d.msg || 'Sample label sent!', 'success');
+    else toast(d.error || d.msg || 'Sample print failed', 'error');
+  } catch (e) {
+    toast('Sample label error: ' + e.message, 'error');
+  }
+}
+
+async function printBarcodeLabel() {
+  const saved = await savePrinterSettings();
+  if (!saved) return;
+  const barcode = (document.getElementById('s_labelSampleBarcode')?.value || '').trim();
+  if (!barcode) {
+    toast('Enter a barcode value first', 'error');
+    return;
+  }
+  const name = (document.getElementById('s_labelSampleName')?.value || '').trim() || 'Barcode Label';
+  const copies = Math.max(1, parseInt(document.getElementById('s_labelCopies')?.value || '1', 10));
+  toast('Sending barcode label to label printer…', 'info');
+  try {
+    const r = await fetch('/api/barcode/label', {
+      method: 'POST',
+      headers: withCsrfHeaders({'Content-Type': 'application/json'}),
+      body: JSON.stringify({
+        copies,
+        product: { barcode, name, sell_price: '0.00' },
+      }),
+    });
+    const d = await r.json();
+    if (d.ok) toast(d.msg || 'Barcode label sent!', 'success');
+    else toast(d.error || d.msg || 'Barcode label print failed', 'error');
+  } catch (e) {
+    toast('Barcode label error: ' + e.message, 'error');
+  }
+}
+
+
+/* ══ RECEIPT LAYOUT ════════════════════════════════════════════════════ */
+window.loadReceiptLayout = async function() {
+  try {
+    const r = await fetch('/api/receipt-layout/settings');
+    const d = await r.json();
+    if (!d.ok) return;
+    const s = d.settings || {};
+    const setVal = (id, v) => { const e = document.getElementById(id); if (e) e.value = v; };
+    const togSet = (id, on) => { const e = document.getElementById(id); if (e) e.classList.toggle('on', on); };
+    const isTrue = v => String(v).toLowerCase() !== 'false';
+
+    setVal('rl_layoutType',  s.rcpt_layout_type  || 'thermal');
+    setVal('rl_cpl',         s.rcpt_cpl          || '48');
+    setVal('rl_headerAlign', s.rcpt_header_align  || 'center');
+    setVal('rl_footerAlign', s.rcpt_footer_align  || 'center');
+    setVal('rl_footerText',  s.rcpt_footer_text   || 'Thank you for shopping!');
+
+    togSet('t_rl_compact',       isTrue(s.rcpt_compact_mode));
+    togSet('t_rl_storeName',     isTrue(s.rcpt_show_store_name     ?? 'true'));
+    togSet('t_rl_branch',        isTrue(s.rcpt_show_branch         ?? 'true'));
+    togSet('t_rl_address',       isTrue(s.rcpt_show_address        ?? 'false'));
+    togSet('t_rl_phone',         isTrue(s.rcpt_show_phone          ?? 'true'));
+    togSet('t_rl_email',         isTrue(s.rcpt_show_email          ?? 'false'));
+    togSet('t_rl_taxNumber',     isTrue(s.rcpt_show_tax_number     ?? 'false'));
+    togSet('t_rl_invoice',       isTrue(s.rcpt_show_invoice        ?? 'true'));
+    togSet('t_rl_datetime',      isTrue(s.rcpt_show_datetime       ?? 'true'));
+    togSet('t_rl_cashier',       isTrue(s.rcpt_show_cashier        ?? 'true'));
+    togSet('t_rl_customer',      isTrue(s.rcpt_show_customer       ?? 'true'));
+    togSet('t_rl_customerPhone', isTrue(s.rcpt_show_customer_phone ?? 'false'));
+    togSet('t_rl_paymentMethod', isTrue(s.rcpt_show_payment_method ?? 'true'));
+    togSet('t_rl_qty',           isTrue(s.rcpt_show_qty            ?? 'true'));
+    togSet('t_rl_unitPrice',     isTrue(s.rcpt_show_unit_price     ?? 'true'));
+    togSet('t_rl_discount',      isTrue(s.rcpt_show_discount       ?? 'true'));
+    togSet('t_rl_lineTotal',     isTrue(s.rcpt_show_line_total     ?? 'true'));
+    togSet('t_rl_sku',           isTrue(s.rcpt_show_sku            ?? 'false'));
+    togSet('t_rl_wrapNames',     isTrue(s.rcpt_wrap_product_names  ?? 'true'));
+    togSet('t_rl_subtotal',      isTrue(s.rcpt_show_subtotal       ?? 'true'));
+    togSet('t_rl_discountTotal', isTrue(s.rcpt_show_discount_total ?? 'true'));
+    togSet('t_rl_tax',           isTrue(s.rcpt_show_tax            ?? 'true'));
+    togSet('t_rl_grandTotal',    isTrue(s.rcpt_show_grand_total    ?? 'true'));
+    togSet('t_rl_paid',          isTrue(s.rcpt_show_paid           ?? 'true'));
+    togSet('t_rl_change',        isTrue(s.rcpt_show_change         ?? 'true'));
+    togSet('t_rl_thankyou',      isTrue(s.rcpt_show_thankyou       ?? 'true'));
+    togSet('t_rl_returnPolicy',  isTrue(s.rcpt_show_return_policy  ?? 'false'));
+    togSet('t_rl_poweredBy',     isTrue(s.rcpt_show_powered_by     ?? 'false'));
+    togSet('t_rl_enableBarcode', isTrue(s.rcpt_enable_barcode      ?? 'true'));
+    togSet('t_rl_barcodeText',   isTrue(s.rcpt_show_barcode_text   ?? 'true'));
+  } catch (e) {
+    console.error('loadReceiptLayout failed:', e);
+  }
+};
+
+async function saveReceiptLayout() {
+  const g = id => document.getElementById(id)?.classList.contains('on') ? 'true' : 'false';
+  const v = id => document.getElementById(id)?.value || '';
+  const payload = {
+    rcpt_layout_type:          v('rl_layoutType'),
+    rcpt_cpl:                  v('rl_cpl'),
+    rcpt_header_align:         v('rl_headerAlign'),
+    rcpt_footer_align:         v('rl_footerAlign'),
+    rcpt_footer_text:          v('rl_footerText'),
+    rcpt_compact_mode:         g('t_rl_compact'),
+    rcpt_show_store_name:      g('t_rl_storeName'),
+    rcpt_show_branch:          g('t_rl_branch'),
+    rcpt_show_address:         g('t_rl_address'),
+    rcpt_show_phone:           g('t_rl_phone'),
+    rcpt_show_email:           g('t_rl_email'),
+    rcpt_show_tax_number:      g('t_rl_taxNumber'),
+    rcpt_show_invoice:         g('t_rl_invoice'),
+    rcpt_show_datetime:        g('t_rl_datetime'),
+    rcpt_show_cashier:         g('t_rl_cashier'),
+    rcpt_show_customer:        g('t_rl_customer'),
+    rcpt_show_customer_phone:  g('t_rl_customerPhone'),
+    rcpt_show_payment_method:  g('t_rl_paymentMethod'),
+    rcpt_show_qty:             g('t_rl_qty'),
+    rcpt_show_unit_price:      g('t_rl_unitPrice'),
+    rcpt_show_discount:        g('t_rl_discount'),
+    rcpt_show_line_total:      g('t_rl_lineTotal'),
+    rcpt_show_sku:             g('t_rl_sku'),
+    rcpt_wrap_product_names:   g('t_rl_wrapNames'),
+    rcpt_show_subtotal:        g('t_rl_subtotal'),
+    rcpt_show_discount_total:  g('t_rl_discountTotal'),
+    rcpt_show_tax:             g('t_rl_tax'),
+    rcpt_show_grand_total:     g('t_rl_grandTotal'),
+    rcpt_show_paid:            g('t_rl_paid'),
+    rcpt_show_change:          g('t_rl_change'),
+    rcpt_show_thankyou:        g('t_rl_thankyou'),
+    rcpt_show_return_policy:   g('t_rl_returnPolicy'),
+    rcpt_show_powered_by:      g('t_rl_poweredBy'),
+    rcpt_enable_barcode:       g('t_rl_enableBarcode'),
+    rcpt_show_barcode_text:    g('t_rl_barcodeText'),
+  };
+  try {
+    const r = await fetch('/api/receipt-layout/settings', {
+      method: 'POST',
+      headers: withCsrfHeaders({'Content-Type': 'application/json'}),
+      body: JSON.stringify(payload),
+    });
+    const d = await r.json();
+    if (d.ok) toast('Receipt layout saved! ✓', 'success');
+    else toast(d.msg || 'Failed to save receipt layout', 'error');
+  } catch (e) {
+    toast('Save failed: ' + e.message, 'error');
+  }
+}
+
+function resetReceiptLayout() {
+  const defaults = {
+    rl_layoutType: 'thermal', rl_cpl: '48', rl_headerAlign: 'center',
+    rl_footerAlign: 'center', rl_footerText: 'Thank you for shopping!',
+  };
+  Object.entries(defaults).forEach(([id, v]) => {
+    const e = document.getElementById(id);
+    if (e) e.value = v;
+  });
+  const trueToggles = ['t_rl_storeName','t_rl_branch','t_rl_phone','t_rl_invoice',
+    't_rl_datetime','t_rl_cashier','t_rl_customer','t_rl_paymentMethod',
+    't_rl_qty','t_rl_unitPrice','t_rl_discount','t_rl_lineTotal','t_rl_wrapNames',
+    't_rl_subtotal','t_rl_discountTotal','t_rl_tax','t_rl_grandTotal',
+    't_rl_paid','t_rl_change','t_rl_thankyou','t_rl_enableBarcode','t_rl_barcodeText'];
+  const falseToggles = ['t_rl_compact','t_rl_address','t_rl_email','t_rl_taxNumber',
+    't_rl_customerPhone','t_rl_sku','t_rl_returnPolicy','t_rl_poweredBy'];
+  trueToggles.forEach(id => { const e = document.getElementById(id); if (e) e.classList.add('on'); });
+  falseToggles.forEach(id => { const e = document.getElementById(id); if (e) e.classList.remove('on'); });
+  toast('Receipt layout reset to defaults', 'info');
+}
+
+/* ══ BARCODE ═════════════════════════════════════════════════════════════ */
+function toggleScanType(v) {
+  document.getElementById('row_scanSerial').style.display = v==='serial' ? 'flex' : 'none';
+}
+function toggleScannerModal(v) {
+  document.getElementById('asHidInfo').style.display    = v==='usb_hid' ? 'flex' : 'none';
+  document.getElementById('asSerialFields').style.display = v==='serial' ? 'block' : 'none';
+}
+function toggleScale(el) {
+  const on = el.classList.contains('on');
+  document.getElementById('scaleOpts').style.opacity      = on ? '1' : '.4';
+  document.getElementById('scaleOpts').style.pointerEvents= on ? 'all' : 'none';
+}
+function testScanner() {
+  document.getElementById('scanTestBox').focus();
+  toast('Click the test box below and scan a barcode','info');
+  show('barcode');
+}
+let _scanTimer;
+function onScanTest(inp) {
+  clearTimeout(_scanTimer);
+  _scanTimer = setTimeout(() => {
+    const val = inp.value.trim();
+    if(!val) return;
+    fetch('/api/products/barcode/'+val)
+      .then(r=>r.json()).then(d => {
+        const box = document.getElementById('scanTestResult');
+        box.style.display = 'block';
+        if(d.id) {
+          box.style.background = 'rgba(16,185,129,.1)';
+          box.style.color      = 'var(--accent2)';
+          box.style.border     = '1px solid rgba(16,185,129,.3)';
+          box.innerHTML = `✓ Found: <strong>${d.name}</strong> — LKR ${parseFloat(d.sell_price).toLocaleString()}`;
+        } else {
+          box.style.background = 'rgba(245,158,11,.1)';
+          box.style.color      = 'var(--warning)';
+          box.style.border     = '1px solid rgba(245,158,11,.3)';
+          box.innerHTML = `⚠ Barcode "${val}" not found in database`;
+        }
+        inp.select();
+      }).catch(()=>{
+        const box = document.getElementById('scanTestResult');
+        box.style.display='block'; box.style.background='rgba(79,108,246,.1)';
+        box.innerHTML = `📡 Scanned: <strong>${val}</strong>`;
+        inp.select();
+      });
+  }, 150);
+}
+
+/* Barcode generation */
+function validateBarcodeInput(value, type) {
+  const v = (value || '').trim();
+  if (!v) return 'Barcode value is required';
+  if (type === 'ean13' && !/^\d{13}$/.test(v)) return 'EAN-13 requires exactly 13 digits';
+  if (type === 'ean8' && !/^\d{8}$/.test(v)) return 'EAN-8 requires exactly 8 digits';
+  if (type === 'code39' && !/^[0-9A-Z\-\. $\/+%]+$/.test(v)) return 'CODE39 supports uppercase letters, digits and - . space $ / + %';
+  if (type === 'code128' && (v.length < 2 || v.length > 48)) return 'CODE128 should be 2 to 48 characters';
+  return '';
+}
+function onBarcodeProductChange() {
+  const sel = document.getElementById('bc_product');
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt?.value) return;
+  const existing = (opt.dataset.bc || '').trim();
+  if (existing) {
+    document.getElementById('bc_value').value = existing;
+    genBarcode();
+  }
+}
+function autoGenBarcode() {
+  const productId = document.getElementById('bc_product').value;
+  const mode = document.getElementById('bc_auto_mode').value;
+  const prefix = document.getElementById('bc_prefix').value.trim() || 'SM';
+  if (!productId) { toast('Select a product first', 'error'); return; }
+  fetch('/api/barcode/generate', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json','X-CSRFToken':__csrfToken},
+    body: JSON.stringify({ product_id: productId, mode, prefix })
+  })
+  .then(r=>r.json())
+  .then(d=>{
+    if (!d.ok) throw new Error(d.error || 'Failed to generate barcode');
+    document.getElementById('bc_value').value = d.barcode;
+    const suggestedType = d.barcode.includes('-') ? 'code128' : 'ean13';
+    document.getElementById('bc_type').value = suggestedType;
+    CustomSelect.refresh(document.getElementById('bc_type'));
+    genBarcode();
+    toast('Barcode generated successfully', 'success');
+  })
+  .catch(e=>toast(e.message,'error'));
+}
+function genBarcode() {
+  const val  = document.getElementById('bc_value').value.trim();
+  const type = document.getElementById('bc_type').value;
+  const prev = document.getElementById('bcPreview');
+  const info = document.getElementById('bcInfo');
+  if(!val) { prev.innerHTML='<span class="text-muted text-sm">Enter a value to preview</span>'; info.textContent=''; return; }
+  const err = validateBarcodeInput(val, type);
+  if (err) {
+    info.textContent = `⚠ ${err}`;
+    return;
+  }
+  prev.innerHTML = `<img src="/api/barcode/image?value=${encodeURIComponent(val)}&type=${encodeURIComponent(type)}" alt="Barcode preview" style="max-height:90px;max-width:100%">`;
+  info.textContent = `Type: ${type.toUpperCase()} · Value: ${val}`;
+  sp('lastBarcode', val);
+}
+function downloadBarcode() {
+  const val = document.getElementById('bc_value').value.trim();
+  const type = document.getElementById('bc_type').value;
+  if(!val) { toast('Enter a barcode value first','error'); return; }
+  const a = document.createElement('a');
+  a.href = `/api/barcode/image?value=${encodeURIComponent(val)}&type=${encodeURIComponent(type)}`; a.download = 'barcode-'+val+'.png'; a.click();
+}
+function saveBarcodeToProduct() {
+  const productId = document.getElementById('bc_product').value;
+  const barcode = document.getElementById('bc_value').value.trim();
+  const barcodeType = document.getElementById('bc_type').value;
+  if (!productId) { toast('Select a product to save', 'error'); return; }
+  const err = validateBarcodeInput(barcode, barcodeType);
+  if (err) { toast(err, 'error'); return; }
+  fetch('/api/barcode/save', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-CSRFToken':__csrfToken},
+    body: JSON.stringify({ product_id: productId, barcode, barcode_type: barcodeType })
+  })
+  .then(r=>r.json())
+  .then(d=>{
+    if (!d.ok) throw new Error(d.error || 'Failed to save barcode');
+    const selected = document.getElementById('bc_product').selectedOptions[0];
+    if (selected) selected.dataset.bc = barcode;
+    toast(d.msg || 'Barcode saved successfully', 'success');
+  })
+  .catch(e=>toast(e.message,'error'));
+}
+function printBarcode() {
+  const barcode = document.getElementById('bc_value').value.trim();
+  const barcodeType = document.getElementById('bc_type').value;
+  const copies = Math.max(1, parseInt(document.getElementById('bc_copies').value || '1', 10));
+  const err = validateBarcodeInput(barcode, barcodeType);
+  if (err) { toast(err, 'error'); return; }
+  fetch('/api/barcode/print', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-CSRFToken':__csrfToken},
+    body: JSON.stringify({ barcode, barcode_type: barcodeType, copies })
+  })
+  .then(r=>r.json())
+  .then(d=>{
+    if (!d.ok) throw new Error(d.error || 'Print failed');
+    toast(d.msg || 'Barcode printed successfully', 'success');
+  })
+  .catch(e=>toast(e.message,'error'));
+}
+function bulkGenerateBarcodes() {
+  const mode = document.getElementById('bc_auto_mode').value;
+  const prefix = document.getElementById('bc_prefix').value.trim() || 'SM';
+  fetch('/api/barcode/generate-missing', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-CSRFToken':__csrfToken},
+    body: JSON.stringify({ mode, prefix })
+  })
+  .then(r=>r.json())
+  .then(d=>{
+    if (!d.ok) throw new Error(d.error || 'Bulk generation failed');
+    toast(`Generated ${d.updated} missing barcodes (skipped ${d.skipped})`, 'success');
+  })
+  .catch(e=>toast(e.message,'error'));
+}
+/* ══ CASH DRAWER ═════════════════════════════════════════════════════════ */
+function testCashDrawer() {
+  toast('Opening cash drawer…','info');
+  fetch('/api/drawer/open', {method:'POST'})
+    .then(r=>r.json()).then(d=>d.ok?toast('Cash drawer opened! ✓','success'):toast('Error: '+d.error,'error'))
+    .catch(()=>toast('Cash drawer signal sent','info'));
+}
+
+/* ══ USERS ═══════════════════════════════════════════════════════════════ */
+async function addUser() {
+  const body = { full_name:document.getElementById('nu_name').value.trim(),
+    username:document.getElementById('nu_user').value.trim(),
+    password:document.getElementById('nu_pass').value,
+    role:document.getElementById('nu_role').value };
+  if(!body.username||!body.password){toast('Username and password required','error');return;}
+  if(body.password !== body.password.trim()){toast('Password cannot start or end with spaces.','error');return;}
+  if(body.password.length < 10){toast('Password must be at least 10 characters long.','error');return;}
+  if(!/[A-Za-z]/.test(body.password)){toast('Password must include at least one letter.','error');return;}
+  if(!/[0-9]/.test(body.password)){toast('Password must include at least one number.','error');return;}
+  if(/^(password|passw0rd|admin|administrator|welcome|letmein|changeme|supermart|cashier|manager|qwerty|asdfgh|zxcvbn)\d{0,4}$/i.test(body.password)){toast('Please choose a less predictable password.','error');return;}
+  if(/^(.)\1{9,}$/.test(body.password)){toast('Password cannot be made of the same character repeated.','error');return;}
+  if(/(0123456789|1234567890|abcdefghij|qwertyuiop|asdfghjkl)/i.test(body.password)){toast('Password cannot contain an obvious sequence.','error');return;}
+  const d = await api('/api/users',{method:'POST',body});
+  if(d?.id){
+    toast('User added!','success');
+    closeModal('modalAddUser');
+    // Clear form
+    ['nu_name','nu_user','nu_pass'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    const roleEl=document.getElementById('nu_role');if(roleEl)roleEl.value='Cashier';
+    // Reload page to refresh user table
+    setTimeout(() => window.reloadWithScrollPersistence ? window.reloadWithScrollPersistence() : location.reload(), 600);
+  } else toast(d?.error||'Failed to create user','error');
+}
+async function delUser(id,btn) {
+  const confirmed = await AppDialog.confirm('Deactivate this user?', { title: 'Deactivate user', confirmText: 'Deactivate', variant: 'danger' });
+  if(!confirmed) return;
+  btn.disabled=true;
+  const d=await api('/api/users/'+id,{method:'DELETE'});
+  if(d?.ok){toast('User deactivated','success');btn.closest('tr').style.opacity='.4';}
+  else{toast('Failed','error');btn.disabled=false;}
+}
+
+/* ══ UTILS ═══════════════════════════════════════════════════════════════ */
+function togglePass(id) {
+  const el=document.getElementById(id);
+  el.type=el.type==='password'?'text':'password';
+}
+
+/* ══ BACKUP ══════════════════════════════════════════════════════════════ */
+window.loadBackupList = async function() {
+  try {
+    const r = await fetch('/api/backup/list');
+    const d = await r.json();
+    const list = document.getElementById('backupFileList');
+    const sel  = document.getElementById('s_restoreFile');
+    if (!d.backups || d.backups.length === 0) {
+      list.innerHTML = '<div class="text-muted text-sm" style="padding:8px">No backups yet. Click "Create Backup" to start.</div>';
+      sel.innerHTML  = '<option value="">— No backups available —</option>';
+      return;
+    }
+    list.innerHTML = d.backups.map(b => `
+      <div class="device-card" style="margin-bottom:6px">
+        <div class="device-icon" style="font-size:18px">🗃️</div>
+        <div class="device-info">
+          <div class="device-name" style="font-size:12px">${b.name}</div>
+          <div class="device-desc">${b.date} &nbsp;·&nbsp; ${b.size}</div>
+        </div>
+        <div class="flex gap-1">
+          <button class="btn btn-ghost btn-sm" onclick="restoreBackup('${b.path.replace(/\\/g,'/')}','${b.name}')">🔄 Restore</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteBackup('${b.path.replace(/\\/g,'/')}',this)">✕</button>
+        </div>
+      </div>`).join('');
+    sel.innerHTML = '<option value="">— Select backup —</option>' +
+      d.backups.map(b=>`<option value="${b.path}">${b.name} (${b.size})</option>`).join('');
+
+    const info = document.getElementById('lastBackupInfo');
+    if(info && d.backups[0]) info.textContent = `Last backup: ${d.backups[0].date}`;
+  } catch(e) {
+    document.getElementById('backupFileList').innerHTML =
+      '<div class="text-muted text-sm" style="padding:8px">Could not load backup list.</div>';
+  }
+};
+
+async function createBackup() {
+  const btn = document.getElementById('btnBackup');
+  btn.disabled = true; btn.textContent = '⏳ Creating backup…';
+  try {
+    const r = await fetch('/api/backup/create', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({type:'manual'})});
+    const d = await r.json();
+    if (d.ok) {
+      toast('Backup started in the background.', 'info');
+      pollBackupStatus();
+    } else {
+      toast(d.msg || 'Backup could not start.', 'error');
+    }
+  } catch(e) { toast('Backup error: '+e, 'error'); }
+  btn.disabled = false; btn.textContent = '💾 Backup Now';
+}
+
+async function saveBackupCfg() {
+  const backupTime = document.getElementById('s_backupTime')?.value || '22:00';
+  const cfg = {
+    auto_backup:  document.getElementById('t_autoBackup')?.classList.contains('on'),
+    backup_time:  backupTime,
+    backup_dir:   document.getElementById('s_backupDir')?.value  || '',
+    keep_count:   parseInt(document.getElementById('v_keepBackups')?.textContent||'7'),
+  };
+  // Save to backup config file (used by the scheduler)
+  await fetch('/api/backup/config', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(cfg)});
+  // Also persist backup_time to database for cross-device consistency
+  try {
+    await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ backup_time: backupTime, pref_autoBackup: String(cfg.auto_backup) })});
+  } catch(e) {}
+  updateBackupTimeLabel(backupTime);
+  toast('Backup settings saved!', 'success');
+}
+
+async function openBackupFolder() {
+  await fetch('/api/backup/open-folder', {method:'POST'});
+  toast('Opening backup folder…', 'info');
+}
+
+async function confirmRestore() {
+  const file = document.getElementById('s_restoreFile').value;
+  const name = document.getElementById('s_restoreFile').selectedOptions[0]?.text;
+  if (!file) { toast('Select a backup file first', 'error'); return; }
+  const confirmed = await AppDialog.confirm(`Restoring a backup will replace the current data. Continue?\n\nFile: ${name}`, { title: 'Restore backup', confirmText: 'Restore', variant: 'danger' });
+  if (!confirmed) return;
+  restoreBackup(file, name);
+}
+
+async function restoreBackup(file, name) {
+  toast('Restoring backup… please wait', 'info');
+  try {
+    const r = await fetch('/api/backup/restore', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({file})
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast('✓ ' + d.msg + ' — Reloading…', 'success');
+      setTimeout(() => window.reloadWithScrollPersistence(), 2000);
+    } else {
+      toast('Restore failed: ' + d.msg, 'error');
+    }
+  } catch(e) { toast('Restore error: '+e, 'error'); }
+}
+
+async function uploadAndRestore() {
+  const fileInput = document.getElementById('restoreUploadFile');
+  const file = fileInput?.files?.[0];
+  if (!file) { toast('Select a backup .zip file first', 'error'); return; }
+  const confirmed = await AppDialog.confirm(`⚠️ UPLOAD & RESTORE?\n\nFile: ${file.name}\n\nThis will OVERWRITE all current data.\nThis cannot be undone!\n\nContinue?`, { title: 'Upload and restore backup', confirmText: 'Restore', variant: 'danger' });
+  if (!confirmed) return;
+  toast('Uploading backup file…', 'info');
+  const formData = new FormData();
+  formData.append('file', file);
+  try {
+    const r = await fetch('/api/backup/upload-restore', {method:'POST', body: formData});
+    const d = await r.json();
+    if (d.ok) {
+      toast('✓ ' + d.msg + ' — Reloading…', 'success');
+      setTimeout(() => window.reloadWithScrollPersistence(), 2500);
+    } else {
+      toast('Restore failed: ' + d.msg, 'error');
+    }
+  } catch(e) { toast('Upload error: '+e, 'error'); }
+}
+
+async function deleteBackup(file, btn) {
+  const confirmed = await AppDialog.confirm('Delete this backup file?', { title: 'Delete backup', confirmText: 'Delete', variant: 'danger' });
+  if (!confirmed) return;
+  btn.disabled = true;
+  const r = await fetch('/api/backup/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({file})});
+  const d = await r.json();
+  if (d.ok) { toast('Backup deleted','info'); window.loadBackupList?.(); }
+  else { toast('Delete failed','error'); btn.disabled=false; }
+}
+
+function updateBackupTimeLabel(val) {
+  const el = document.getElementById('backupTimeLabel');
+  if (!el || !val) return;
+  try {
+    const [h, m] = val.split(':').map(Number);
+    const date = new Date(); date.setHours(h, m, 0, 0);
+    el.textContent = date.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  } catch(e) {}
+}
+
+async function loadBackupConfig() {
+  try {
+    const r = await fetch('/api/backup/config');
+    const d = await r.json();
+    if (d.auto_backup) document.getElementById('t_autoBackup')?.classList.add('on');
+    if (d.backup_time) {
+      const inp = document.getElementById('s_backupTime');
+      if(inp) { inp.value = d.backup_time; updateBackupTimeLabel(d.backup_time); }
+    }
+    if (d.backup_dir) {
+      const inp = document.getElementById('s_backupDir');
+      if(inp) inp.value = d.backup_dir;
+    }
+    if (d.keep_count) {
+      const el = document.getElementById('v_keepBackups');
+      if(el) el.textContent = d.keep_count;
+    }
+    if (d.last_backup) {
+      const info = document.getElementById('lastBackupInfo');
+      if(info) info.textContent = `Last backup: ${d.last_backup}`;
+    }
+    const lastSuccess = document.getElementById('backupLastSuccess');
+    if(lastSuccess) lastSuccess.textContent = d.last_backup || 'No successful backup yet';
+    const status = document.getElementById('backupStatus');
+    if(status) {
+      const st = d.status || {};
+      status.textContent = st.running ? 'Backup in progress…' : (d.last_backup_result === 'failed' ? 'Last backup failed' : 'Ready');
+    }
+    const nextRun = document.getElementById('backupNextRun');
+    if(nextRun) nextRun.textContent = d.next_scheduled_backup || '—';
+    const health = document.getElementById('backupHealth');
+    if(health) health.textContent = d.health_warning || 'Healthy';
+  } catch(e) {}
+}
+
+async function pollBackupStatus() {
+  const statusEl = document.getElementById('backupStatus');
+  const btn = document.getElementById('btnBackup');
+  for (let i = 0; i < 60; i++) {
+    try {
+      const r = await fetch('/api/backup/status');
+      const d = await r.json();
+      const st = d.status || {};
+      if (statusEl) statusEl.textContent = st.running ? (st.message || 'Backup in progress…') : (st.message || 'Ready');
+      if (!st.running) {
+        loadBackupConfig();
+        window.loadBackupList?.();
+        btn.disabled = false;
+        btn.textContent = '💾 Backup Now';
+        if (st.last_result === 'success') toast('Backup complete.', 'success');
+        else if (st.last_result === 'failed') toast('Backup failed. Please try again.', 'error');
+        return;
+      }
+    } catch(e) {}
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+}
+
+/* ══ GOOGLE DRIVE BACKUP ═════════════════════════════════════════════════ */
+async function loadGDriveStatus() {
+  try {
+    const r = await fetch('/api/backup/gdrive/status');
+    if(!r.ok) return;
+    const d = await r.json();
+    const banner = document.getElementById('gdriveStatusBanner');
+    const connStatus = document.getElementById('gdriveConnStatus');
+    const connectBtn = document.getElementById('btnGdriveConnect');
+    if(d.connected) {
+      if(banner){ banner.className='info-banner info-green'; banner.textContent='✅ Google Drive is connected and ready for backups.'; }
+      if(connStatus){ connStatus.className='device-status status-ok'; connStatus.textContent='✓ Connected'; }
+      if(connectBtn){ connectBtn.textContent='🔄 Reconnect'; }
+    } else {
+      if(banner){ banner.className='info-banner info-yellow'; banner.textContent='⚠️ Google Drive not connected. Set up credentials and click Connect.'; }
+      if(connStatus){ connStatus.className='device-status status-off'; connStatus.textContent='Not Connected'; }
+    }
+    // Set toggle
+    const tog = document.getElementById('t_gdriveEnabled');
+    if(tog){ if(d.enabled) tog.classList.add('on'); else tog.classList.remove('on'); }
+    // Set freq
+    const freq = document.getElementById('gdrive_freq');
+    if(freq && d.freq) freq.value = d.freq;
+    if(freq) CustomSelect.refresh(freq);
+  } catch(e) {}
+}
+
+async function loadGDriveConfig() {
+  try {
+    const r = await fetch('/api/settings/all');
+    if(!r.ok) return;
+    const d = await r.json();
+    ['gdrive_client_id','gdrive_client_secret','gdrive_folder_id'].forEach(k => {
+      const el = document.getElementById(k);
+      if(el && d[k]) el.value = d[k];
+    });
+  } catch(e) {}
+}
+
+async function saveGDriveConfig() {
+  const body = {
+    gdrive_client_id:     (document.getElementById('gdrive_client_id')?.value     || '').trim(),
+    gdrive_client_secret: (document.getElementById('gdrive_client_secret')?.value || '').trim(),
+    gdrive_folder_id:     (document.getElementById('gdrive_folder_id')?.value     || '').trim(),
+    gdrive_backup_freq:   document.getElementById('gdrive_freq')?.value || 'daily',
+    gdrive_backup_enabled: document.getElementById('t_gdriveEnabled')?.classList.contains('on') ? '1' : '0',
+  };
+  try {
+    const r = await fetch('/api/backup/gdrive/save-config', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+    });
+    const d = await r.json();
+    if(d.ok) toast('Google Drive config saved!','success');
+    else toast('Save failed','error');
+  } catch(e) { toast('Error: '+e,'error'); }
+}
+
+async function connectGDrive() {
+  // First save credentials so the callback URL can use them
+  await saveGDriveConfig();
+  try {
+    const r = await fetch('/api/backup/gdrive/auth-url');
+    const d = await r.json();
+    if(d.ok && d.url) {
+      toast('Opening Google authorization page…','info');
+      window.open(d.url, '_blank', 'width=600,height=700');
+    } else {
+      toast(d.msg || 'Enter Client ID first','error');
+    }
+  } catch(e) { toast('Error: '+e,'error'); }
+}
+
+async function triggerGDriveBackup() {
+  const btn = document.getElementById('btnGdriveTrigger');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Backing up…'; }
+  try {
+    const r = await fetch('/api/backup/gdrive/trigger', {method:'POST', headers:{'Content-Type':'application/json'}});
+    const d = await r.json();
+    if(d.ok) {
+      toast('Backup started in background! Refresh logs in a moment.','success');
+      setTimeout(() => loadGDriveLogs(), 5000);
+    } else toast('Backup failed: '+(d.msg||'Unknown error'),'error');
+  } catch(e) { toast('Error: '+e,'error'); }
+  finally { if(btn){ btn.disabled=false; btn.textContent='☁️ Backup Now'; } }
+}
+
+async function loadGDriveLogs() {
+  const container = document.getElementById('gdriveLogList');
+  if(!container) return;
+  try {
+    const r = await fetch('/api/backup/gdrive/logs');
+    const logs = await r.json();
+    if(!logs.length){
+      container.innerHTML='<div class="text-muted text-sm" style="padding:8px">No backups yet. Click "Backup Now" to create the first backup.</div>';
+      return;
+    }
+    const statusColors = {success:'var(--accent2)',failed:'var(--danger)',pending:'var(--warning)'};
+    const statusIcons  = {success:'✓',failed:'✗',pending:'⏳'};
+    container.innerHTML = logs.map(l => `
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;
+                  border-bottom:1px solid var(--border)">
+        <span style="width:22px;height:22px;border-radius:50%;background:${statusColors[l.status]||'var(--muted)'};
+                     color:#fff;display:flex;align-items:center;justify-content:center;
+                     font-size:11px;font-weight:700;flex-shrink:0">
+          ${statusIcons[l.status]||'?'}
+        </span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600">${l.backup_file || 'backup'}</div>
+          <div style="font-size:11px;color:var(--muted)">${l.backup_date} · ${l.file_size||'—'} · ${l.destination}</div>
+          ${l.notes ? `<div style="font-size:11px;color:var(--muted)">${l.notes}</div>` : ''}
+        </div>
+        <span class="badge ${l.status==='success'?'badge-success':l.status==='failed'?'badge-danger':'badge-warning'}">${l.status}</span>
+      </div>`).join('');
+  } catch(e) {
+    if(container) container.innerHTML='<div class="text-muted text-sm" style="padding:8px">Could not load backup history.</div>';
+  }
+}
+
+/* ══ LICENSE ═════════════════════════════════════════════════════════════ */
+window.loadLicenseInfo = async function() {
+  const section = document.getElementById('licInfoSection');
+  if (!section) return;
+  try {
+    const r = await fetch('/api/license/info');
+    const d = await r.json();
+    const badge = document.getElementById('licBadge');
+    if (d.ok && d.info) {
+      const i = d.info;
+      const activated = !!i.activated;
+      const trialLeft = Number(i.trial_days_left || 0);
+      if (badge) {
+        badge.className = activated ? 'device-status status-ok' : 'device-status status-warn';
+        badge.textContent = activated ? '✓ Activated (Lifetime)' : `⏳ Trial (${trialLeft}d)`;
+      }
+      if (activated) {
+        section.innerHTML = `
+          <div class="cfg-row"><div class="cfg-lbl">Install ID</div>
+            <code style="background:var(--stat);padding:4px 10px;border-radius:6px;font-size:12px">${i.install_id||'—'}</code></div>
+          <div class="cfg-row"><div class="cfg-lbl">Activation Status</div>
+            <span class="badge badge-success">ACTIVATED</span></div>
+          <div class="cfg-row"><div class="cfg-lbl">License Type</div><span>Lifetime</span></div>
+          <div class="cfg-row"><div class="cfg-lbl">Activated On</div><span>${i.activated_at||'—'}</span></div>`;
+      } else {
+        section.innerHTML = `
+          <div class="cfg-row"><div class="cfg-lbl">Install ID</div>
+            <code style="background:var(--stat);padding:4px 10px;border-radius:6px;font-size:12px">${i.install_id||'—'}</code></div>
+          <div class="cfg-row"><div class="cfg-lbl">Activation Status</div>
+            <span class="badge badge-warning">TRIAL MODE</span></div>
+          <div class="cfg-row"><div class="cfg-lbl">Trial Days Left</div><span>${i.trial_days_left ?? '—'}</span></div>
+          <div class="cfg-row"><div class="cfg-lbl">Trial Started</div><span>${i.trial_started_at||'—'}</span></div>`;
+      }
+    } else {
+      if (badge){ badge.className='device-status status-err'; badge.textContent='Activation required'; }
+      section.innerHTML = `<div class="cfg-row"><div class="cfg-lbl" style="color:var(--danger)">Activation Required</div>
+        <button class="btn btn-primary btn-sm" onclick="window.location.href='/activation'">🔑 Open Activation</button></div>`;
+    }
+  } catch(e) {}
+};
+
+/* ══ LICENSE ACTIVATE ════════════════════════════════════════════════════ */
+async function activateLicense() {
+  const key = (document.getElementById('newLicKey')?.value || '').trim().toUpperCase();
+  if (!key) { toast('Enter an activation key', 'error'); return; }
+  const badge = document.getElementById('licBadge');
+
+  try {
+    const r = await fetch('/api/license/activate', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({key})
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast('✅ ' + (d.msg || 'Activation successful!'), 'success');
+      if(badge){ badge.className='device-status status-ok'; badge.textContent='✓ Activated'; }
+      window.loadLicenseInfo?.();
+    } else {
+      toast('❌ ' + (d.msg || 'Invalid key'), 'error');
+      if(badge){ badge.className='device-status status-err'; badge.textContent='✗ Invalid'; }
+    }
+  } catch { toast('Connection error', 'error'); }
+}
+
+/* ══ SUPPLIER RESET ══════════════════════════════════════════════════════ */
+async function resetSuppliers() {
+  const confirm1 = await AppDialog.confirm('Reset ALL Suppliers?\n\nThis will permanently delete ALL suppliers and their transaction history.\nProducts will be unlinked from suppliers.\n\nThis CANNOT be undone!', { title: 'Dangerous action', confirmText: 'Continue', variant: 'danger' });
+  if (!confirm1) return;
+  const confirm2 = await AppDialog.confirm('Are you absolutely sure? Type YES in the next prompt to confirm.', { title: 'Confirm again', confirmText: 'Yes, continue', variant: 'danger' });
+  if (!confirm2) return;
+  const typed = prompt('Type YES to confirm supplier reset:');
+  if (typed !== 'YES') { toast('Reset cancelled — you did not type YES', 'warning'); return; }
+
+  try {
+    const r = await fetch('/api/admin/suppliers/reset', {method:'POST', headers:{'Content-Type':'application/json'}});
+    if (r.status === 403 || r.status === 404) {
+      toast('Supplier reset is disabled in this runtime.', 'warning');
+      return;
+    }
+    const d = await r.json();
+    if (d.ok) {
+      toast('All suppliers deleted and auto-increment reset. ✓', 'success');
+      setTimeout(() => window.reloadWithScrollPersistence(), 1500);
+    } else {
+      toast('Supplier reset failed: ' + (d.error || d.msg), 'error');
+    }
+  } catch(e) {
+    toast('Supplier reset error: ' + e, 'error');
+  }
+}
+
+/* ══ RESET ALL DATA ══════════════════════════════════════════════════════ */
+async function resetAllData() {
+  const confirm1 = await AppDialog.confirm('Reset All Data?\n\nThis will permanently delete operational records (sales, purchases, stock, customers, suppliers, invoices, repairs, IMEI operations).\n\nUsers, settings, and activation/license data will be kept.\n\nThis CANNOT be undone!', { title: 'Dangerous action', confirmText: 'Continue', variant: 'danger' });
+  if (!confirm1) return;
+  const confirm2 = await AppDialog.confirm('Are you absolutely sure? Type YES in the next prompt to confirm.', { title: 'Confirm again', confirmText: 'Yes, continue', variant: 'danger' });
+  if (!confirm2) return;
+  const typed = prompt('Type YES to confirm full data reset:');
+  if (typed !== 'YES') { toast('Reset cancelled — you did not type YES', 'warning'); return; }
+
+  try {
+    const r = await fetch('/api/admin/reset-business-data', {method:'POST', headers:withCsrfHeaders({'Content-Type':'application/json'})});
+    if (r.status === 403 || r.status === 404) {
+      toast('Business reset is disabled in this runtime.', 'warning');
+      return;
+    }
+    const d = await r.json();
+    if (d.ok) {
+      toast('Reset All Data complete. Operational data cleared; users/settings/license preserved. ✓', 'success');
+      setTimeout(() => { window.location.href = '/'; }, 1500);
+    } else {
+      toast('Reset failed: ' + (d.error || d.msg), 'error');
+    }
+  } catch(e) {
+    toast('Reset error: ' + e, 'error');
+  }
+}
+
+/* ══ FACTORY RESET ═══════════════════════════════════════════════════════ */
+async function factoryReset() {
+  const impactText = 'This Factory Reset deletes operational data, users, company settings, sessions, and app state, then returns to first-run setup.\nActivation/license will be preserved.';
+
+  const confirm1 = await AppDialog.confirm(
+    `Factory Reset?\n\n${impactText}\n\nThis CANNOT be undone!`,
+    { title: 'Factory Reset — Keep License', confirmText: 'Continue', variant: 'danger' }
+  );
+  if (!confirm1) return;
+
+  const confirm2 = await AppDialog.confirm(
+    'Final check: all users and sessions will be deleted, and first-run setup will be required again.',
+    { title: 'Final Confirmation', confirmText: 'Yes, wipe everything', variant: 'danger' }
+  );
+  if (!confirm2) return;
+
+  const typed = prompt('Type FACTORY_RESET to confirm:');
+  if (typed !== 'FACTORY_RESET') {
+    toast('Factory reset cancelled — confirmation text did not match.', 'warning');
+    return;
+  }
+
+  try {
+    const r = await fetch('/api/admin/factory-reset', {
+      method: 'POST',
+      headers: withCsrfHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ confirm: 'FACTORY_RESET' }),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast((d.msg || 'Factory reset complete.') + ' ✓', 'success');
+      setTimeout(() => { window.location.href = d.redirect || '/'; }, 1200);
+    } else {
+      toast('Factory reset failed: ' + (d.error || d.msg || 'Unknown error'), 'error');
+    }
+  } catch (e) {
+    toast('Factory reset error: ' + e, 'error');
+  }
+}
+
+async function fullFactoryReset() {
+  const confirm1 = await AppDialog.confirm(
+    'FULL FACTORY RESET?\n\nRestricted operation (Developer, or Admin when destructive admin tools are enabled).\nThis will delete EVERYTHING including activation/license data.\n\nApp will restart as a true fresh install.\n\nThis CANNOT be undone!',
+    { title: '☠ Full Factory Reset (Delete License)', confirmText: 'Continue', variant: 'danger' }
+  );
+  if (!confirm1) return;
+
+  const typed = prompt('Type FULL_FACTORY_RESET to confirm:');
+  if (typed !== 'FULL_FACTORY_RESET') {
+    toast('Full factory reset cancelled — confirmation text did not match.', 'warning');
+    return;
+  }
+
+  try {
+    const r = await fetch('/api/admin/full-factory-reset', {
+      method: 'POST',
+      headers: withCsrfHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ confirm: 'FULL_FACTORY_RESET' }),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast((d.msg || 'Full factory reset complete.') + ' ✓', 'success');
+      setTimeout(() => { window.location.href = d.redirect || '/activation'; }, 1200);
+    } else {
+      toast('Full factory reset failed: ' + (d.error || d.msg || 'Unknown error'), 'error');
+    }
+  } catch (e) {
+    toast('Full factory reset error: ' + e, 'error');
+  }
+}
+
+/* ══ AUDIT LOG ═══════════════════════════════════════════════════════════ */
+let _auditPage = 1;
+async function loadAuditLogs(page) {
+  if (page) _auditPage = page;
+  const q = (document.getElementById('auditSearch')?.value || '').trim();
+  const tbody = document.getElementById('auditBody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="text-muted" style="text-align:center;padding:20px">Loading…</td></tr>';
+  try {
+    const r = await fetch(`/api/audit-logs?page=${_auditPage}&per_page=30&q=${encodeURIComponent(q)}`);
+    const d = await r.json();
+    if (!d.logs || !d.logs.length) {
+      if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="text-muted" style="text-align:center;padding:20px">No logs found</td></tr>';
+      return;
+    }
+    if (tbody) tbody.innerHTML = d.logs.map(l => `
+      <tr>
+        <td class="text-muted text-sm">${l.date}</td>
+        <td style="font-weight:600">${l.user}</td>
+        <td>${l.action}</td>
+        <td class="text-muted text-sm">${l.ip || '—'}</td>
+      </tr>`).join('');
+    const pg = document.getElementById('auditPagination');
+    if (pg) {
+      const totalPages = Math.ceil(d.total / d.per_page);
+      pg.innerHTML = `
+        <button class="btn btn-ghost btn-sm" onclick="loadAuditLogs(${_auditPage-1})" ${_auditPage<=1?'disabled':''}>‹ Prev</button>
+        <span class="text-muted text-sm">Page ${_auditPage} of ${totalPages} (${d.total} entries)</span>
+        <button class="btn btn-ghost btn-sm" onclick="loadAuditLogs(${_auditPage+1})" ${_auditPage>=totalPages?'disabled':''}>Next ›</button>`;
+    }
+  } catch(e) {
+    if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="text-danger" style="text-align:center;padding:20px">Error loading logs</td></tr>';
+  }
+}
+
+/* ══ SESSIONS ════════════════════════════════════════════════════════════ */
+async function loadSessions() {
+  const body = document.getElementById('sessionsBody');
+  if (body) body.innerHTML = '<div class="text-muted" style="text-align:center;padding:20px">Loading…</div>';
+  try {
+    const r = await fetch('/api/sessions');
+    const sessions = await r.json();
+    if (!sessions.length) {
+      if (body) body.innerHTML = '<div class="text-muted" style="text-align:center;padding:20px">No active sessions</div>';
+      return;
+    }
+    if (body) body.innerHTML = sessions.map(s => `
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid var(--border)">
+        <div style="flex:1">
+          <div style="font-weight:700">${s.full_name} <span class="badge badge-primary">${s.role}</span>
+            ${s.is_current ? '<span class="badge badge-success">Current</span>' : ''}
+          </div>
+          <div class="text-muted text-sm">@${s.username} · ${s.ip || 'unknown IP'} · since ${s.login_time}${s.last_seen ? ` · last active ${s.last_seen}` : ''}</div>
+        </div>
+        ${!s.is_current ? `<button class="btn btn-danger btn-sm" onclick="killSession('${s.session_id}')">⏏ Logout</button>` : ''}
+      </div>`).join('');
+  } catch(e) {
+    if (body) body.innerHTML = '<div class="text-danger" style="text-align:center;padding:20px">Error loading sessions</div>';
+  }
+}
+
+async function killSession(sid) {
+  const confirmed = await AppDialog.confirm('Force logout this session?', { title: 'Terminate session', confirmText: 'Logout', variant: 'danger' });
+  if (!confirmed) return;
+  const r = await fetch(`/api/sessions/${sid}`, {method:'DELETE'});
+  const d = await r.json();
+  if (d.ok) { toast('Session terminated', 'success'); loadSessions(); }
+  else toast('Error terminating session', 'error');
+}
+
+async function logoutAllSessions() {
+  const confirmed = await AppDialog.confirm('Force logout ALL other active sessions? They will need to log in again.', { title: 'Logout all sessions', confirmText: 'Logout all', variant: 'danger' });
+  if (!confirmed) return;
+  const r = await fetch('/api/sessions/logout-all', {method:'POST', headers:{'Content-Type':'application/json'}});
+  const d = await r.json();
+  if (d.ok) { toast(`${d.killed} session(s) terminated`, 'success'); loadSessions(); }
+  else toast('Error', 'error');
+}
+
+/* ══ RETURN POLICY ═══════════════════════════════════════════════════════ */
+async function saveReturnPolicy() {
+  const days = parseInt(document.getElementById('s_returnPeriod')?.value || 0);
+  const r = await fetch('/api/settings', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({return_period_days: days})
+  });
+  const d = await r.json();
+  if (d.ok) toast('Return policy saved', 'success');
+  else toast('Error saving policy', 'error');
+}
+
+async function loadReturnPolicy() {
+  try {
+    const r = await fetch('/api/settings');
+    const d = await r.json();
+    const el = document.getElementById('s_returnPeriod');
+    if (el) el.value = d.return_period_days || 0;
+  } catch(e) {}
+}
+
+function passwordChangeIdentityContext() {
+  return {
+    username: {{ (current_user.username or '')|tojson }},
+    email: {{ (current_user.email or '')|tojson }},
+    fullName: {{ (current_user.full_name or '')|tojson }},
+  };
+}
+
+function validatePasswordInput(pw, identity = {}) {
+  if (!pw.trim()) return 'Please enter a new password.';
+  if (pw !== pw.trim()) return 'Password cannot start or end with spaces.';
+  return '';
+}
+
+function setPasswordValidation(message, details = []) {
+  const box = document.getElementById('changePasswordValidation');
+  if (!box) return;
+  if (!message) {
+    box.classList.remove('show');
+    box.innerHTML = '';
+    return;
+  }
+  box.classList.add('show');
+  box.innerHTML = `<div>${message}</div>${details.length ? `<ul>${details.map((item) => `<li>${item}</li>`).join('')}</ul>` : ''}`;
+}
+
+function resetPasswordChangeForm() {
+  ['cp_current', 'cp_new', 'cp_confirm'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  setPasswordValidation('');
+}
+
+async function submitPasswordChange() {
+  const currentPassword = document.getElementById('cp_current')?.value || '';
+  const newPassword = document.getElementById('cp_new')?.value || '';
+  const confirmPassword = document.getElementById('cp_confirm')?.value || '';
+  const btn = document.getElementById('changePasswordSettingsBtn');
+  const validationError = validatePasswordInput(newPassword, passwordChangeIdentityContext());
+
+  if (!currentPassword.trim()) {
+    setPasswordValidation('Please enter your current password.');
+    return;
+  }
+  if (validationError) {
+    setPasswordValidation(validationError, ['Enter at least 1 character.', 'Password cannot start or end with spaces.']);
+    return;
+  }
+  if (newPassword !== confirmPassword) {
+    setPasswordValidation('New password and confirmation do not match.');
+    return;
+  }
+
+  setPasswordValidation('');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ Updating…';
+  }
+
+  try {
+    const response = await fetch('/api/users/change-password', {
+      method: 'POST',
+      headers: withCsrfHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        current_password: currentPassword,
+        password: newPassword,
+        confirm_password: confirmPassword,
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      setPasswordValidation(data.msg || 'Failed to change password.');
+      return;
+    }
+    resetPasswordChangeForm();
+    toast(data.msg || 'Password updated successfully.', 'success');
+    window.setTimeout(() => window.reloadWithScrollPersistence(), 500);
+  } catch (error) {
+    setPasswordValidation('Network error while changing password. Please try again.');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '🔐 Update Password';
+    }
+  }
+}
+
+/* ══ INIT ════════════════════════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    {% if not is_admin %}
+    safelyInvoke(() => show('users'), "show('users')");
+    {% endif %}
+    {% if is_admin %}
+    safelyInvoke(getWindowFunction('loadBackupList'), 'loadBackupList');
+    safelyInvoke(loadBackupConfig, 'loadBackupConfig');
+    safelyInvoke(getWindowFunction('loadLicenseInfo'), 'loadLicenseInfo');
+    safelyInvoke(getWindowFunction('loadCompanyInfo'), 'loadCompanyInfo');
+    safelyInvoke(loadGDriveStatus, 'loadGDriveStatus');
+    safelyInvoke(loadGDriveConfig, 'loadGDriveConfig');
+    safelyInvoke(loadGDriveLogs, 'loadGDriveLogs');
+    safelyInvoke(loadReturnPolicy, 'loadReturnPolicy');
+    safelyInvoke(getWindowFunction('loadHardwareSettings'), 'loadHardwareSettings');
+    safelyInvoke(getWindowFunction('loadReceiptLayout'), 'loadReceiptLayout');
+    safelyInvoke(() => fetch('/api/hardware/auto-connect', { method: 'POST', headers: withCsrfHeaders({}) }).catch(() => {}), 'hardwareAutoConnect');
+    function refreshCardTerminalStatus() {
+      var el = document.getElementById('cardTerminalStatus');
+      if (!el) return;
+      var termType = (window.sp_cache && window.sp_cache['termType']) || '';
+      var cardEnabled = (window.sp_cache && window.sp_cache['cardEnabled']) !== false;
+      if (!cardEnabled || !termType || termType === 'manual_record_only') {
+        el.className = 'device-status status-off';
+        el.textContent = '○ Manual Mode';
+        return;
+      }
+      fetch('/api/card/test-connection', {
+        method: 'POST',
+        headers: withCsrfHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ terminal_type: termType })
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          if (d.ok && d.status === 'connected') {
+            el.className = 'device-status status-ok';
+            el.textContent = '✓ Connected';
+          } else {
+            el.className = 'device-status status-err';
+            el.textContent = '✖ ' + (d.msg || 'Disconnected');
+          }
+        })
+        .catch(function() {
+          el.className = 'device-status status-err';
+          el.textContent = '✖ Disconnected';
+        });
+    }
+
+    safelyInvoke(() => window.setTimeout(() => safelyInvoke(refreshCardTerminalStatus, 'refreshCardTerminalStatus'), 800), 'cardStatusTimeout');
+    safelyInvoke(() => window.setInterval(() => safelyInvoke(refreshCardTerminalStatus, 'refreshCardTerminalStatus'), 3000), 'cardStatusInterval');
+    {% endif %}
+  } catch (error) {
+    console.error('Settings page bootstrap failed:', error);
+  }
+  // Restore saved prefs
+  safelyInvoke(() => {
+    if (window.applyGlobalTheme && window.getStoredTheme) {
+      window.applyGlobalTheme(window.getStoredTheme());
+    }
+  }, 'applyGlobalTheme');
+  // Counters (label counters are loaded from server via loadLabelConfig)
+  [['gridCols',5],['cpl',48],
+   ['v_scanMs',100],['scaleProd',5],['scaleVal',5],['scaleDec',3],['termTimeout',60],
+   ['maxDisc',20],['discApproval',10],['keepBackups',7]].forEach(([k,def])=>{
+    const el=document.getElementById('v_'+k);
+    if(el) el.textContent=gp(k,def);
+  });
+});
+</script>
+
+<!-- ── Add User Modal ──────────────────────────────────────────────────────── -->
+<div class="modal-backdrop" id="modalAddUser" onclick="closeModal('modalAddUser')">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:460px;width:95%">
+    <div class="modal-header" style="padding:18px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <div class="modal-title" style="font-size:16px;font-weight:700">👤 Add New User</div>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('modalAddUser')">✕</button>
+    </div>
+    <div class="modal-body" style="padding:20px">
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div>
+          <label class="form-label" style="display:block;font-size:13px;font-weight:600;margin-bottom:4px">Full Name</label>
+          <input id="nu_name" type="text" class="form-input" placeholder="e.g. Kamal Perera" style="width:100%">
+        </div>
+        <div>
+          <label class="form-label" style="display:block;font-size:13px;font-weight:600;margin-bottom:4px">Username <span style="color:var(--danger)">*</span></label>
+          <input id="nu_user" type="text" class="form-input" placeholder="e.g. kamal.tech" autocomplete="off" style="width:100%">
+        </div>
+        <div>
+          <label class="form-label" style="display:block;font-size:13px;font-weight:600;margin-bottom:4px">Password <span style="color:var(--danger)">*</span></label>
+          <div style="position:relative">
+            <input id="nu_pass" type="password" class="form-input" placeholder="Min 10 chars, letters + numbers" autocomplete="new-password" style="width:100%;padding-right:44px">
+            <button type="button" onclick="togglePass('nu_pass')" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--muted);font-size:16px">👁</button>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Minimum 10 characters, must include letters and numbers.</div>
+        </div>
+        <div>
+          <label class="form-label" style="display:block;font-size:13px;font-weight:600;margin-bottom:4px">Role <span style="color:var(--danger)">*</span></label>
+          <select id="nu_role" class="form-select" style="width:100%">
+            <option value="Cashier">Cashier</option>
+            <option value="Technician">Technician</option>
+            <option value="Operator">Operator</option>
+            <option value="Manager">Manager</option>
+            <option value="Admin">Admin</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer" style="padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px">
+      <button class="btn btn-ghost" onclick="closeModal('modalAddUser')">Cancel</button>
+      <button class="btn btn-primary" onclick="addUser()">💾 Save User</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

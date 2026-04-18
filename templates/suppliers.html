@@ -1,0 +1,412 @@
+{% extends "base.html" %}
+{% from "sidebar.html" import sidebar with context %}
+{% block title %} — Suppliers{% endblock %}
+{% block body %}
+<div class="app-layout">
+  {{ sidebar('suppliers') }}
+  <div class="main-area">
+    <div class="topbar">
+      <div style="font-size:18px;font-weight:700">🚚 Suppliers</div>
+      <div class="flex gap-2">
+        {% if current_user.role == 'Admin' %}
+        <button class="btn btn-ghost btn-sm" onclick="cleanupSuppliers()" title="Remove suppliers with no products, purchases or transactions">🧹 Clean Temp Suppliers</button>
+        {% endif %}
+        <button class="btn btn-primary btn-sm" onclick="openModal('addSupModal')">+ Add Supplier</button>
+      </div>
+    </div>
+    <div class="page-content fade-in">
+
+      <!-- Summary cards -->
+      <div class="grid-3 mb-6">
+        <div class="stat-card">
+          <div class="text-muted text-xs mb-2">TOTAL SUPPLIERS</div>
+          <div class="text-xl font-800" id="totalCount">{{ suppliers|length }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="text-muted text-xs mb-2">AMOUNT OWED TO SUPPLIERS</div>
+          <div class="text-xl font-800 text-danger" id="totalOwed">
+            LKR {{ "%.0f"|format(suppliers|selectattr('balance','gt',0)|map(attribute='balance')|sum) }}
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="text-muted text-xs mb-2">CREDIT / OVERPAID</div>
+          <div class="text-xl font-800 text-success" id="totalCredit">
+            LKR {{ "%.0f"|format(suppliers|selectattr('balance','lt',0)|map(attribute='balance')|sum|abs) }}
+          </div>
+        </div>
+      </div>
+
+      <!-- Supplier table -->
+      <div class="mb-4"><input class="form-input" id="supplierSearch" placeholder="🔍 Search suppliers by name, phone or email" oninput="filterSuppliers()"></div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr>
+            <th>Supplier</th><th>Phone</th><th>Email</th><th>Balance</th><th>Actions</th>
+          </tr></thead>
+          <tbody id="supTable">
+            {% for s in suppliers %}
+            <tr id="sup-row-{{ s.id }}" class="sup-row">
+              <td style="font-weight:700">{{ s.name }}</td>
+              <td class="text-sm">{{ s.phone or '—' }}</td>
+              <td class="text-sm">{{ s.email or '—' }}</td>
+              <td>
+                {% if s.balance > 0 %}
+                  <span style="color:var(--danger);font-weight:700">Owe LKR {{ "%.2f"|format(s.balance) }}</span>
+                {% elif s.balance < 0 %}
+                  <span style="color:var(--accent2);font-weight:700">Credit LKR {{ "%.2f"|format(s.balance|abs) }}</span>
+                {% else %}
+                  <span class="text-muted">Clear</span>
+                {% endif %}
+              </td>
+              <td>
+                <div class="flex gap-2">
+                  <button class="btn btn-ghost btn-sm" onclick="openProfile({{ s.id }}, '{{ s.name }}')">📋 Profile</button>
+                  <button class="btn btn-ghost btn-sm" onclick='editSupplier({{ s.id }}, {{ (s.name or '')|tojson }}, {{ (s.phone or '')|tojson }}, {{ (s.email or '')|tojson }}, {{ (s.address or '')|tojson }})'>Edit</button>
+                  <button class="btn btn-sm" style="background:rgba(239,68,68,.1);color:var(--danger)" onclick="deleteSupplier({{ s.id }}, '{{ s.name }}')">Del</button>
+                </div>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="text-muted" style="text-align:center;padding:40px">No suppliers yet. Add your first supplier!</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── ADD SUPPLIER MODAL ─────────────────────────────────── -->
+<div class="modal-overlay" id="addSupModal">
+  <div class="modal" style="width:500px">
+    <div class="modal-title">🚚 Add Supplier</div>
+    <div class="grid-2 mb-4" style="gap:12px">
+      <div class="form-group"><label class="form-label">Name *</label><input class="form-input" id="supName" placeholder="Supplier name"></div>
+      <div class="form-group"><label class="form-label">Phone</label><input class="form-input" id="supPhone" placeholder="07X XXXXXXX"></div>
+      <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="supEmail" type="email" placeholder="email@example.com"></div>
+      <div class="form-group"><label class="form-label">Credit Limit (LKR)</label><input class="form-input" id="supCredit" type="number" min="0" placeholder="0"></div>
+    </div>
+    <div class="form-group mb-4"><label class="form-label">Address</label><input class="form-input" id="supAddress" placeholder="Address"></div>
+    <div class="flex gap-3 justify-end">
+      <button class="btn btn-ghost" onclick="closeModal('addSupModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="addSupplier()">Add Supplier</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── EDIT SUPPLIER MODAL ────────────────────────────────── -->
+<div class="modal-overlay" id="editSupModal">
+  <div class="modal" style="width:500px">
+    <div class="modal-title">✏️ Edit Supplier</div>
+    <input type="hidden" id="editSupId">
+    <div class="grid-2 mb-4" style="gap:12px">
+      <div class="form-group"><label class="form-label">Name *</label><input class="form-input" id="editSupName" placeholder="Supplier name"></div>
+      <div class="form-group"><label class="form-label">Phone</label><input class="form-input" id="editSupPhone" placeholder="07X XXXXXXX"></div>
+      <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="editSupEmail" placeholder="email@example.com"></div>
+    </div>
+    <div class="form-group mb-4"><label class="form-label">Address</label><input class="form-input" id="editSupAddress" placeholder="Address"></div>
+    <div class="flex gap-3 justify-end">
+      <button class="btn btn-ghost" onclick="closeModal('editSupModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveSupEdit()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── SUPPLIER PROFILE MODAL ─────────────────────────────── -->
+<div class="modal-overlay" id="profileModal" onclick="if(event.target===this)closeModal('profileModal')">
+  <div class="modal" style="width:700px;max-height:85vh;overflow-y:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <div class="modal-title" id="profileTitle">🚚 Supplier Profile</div>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('profileModal')">✕</button>
+    </div>
+
+    <!-- Balance banner -->
+    <div id="profileBanner" class="mb-4" style="padding:16px;border-radius:12px;text-align:center;font-size:20px;font-weight:800"></div>
+
+    <!-- Action buttons -->
+    <div class="flex gap-3 mb-5">
+      <button class="btn btn-primary" style="flex:1" onclick="openPayModal()">💰 Record Payment</button>
+      <button class="btn btn-ghost" style="flex:1" onclick="openPurchaseModal()">📦 Record Purchase</button>
+    </div>
+
+    <!-- Transactions -->
+    <div style="font-size:13px;font-weight:700;color:var(--muted);margin-bottom:10px">TRANSACTION HISTORY</div>
+    <div id="profileTxns">
+      <div class="text-muted" style="text-align:center;padding:30px">Loading...</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── PAYMENT MODAL ──────────────────────────────────────── -->
+<div class="modal-overlay" id="payModal">
+  <div class="modal" style="width:400px">
+    <div class="modal-title">💰 Record Payment to Supplier</div>
+    <p class="text-muted text-sm mb-4" id="payModalSub"></p>
+    <div class="form-group mb-3">
+      <label class="form-label">Amount Paid (LKR)</label>
+      <input class="form-input" id="payAmount" type="number" min="0.01" step="0.01" placeholder="0.00">
+    </div>
+    <div class="form-group mb-4">
+      <label class="form-label">Note</label>
+      <input class="form-input" id="payNote" placeholder="e.g. Cash payment for invoice #123">
+    </div>
+    <div class="flex gap-3 justify-end">
+      <button class="btn btn-ghost" onclick="closeModal('payModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitPayment()">Record Payment</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── PURCHASE MODAL ─────────────────────────────────────── -->
+<div class="modal-overlay" id="purchaseModal">
+  <div class="modal" style="width:400px">
+    <div class="modal-title">📦 Record Purchase</div>
+    <p class="text-muted text-sm mb-4" id="purModalSub"></p>
+    <div class="form-group mb-3">
+      <label class="form-label">Purchase Amount (LKR)</label>
+      <input class="form-input" id="purAmount" type="number" min="0.01" step="0.01" placeholder="0.00">
+    </div>
+    <div class="form-group mb-4">
+      <label class="form-label">Note</label>
+      <input class="form-input" id="purNote" placeholder="e.g. Received 50kg Rice - Invoice #456">
+    </div>
+    <div class="flex gap-3 justify-end">
+      <button class="btn btn-ghost" onclick="closeModal('purchaseModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitPurchase()">Record Purchase</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let _currentSupId = null;
+let _currentSupName = '';
+
+// ── ADD ──────────────────────────────────────────────────────
+async function addSupplier() {
+  const name = document.getElementById('supName').value.trim();
+  if (!name) { toast('Supplier name required', 'error'); return; }
+  const body = {
+    name,
+    phone:        document.getElementById('supPhone').value.trim(),
+    email:        document.getElementById('supEmail').value.trim(),
+    address:      document.getElementById('supAddress').value.trim(),
+    credit_limit: parseFloat(document.getElementById('supCredit').value) || 0,
+  };
+  const res = await fetch('/api/suppliers', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+  if (res.ok) {
+    const data = await res.json();
+    // Close modal and clear form immediately
+    closeModal('addSupModal');
+    document.getElementById('supName').value    = '';
+    document.getElementById('supPhone').value   = '';
+    document.getElementById('supEmail').value   = '';
+    document.getElementById('supAddress').value = '';
+    document.getElementById('supCredit').value  = '';
+    toast('Supplier added!', 'success');
+    // Inject new row into table without full page reload
+    const tbody = document.getElementById('supTable');
+    const emptyRow = tbody.querySelector('td[colspan="5"]');
+    if (emptyRow) emptyRow.closest('tr').remove();
+    const tr = document.createElement('tr');
+    tr.id = `sup-row-${data.id}`;
+    tr.innerHTML = `
+      <td style="font-weight:700">${data.name}</td>
+      <td class="text-sm">${data.phone || '—'}</td>
+      <td class="text-sm">${data.email || '—'}</td>
+      <td><span class="text-muted">Clear</span></td>
+      <td>
+        <div class="flex gap-2">
+          <button class="btn btn-ghost btn-sm" onclick="openProfile(${data.id}, '${data.name.replace(/'/g,"\\'")}')">📋 Profile</button>
+          <button class="btn btn-ghost btn-sm" onclick="editSupplier(${data.id}, '${data.name.replace(/'/g,"\\'")}', '${(data.phone||'').replace(/'/g,"\\'")}', '${(data.email||'').replace(/'/g,"\\'")}', '${(data.address||'').replace(/'/g,"\\'")}')">Edit</button>
+          <button class="btn btn-sm" style="background:rgba(239,68,68,.1);color:var(--danger)" onclick="deleteSupplier(${data.id}, '${data.name.replace(/'/g,"\\'")}')">Del</button>
+        </div>
+      </td>`;
+    tbody.appendChild(tr);
+    // Update total count
+    const countEl = document.getElementById('totalCount');
+    if (countEl) countEl.textContent = parseInt(countEl.textContent || '0') + 1;
+  } else {
+    const d = await res.json(); toast(d.error || 'Error', 'error');
+  }
+}
+
+// ── EDIT ─────────────────────────────────────────────────────
+function editSupplier(id, name, phone, email, address) {
+  document.getElementById('editSupId').value      = id;
+  document.getElementById('editSupName').value    = name;
+  document.getElementById('editSupPhone').value   = phone;
+  document.getElementById('editSupEmail').value   = email;
+  document.getElementById('editSupAddress').value = address;
+  openModal('editSupModal');
+}
+async function saveSupEdit() {
+  const id = document.getElementById('editSupId').value;
+  const body = {
+    name:    document.getElementById('editSupName').value.trim(),
+    phone:   document.getElementById('editSupPhone').value.trim(),
+    email:   document.getElementById('editSupEmail').value.trim(),
+    address: document.getElementById('editSupAddress').value.trim(),
+  };
+  if (!body.name) { toast('Name required', 'error'); return; }
+  const res = await fetch(`/api/suppliers/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+  if (res.ok) {
+    closeModal('editSupModal');
+    toast('Saved!', 'success');
+    setTimeout(() => location.reload(), 700);
+  } else {
+    toast('Error saving', 'error');
+  }
+}
+
+// ── DELETE ───────────────────────────────────────────────────
+async function deleteSupplier(id, name) {
+  const confirmed = await AppDialog.confirm(`Delete supplier "${name}"?\nThis will fail if active products are linked.`, { title: "Delete supplier", confirmText: "Delete", variant: "danger" });
+  if (!confirmed) return;
+  const res = await fetch(`/api/suppliers/${id}`, { method:'DELETE' });
+  const d = await res.json();
+  if (d.ok) { document.getElementById(`sup-row-${id}`)?.remove(); toast('Deleted', 'success'); }
+  else { toast(d.msg || d.error || 'Cannot delete — linked products exist', 'error'); }
+}
+
+// ── CLEANUP TEMPORARY SUPPLIERS ──────────────────────────────
+async function cleanupSuppliers() {
+  const confirmed = await AppDialog.confirm(
+    'Remove all suppliers that have:\n' +
+    '• No linked products\n' +
+    '• No purchase orders\n' +
+    '• No transactions\n\n' +
+    'This will permanently hide them. Continue?',
+    { title: 'Cleanup suppliers', confirmText: 'Continue', variant: 'danger' }
+  );
+  if (!confirmed) return;
+
+  const btn = document.querySelector('[onclick="cleanupSuppliers()"]');
+  if (btn) { btn.disabled = true; btn.textContent = '🧹 Cleaning…'; }
+
+  const res = await api('/api/suppliers/cleanup', { method: 'POST' });
+
+  if (btn) { btn.disabled = false; btn.textContent = '🧹 Clean Temp Suppliers'; }
+
+  if (res && res.ok) {
+    toast(res.msg || `${res.cleaned} supplier(s) removed.`, res.cleaned > 0 ? 'success' : 'info');
+    if (res.cleaned > 0) setTimeout(() => location.reload(), 800);
+  } else {
+    toast('Cleanup failed', 'error');
+  }
+}
+
+function filterSuppliers() {
+  const q = (document.getElementById('supplierSearch')?.value || '').trim().toLowerCase();
+  document.querySelectorAll('#supTable .sup-row').forEach(row => {
+    row.style.display = !q || row.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+// ── PROFILE ──────────────────────────────────────────────────
+async function openProfile(id, name) {
+  _currentSupId   = id;
+  _currentSupName = name;
+  document.getElementById('profileTitle').textContent = `🚚 ${name}`;
+  document.getElementById('profileBanner').textContent = '';
+  document.getElementById('profileTxns').innerHTML = '<div class="text-muted" style="text-align:center;padding:30px">Loading...</div>';
+  openModal('profileModal');
+
+  // Load transactions
+  const res = await fetch(`/api/suppliers/${id}/transactions`);
+  const d   = await res.json();
+
+  // Balance banner
+  const bal = d.balance || 0;
+  const banner = document.getElementById('profileBanner');
+  if (bal > 0) {
+    banner.style.background = 'rgba(239,68,68,.12)';
+    banner.style.color      = 'var(--danger)';
+    banner.textContent      = `Owe LKR ${bal.toLocaleString('en-LK', {minimumFractionDigits:2})} to supplier`;
+  } else if (bal < 0) {
+    banner.style.background = 'rgba(16,185,129,.12)';
+    banner.style.color      = 'var(--accent2)';
+    banner.textContent      = `Credit LKR ${Math.abs(bal).toLocaleString('en-LK', {minimumFractionDigits:2})} (overpaid)`;
+  } else {
+    banner.style.background = 'rgba(79,108,246,.1)';
+    banner.style.color      = 'var(--accent)';
+    banner.textContent      = 'Balance Clear ✓';
+  }
+
+  // Transactions list
+  const txns = d.transactions || [];
+  if (!txns.length) {
+    document.getElementById('profileTxns').innerHTML =
+      '<div class="text-muted" style="text-align:center;padding:30px">No transactions yet.</div>';
+    return;
+  }
+  document.getElementById('profileTxns').innerHTML = `
+    <table class="data-table">
+      <thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Note</th></tr></thead>
+      <tbody>
+        ${txns.map(t => `
+          <tr>
+            <td class="text-sm text-muted">${t.date || '' || ''}</td>
+            <td>
+              <span class="badge ${t.type==='payment'?'badge-green':'badge-blue'}">
+                ${t.type==='payment'?'💰 Payment':'📦 Purchase'}
+              </span>
+            </td>
+            <td style="font-weight:700;color:${t.type==='payment'?'var(--accent2)':'var(--danger)'}">
+              LKR ${parseFloat(t.amount).toLocaleString('en-LK',{minimumFractionDigits:2})}
+            </td>
+            <td class="text-sm text-muted">${t.note || '—'}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`;
+}
+
+// ── PAY ──────────────────────────────────────────────────────
+function openPayModal() {
+  document.getElementById('payModalSub').textContent = `Paying: ${_currentSupName}`;
+  document.getElementById('payAmount').value = '';
+  document.getElementById('payNote').value   = '';
+  openModal('payModal');
+}
+async function submitPayment() {
+  const amount = parseFloat(document.getElementById('payAmount').value);
+  if (!amount || amount <= 0) { toast('Enter valid amount','error'); return; }
+  const note = document.getElementById('payNote').value.trim();
+  const res = await fetch(`/api/suppliers/${_currentSupId}/payment`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ amount, note })
+  });
+  const d = await res.json();
+  if (d.ok) {
+    closeModal('payModal');
+    toast('Payment recorded!');
+    openProfile(_currentSupId, _currentSupName);
+    setTimeout(() => location.reload(), 1500);
+  } else { toast(d.error || 'Error','error'); }
+}
+
+// ── PURCHASE ─────────────────────────────────────────────────
+function openPurchaseModal() {
+  document.getElementById('purModalSub').textContent = `From: ${_currentSupName}`;
+  document.getElementById('purAmount').value = '';
+  document.getElementById('purNote').value   = '';
+  openModal('purchaseModal');
+}
+async function submitPurchase() {
+  const amount = parseFloat(document.getElementById('purAmount').value);
+  if (!amount || amount <= 0) { toast('Enter valid amount','error'); return; }
+  const note = document.getElementById('purNote').value.trim();
+  const res = await fetch(`/api/suppliers/${_currentSupId}/purchase`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ amount, note })
+  });
+  const d = await res.json();
+  if (d.ok) {
+    closeModal('purchaseModal');
+    toast('Purchase recorded!');
+    openProfile(_currentSupId, _currentSupName);
+    setTimeout(() => location.reload(), 1500);
+  } else { toast(d.error || 'Error','error'); }
+}
+</script>
+{% endblock %}

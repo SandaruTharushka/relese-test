@@ -1,0 +1,77 @@
+<div class="receipt{% if compact_mode %} compact-58{% endif %}">
+  <div class="receipt-header center" style="text-align:center;">
+    <div class="receipt-logo" aria-label="Store logo">SM</div>
+    {% if show.store_name %}<div class="store-name">{{ store.name }}</div>{% endif %}
+    {% if show.branch and store.branch %}<div class="store-line">{{ store.branch }}</div>{% endif %}
+    {% if show.address and store.address %}<div class="store-line">{{ store.address }}</div>{% endif %}
+    {% if show.phone and store.phone %}<div class="store-line">Tel: {{ store.phone }}</div>{% endif %}
+    {% if show.email and store.email %}<div class="store-line">{{ store.email }}</div>{% endif %}
+  </div>
+
+  <div class="line"></div>
+
+  <div class="meta-grid">
+    {% if show.invoice %}<div class="row"><span>Invoice No</span><span class="value">{{ sale.invoice_number }}</span></div>{% endif %}
+    {% if show.cashier %}<div class="row"><span>Cashier</span><span class="value">{{ cashier_name }}</span></div>{% endif %}
+    {% if show.datetime %}<div class="row"><span>Date</span><span class="value">{{ sale_datetime.strftime('%d/%m/%Y') if sale_datetime else '—' }}</span></div>{% endif %}
+    {% if show.datetime %}<div class="row"><span>Time</span><span class="value">{{ sale_datetime.strftime('%I:%M %p') if sale_datetime else '—' }}</span></div>{% endif %}
+    {% if show.customer %}<div class="row"><span>Customer</span><span class="value">{{ customer_name }}</span></div>{% endif %}
+    {% if show.customer_phone %}<div class="row"><span>Phone</span><span class="value">{{ customer_phone or '—' }}</span></div>{% endif %}
+    {% if show.payment_method and payment_method_label %}<div class="row"><span>Payment</span><span class="value">{{ payment_method_label }}</span></div>{% endif %}
+  </div>
+
+  <div class="line"></div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="text-align:left">Item</th>
+        {% if show.qty %}<th style="text-align:center">Qty</th>{% endif %}
+        {% if show.unit_price and not compact_mode %}<th style="text-align:right">Price</th>{% endif %}
+        {% if show.line_total %}<th style="text-align:right">Total</th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in item_rows %}
+      <tr>
+        <td>
+          {{ item.name }}
+          {% if show.sku and item.sku %}<div class="item-sub">SKU: {{ item.sku }}</div>{% endif %}
+          {% if item.imei %}<div class="item-sub">IMEI: {{ item.imei }}</div>{% endif %}
+        </td>
+        {% if show.qty %}<td style="text-align:center">{{ item.qty }}</td>{% endif %}
+        {% if show.unit_price and not compact_mode %}<td style="text-align:right">{{ item.unit_price }}</td>{% endif %}
+        {% if show.line_total %}<td style="text-align:right">{{ item.line_total }}</td>{% endif %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="line"></div>
+
+  {% if show.subtotal %}<div class="row"><span>Subtotal</span><span class="value">{{ totals.subtotal }}</span></div>{% endif %}
+  {% if show.discount_total %}<div class="row"><span>Discount</span><span class="value">{{ totals.discount }}</span></div>{% endif %}
+  {% if show.tax %}<div class="row"><span>Tax / VAT</span><span class="value">{{ totals.tax }}</span></div>{% endif %}
+  {% if show.grand_total %}<div class="row net-total"><span>Net Total</span><span class="value">{{ totals.grand_total }}</span></div>{% endif %}
+  {% if show.paid %}<div class="row"><span>Cash</span><span class="value">{{ totals.paid }}</span></div>{% endif %}
+  {% if show.change %}<div class="row"><span>Balance</span><span class="value">{{ totals.change }}</span></div>{% endif %}
+
+  {% if totals.you_saved != '0.00' %}
+  <div class="line"></div>
+  <div class="row savings"><span>You Saved</span><span class="value">{{ totals.you_saved }}</span></div>
+  {% endif %}
+
+  {% if barcode_url and profile.get('enable_barcode', True) %}
+  <div class="line"></div>
+  <div class="codes">
+    <img class="barcode" src="{{ barcode_url }}" alt="Barcode">
+    {% if profile.get('show_barcode_text', True) %}
+    <div class="caption">{{ sale.invoice_number }}</div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <div class="line"></div>
+  <div class="center thanks">Thank You!</div>
+  <div class="center provider-text">Powered by SuperMart POS</div>
+</div>

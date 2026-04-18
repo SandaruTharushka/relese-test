@@ -1,0 +1,944 @@
+{% extends "base.html" %}
+{% from "sidebar.html" import sidebar with context %}
+{% block title %} — Profit Report{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+.profit-tabs { display:flex; gap:4px; border-bottom:2px solid var(--border); margin-bottom:24px; }
+.profit-tabs .ptab {
+  padding:10px 22px; font-size:13px; font-weight:700; color:var(--muted);
+  border:none; background:none; cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px;
+  transition:all .18s; border-radius:6px 6px 0 0;
+}
+.profit-tabs .ptab:hover { background:var(--stat); color:var(--text); }
+.profit-tabs .ptab.active { color:var(--accent); border-bottom-color:var(--accent); background:rgba(79,108,246,.07); }
+.revenue-pill {
+  display:inline-flex; align-items:center; gap:8px; padding:6px 14px;
+  border-radius:999px; font-size:12px; font-weight:700; white-space:nowrap;
+}
+.breakdown-row {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 16px; border-radius:10px; background:var(--stat); margin-bottom:8px;
+}
+.breakdown-row .br-label { font-size:12px; font-weight:600; color:var(--muted); }
+.breakdown-row .br-val { font-size:15px; font-weight:800; }
+.breakdown-divider { border:none; border-top:1px solid var(--border); margin:12px 0; }
+.profit-positive { color:var(--accent2)!important; }
+.profit-negative { color:var(--danger)!important; }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="app-layout">
+  {{ sidebar('profit') }}
+  <div class="main-area">
+    <div class="topbar">
+      <div>
+        <div style="font-size:18px;font-weight:800">💰 Profit Report</div>
+        <div style="font-size:12px;color:var(--muted)">Revenue vs cost analysis — product sales &amp; service jobs</div>
+      </div>
+    </div>
+
+    <div class="page-content fade-in">
+
+      <!-- ── TOP-LEVEL TABS ──────────────────────────────────────────────── -->
+      <div class="profit-tabs">
+        <button class="ptab active" onclick="switchProfitTab('product',this)">📦 Product Sales</button>
+        <button class="ptab" onclick="switchProfitTab('service',this)">🔧 Service Jobs</button>
+        <button class="ptab" onclick="switchProfitTab('combined',this)">📊 Combined Overview</button>
+        <button class="ptab" onclick="switchProfitTab('finance',this)">💸 Finance &amp; Expenses</button>
+      </div>
+
+      <!-- ═══════════════ PRODUCT SALES TAB ════════════════════════════════ -->
+      <div id="tabProduct">
+
+        <!-- Summary stat cards (product) -->
+        <div class="grid-4 mb-6">
+          <div class="stat-card">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Total Revenue</div>
+            <div style="font-size:22px;font-weight:800;color:var(--accent)" id="sumRevenue">—</div>
+          </div>
+          <div class="stat-card">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Total Cost</div>
+            <div style="font-size:22px;font-weight:800;color:var(--danger)" id="sumCost">—</div>
+          </div>
+          <div class="stat-card">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Net Profit</div>
+            <div style="font-size:22px;font-weight:800" id="sumProfit">—</div>
+          </div>
+          <div class="stat-card">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Avg Margin</div>
+            <div style="font-size:22px;font-weight:800" id="sumMargin">—</div>
+          </div>
+        </div>
+
+        <!-- Sub-tabs: Daily / Monthly / By Product -->
+        <div class="chip-group mb-5" id="productSubChips">
+          <div class="chip active" onclick="switchProductSub('daily',this)">📅 Daily</div>
+          <div class="chip" onclick="switchProductSub('monthly',this)">📆 Monthly</div>
+          <div class="chip" onclick="switchProductSub('byproduct',this)">📦 By Product</div>
+        </div>
+
+        <!-- Daily -->
+        <div id="pSubDaily">
+          <div class="flex gap-2 items-center mb-4">
+            <label class="form-label" style="margin:0">Days:</label>
+            <div class="chip-group" id="dayChips">
+              <div class="chip active" onclick="setDays(7,this)">7 Days</div>
+              <div class="chip" onclick="setDays(14,this)">14 Days</div>
+              <div class="chip" onclick="setDays(30,this)">30 Days</div>
+            </div>
+          </div>
+          <div class="card mb-6" style="padding:24px">
+            <div style="font-weight:700;margin-bottom:16px">Daily Revenue vs Cost vs Profit</div>
+            <div style="position:relative;height:300px"><canvas id="dailyChart"></canvas></div>
+          </div>
+          <div class="table-wrap">
+            <div class="table-header"><div style="font-weight:700">Daily Breakdown</div></div>
+            <div class="overflow-x">
+              <table class="data-table">
+                <thead><tr><th>Date</th><th>Orders</th><th>Revenue</th><th>Cost</th><th>Profit</th><th>Margin</th></tr></thead>
+                <tbody id="dailyTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Monthly -->
+        <div id="pSubMonthly" style="display:none">
+          <div class="card mb-6" style="padding:24px">
+            <div style="font-weight:700;margin-bottom:16px">Monthly Revenue vs Cost vs Profit</div>
+            <div style="position:relative;height:300px"><canvas id="monthlyChart"></canvas></div>
+          </div>
+          <div class="table-wrap">
+            <div class="table-header"><div style="font-weight:700">Monthly Breakdown</div></div>
+            <div class="overflow-x">
+              <table class="data-table">
+                <thead><tr><th>Month</th><th>Orders</th><th>Revenue</th><th>Cost</th><th>Profit</th><th>Margin</th></tr></thead>
+                <tbody id="monthlyTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- By Product -->
+        <div id="pSubByProduct" style="display:none">
+          <div class="flex gap-2 items-center mb-4">
+            <div class="form-group" style="flex-direction:row;align-items:center;gap:8px;margin:0">
+              <label class="form-label" style="margin:0;white-space:nowrap">Date range:</label>
+              <input type="date" class="form-input" id="prodFrom" style="width:160px">
+              <span style="color:var(--muted)">to</span>
+              <input type="date" class="form-input" id="prodTo" style="width:160px">
+              <button class="btn btn-primary btn-sm" onclick="loadProductProfit()">Apply</button>
+            </div>
+          </div>
+          <div class="grid-2 mb-6">
+            <div class="card" style="padding:24px">
+              <div style="font-weight:700;margin-bottom:16px">Top 10 Products by Profit</div>
+              <div style="position:relative;height:320px"><canvas id="productProfitChart"></canvas></div>
+            </div>
+            <div class="card" style="padding:24px">
+              <div style="font-weight:700;margin-bottom:16px">Profit Margin Distribution</div>
+              <div style="position:relative;height:320px"><canvas id="marginChart"></canvas></div>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <div class="table-header">
+              <div style="font-weight:700">Product Profit Breakdown</div>
+              <input type="text" class="form-input" id="searchProduct" placeholder="Search product…" style="width:220px" oninput="filterProductTable()">
+            </div>
+            <div class="overflow-x">
+              <table class="data-table">
+                <thead><tr><th>Product</th><th>Qty Sold</th><th>Revenue</th><th>Cost</th><th>Profit</th><th>Margin</th></tr></thead>
+                <tbody id="productTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /tabProduct -->
+
+      <!-- ═══════════════ SERVICE JOBS TAB ══════════════════════════════════ -->
+      <div id="tabService" style="display:none">
+
+        <!-- Date range filter -->
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:20px;flex-wrap:wrap">
+          <label class="form-label" style="margin:0">From</label>
+          <input type="date" class="form-input" id="svcFrom" style="width:155px">
+          <label class="form-label" style="margin:0">To</label>
+          <input type="date" class="form-input" id="svcTo" style="width:155px">
+          <div class="chip-group">
+            <div class="chip" onclick="setSvcRange(7,this)">7d</div>
+            <div class="chip active" onclick="setSvcRange(30,this)">30d</div>
+            <div class="chip" onclick="setSvcRange(90,this)">90d</div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="loadServiceProfit()">Apply</button>
+        </div>
+
+        <!-- Service KPI cards -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin-bottom:24px">
+          <div class="stat-card">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Total Jobs</div>
+            <div style="font-size:22px;font-weight:800" id="svcJobCount">—</div>
+          </div>
+          <div class="stat-card">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Total Revenue</div>
+            <div style="font-size:22px;font-weight:800;color:var(--accent)" id="svcTotalRev">—</div>
+          </div>
+          <div class="stat-card">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Labour Revenue</div>
+            <div style="font-size:22px;font-weight:800;color:#8B5CF6" id="svcLabourRev">—</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">Pure service margin</div>
+          </div>
+          <div class="stat-card">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Parts Revenue</div>
+            <div style="font-size:22px;font-weight:800;color:#F59E0B" id="svcPartsRev">—</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px" id="svcPartsCostLbl">Cost: —</div>
+          </div>
+          <div class="stat-card">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Service Profit</div>
+            <div style="font-size:22px;font-weight:800" id="svcProfit">—</div>
+          </div>
+          <div class="stat-card">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Outstanding Balance</div>
+            <div style="font-size:22px;font-weight:800;color:var(--danger)" id="svcOutstanding">—</div>
+          </div>
+        </div>
+
+        <!-- Revenue breakdown card -->
+        <div class="card mb-6">
+          <div style="font-size:15px;font-weight:700;margin-bottom:16px">📋 Service Revenue Breakdown</div>
+          <div class="grid-2" style="gap:20px">
+            <div>
+              <div class="breakdown-row">
+                <span class="br-label">🔧 Labour Charges</span>
+                <span class="br-val" id="brkLabour" style="color:#8B5CF6">—</span>
+              </div>
+              <div class="breakdown-row">
+                <span class="br-label">🔩 Parts Revenue</span>
+                <span class="br-val" id="brkPartsRev" style="color:#F59E0B">—</span>
+              </div>
+              <div class="breakdown-row" style="background:rgba(239,68,68,.08)">
+                <span class="br-label">📦 Parts Cost</span>
+                <span class="br-val" id="brkPartsCost" style="color:var(--danger)">—</span>
+              </div>
+              <hr class="breakdown-divider">
+              <div class="breakdown-row" style="background:rgba(16,185,129,.08)">
+                <span class="br-label" style="color:var(--text);font-weight:700">💰 Service Gross Profit</span>
+                <span class="br-val" id="brkProfit">—</span>
+              </div>
+            </div>
+            <div>
+              <div class="card" style="padding:0">
+                <div style="position:relative;height:240px;padding:12px">
+                  <canvas id="svcBreakdownChart"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Labour vs Parts trend chart -->
+        <div class="card mb-6" style="padding:24px">
+          <div style="font-weight:700;margin-bottom:16px">📈 Monthly Service Revenue Trend (Labour vs Parts)</div>
+          <div style="position:relative;height:280px"><canvas id="svcTrendChart"></canvas></div>
+        </div>
+
+        <!-- Technician profit table -->
+        <div class="card">
+          <div style="font-size:15px;font-weight:700;margin-bottom:16px">👨‍🔧 Technician Revenue Summary</div>
+          <div class="overflow-x">
+            <table class="data-table">
+              <thead><tr><th>Technician</th><th>Jobs</th><th>Total Revenue</th><th>Labour</th><th>Avg / Job</th></tr></thead>
+              <tbody id="svcTechProfitBody"><tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div><!-- /tabService -->
+
+      <!-- ═══════════════ COMBINED OVERVIEW TAB ════════════════════════════ -->
+      <div id="tabCombined" style="display:none">
+
+        <!-- Date range -->
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:20px;flex-wrap:wrap">
+          <label class="form-label" style="margin:0">From</label>
+          <input type="date" class="form-input" id="combFrom" style="width:155px">
+          <label class="form-label" style="margin:0">To</label>
+          <input type="date" class="form-input" id="combTo" style="width:155px">
+          <div class="chip-group">
+            <div class="chip" onclick="setCombRange(7,this)">7d</div>
+            <div class="chip active" onclick="setCombRange(30,this)">30d</div>
+            <div class="chip" onclick="setCombRange(90,this)">90d</div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="loadCombinedProfit()">Apply</button>
+        </div>
+
+        <!-- Combined KPI cards -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin-bottom:24px">
+          <div class="stat-card" style="border-left:4px solid var(--accent)">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Combined Revenue</div>
+            <div style="font-size:24px;font-weight:900;color:var(--accent)" id="ccCombRev">—</div>
+          </div>
+          <div class="stat-card" style="border-left:4px solid #4F6CF6">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Product Sales Revenue</div>
+            <div style="font-size:22px;font-weight:800;color:#4F6CF6" id="ccSalesRev">—</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px" id="ccSalesProfitLbl">Profit: —</div>
+          </div>
+          <div class="stat-card" style="border-left:4px solid #10B981">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Service Revenue</div>
+            <div style="font-size:22px;font-weight:800;color:#10B981" id="ccServiceRev">—</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px" id="ccServiceProfitLbl">Profit: —</div>
+          </div>
+          <div class="stat-card" style="border-left:4px solid var(--accent2)">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Combined Gross Profit</div>
+            <div style="font-size:24px;font-weight:900" id="ccCombProfit">—</div>
+          </div>
+          <div class="stat-card" style="border-left:4px solid var(--danger)">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Outstanding (Service)</div>
+            <div style="font-size:22px;font-weight:800;color:var(--danger)" id="ccOutstanding">—</div>
+          </div>
+        </div>
+
+        <!-- Full breakdown card -->
+        <div class="card mb-6">
+          <div style="font-size:15px;font-weight:700;margin-bottom:16px">📋 Full Revenue & Profit Breakdown</div>
+          <div class="grid-2" style="gap:24px">
+            <div>
+              <!-- Product section -->
+              <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">🛒 Product Sales</div>
+              <div class="breakdown-row">
+                <span class="br-label">Sales Revenue</span>
+                <span class="br-val" id="fullSalesRev" style="color:#4F6CF6">—</span>
+              </div>
+              <div class="breakdown-row" style="background:rgba(239,68,68,.08)">
+                <span class="br-label">Product Cost (COGS)</span>
+                <span class="br-val" id="fullSalesCost" style="color:var(--danger)">—</span>
+              </div>
+              <div class="breakdown-row" style="background:rgba(79,108,246,.08)">
+                <span class="br-label" style="font-weight:700">Sales Gross Profit</span>
+                <span class="br-val" id="fullSalesProfit">—</span>
+              </div>
+              <hr class="breakdown-divider">
+              <!-- Service section -->
+              <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;margin-top:4px">🔧 Service Jobs</div>
+              <div class="breakdown-row">
+                <span class="br-label">Labour Revenue</span>
+                <span class="br-val" id="fullLabour" style="color:#8B5CF6">—</span>
+              </div>
+              <div class="breakdown-row">
+                <span class="br-label">Parts Revenue</span>
+                <span class="br-val" id="fullPartsRev" style="color:#F59E0B">—</span>
+              </div>
+              <div class="breakdown-row" style="background:rgba(239,68,68,.08)">
+                <span class="br-label">Parts Cost</span>
+                <span class="br-val" id="fullPartsCost" style="color:var(--danger)">—</span>
+              </div>
+              <div class="breakdown-row" style="background:rgba(16,185,129,.08)">
+                <span class="br-label" style="font-weight:700">Service Gross Profit</span>
+                <span class="br-val" id="fullServiceProfit">—</span>
+              </div>
+              <hr class="breakdown-divider">
+              <!-- Totals -->
+              <div class="breakdown-row" style="background:rgba(79,108,246,.12);border:1px solid rgba(79,108,246,.25)">
+                <span class="br-label" style="font-size:13px;color:var(--text);font-weight:800">🏆 COMBINED GROSS PROFIT</span>
+                <span class="br-val" id="fullCombProfit" style="font-size:20px">—</span>
+              </div>
+              <div class="breakdown-row" style="background:rgba(239,68,68,.06)">
+                <span class="br-label">⏳ Outstanding Service Balance</span>
+                <span class="br-val" id="fullOutstanding" style="color:var(--danger)">—</span>
+              </div>
+            </div>
+            <!-- Pie chart -->
+            <div>
+              <div style="position:relative;height:300px"><canvas id="combBreakdownChart"></canvas></div>
+              <div id="combBreakdownLegend" style="display:flex;flex-direction:column;gap:8px;margin-top:16px"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Combined trend chart -->
+        <div class="card">
+          <div style="font-size:15px;font-weight:700;margin-bottom:16px">📈 Sales vs Service Revenue Trend</div>
+          <div style="position:relative;height:280px"><canvas id="combTrendChart"></canvas></div>
+        </div>
+
+      </div><!-- /tabCombined -->
+
+      <!-- ═══════════════ FINANCE & EXPENSES TAB ═══════════════════════════ -->
+      <div id="tabFinance" style="display:none">
+
+        <!-- Date range picker -->
+        <div class="flex gap-3 mb-5 flex-wrap items-center">
+          <div class="flex items-center gap-2">
+            <label class="form-label" style="margin:0">From</label>
+            <input id="finFrom" class="form-control" type="date" style="width:150px" onchange="loadFinanceTab()">
+          </div>
+          <div class="flex items-center gap-2">
+            <label class="form-label" style="margin:0">To</label>
+            <input id="finTo" class="form-control" type="date" style="width:150px" onchange="loadFinanceTab()">
+          </div>
+          <button class="btn btn-sm" onclick="setFinThisMonth()">This Month</button>
+        </div>
+
+        <!-- Top summary cards -->
+        <div class="grid-4 mb-5">
+          <div class="stat-card">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Gross Profit</div>
+            <div style="font-size:22px;font-weight:800;color:var(--accent2)" id="finGross">—</div>
+          </div>
+          <div class="stat-card">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Total Deductions</div>
+            <div style="font-size:22px;font-weight:800;color:var(--danger)" id="finDeductions">—</div>
+          </div>
+          <div class="stat-card">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Net Profit</div>
+            <div style="font-size:22px;font-weight:800" id="finNet">—</div>
+          </div>
+          <div class="stat-card">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Cash Flow Balance</div>
+            <div style="font-size:22px;font-weight:800" id="finCash">—</div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+
+          <!-- Revenue breakdown -->
+          <div class="card" style="padding:22px">
+            <div style="font-weight:800;margin-bottom:16px;font-size:14px">📈 Revenue Breakdown</div>
+            <div class="breakdown-row">
+              <span class="br-label">Product Sales Revenue</span>
+              <span class="br-val profit-positive" id="finProdRev">—</span>
+            </div>
+            <div class="breakdown-row">
+              <span class="br-label">Product Sales Cost</span>
+              <span class="br-val profit-negative" id="finProdCost">—</span>
+            </div>
+            <div class="breakdown-row">
+              <span class="br-label">Service Labour</span>
+              <span class="br-val profit-positive" id="finSvcLabour">—</span>
+            </div>
+            <div class="breakdown-row">
+              <span class="br-label">Service Parts Revenue</span>
+              <span class="br-val profit-positive" id="finSvcParts">—</span>
+            </div>
+            <div class="breakdown-row">
+              <span class="br-label">Service Parts Cost</span>
+              <span class="br-val profit-negative" id="finSvcPartsCost">—</span>
+            </div>
+            <hr class="breakdown-divider">
+            <div class="breakdown-row" style="background:rgba(16,185,129,.07)">
+              <span class="br-label" style="font-size:13px;font-weight:800">Gross Profit</span>
+              <span class="br-val profit-positive" id="finGross2">—</span>
+            </div>
+          </div>
+
+          <!-- Deductions breakdown -->
+          <div class="card" style="padding:22px">
+            <div style="font-weight:800;margin-bottom:16px;font-size:14px">📉 Deductions</div>
+            <div class="breakdown-row">
+              <span class="br-label">🤝 Broker Commissions</span>
+              <span class="br-val profit-negative" id="finBrokerComm">—</span>
+            </div>
+            <div class="breakdown-row">
+              <span class="br-label">🏪 Shop Expenses</span>
+              <span class="br-val profit-negative" id="finShopExp">—</span>
+            </div>
+            <div class="breakdown-row">
+              <span class="br-label">🔧 Work Expenses</span>
+              <span class="br-val profit-negative" id="finWorkExp">—</span>
+            </div>
+            <div class="breakdown-row">
+              <span class="br-label">➕ Extra Expenses</span>
+              <span class="br-val profit-negative" id="finExtraExp">—</span>
+            </div>
+            <div class="breakdown-row">
+              <span class="br-label">🏦 Bank Loan / Interest</span>
+              <span class="br-val profit-negative" id="finBankLoan">—</span>
+            </div>
+            <hr class="breakdown-divider">
+            <div class="breakdown-row" style="background:rgba(239,68,68,.07)">
+              <span class="br-label" style="font-size:13px;font-weight:800">Total Deductions</span>
+              <span class="br-val profit-negative" id="finDeductions2">—</span>
+            </div>
+            <div class="breakdown-row" style="background:rgba(79,108,246,.07)">
+              <span class="br-label" style="font-size:13px;font-weight:800">Accounting Net Profit</span>
+              <span class="br-val" id="finNet2">—</span>
+            </div>
+            <hr class="breakdown-divider">
+            <div class="breakdown-row">
+              <span class="br-label">💰 Savings Transfer</span>
+              <span class="br-val" style="color:#8b5cf6" id="finSavings">—</span>
+            </div>
+            <div class="breakdown-row" style="background:rgba(139,92,246,.07)">
+              <span class="br-label" style="font-size:13px;font-weight:800">Cash Flow Balance</span>
+              <span class="br-val" id="finCash2">—</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Broker commission table -->
+        <div class="card mt-5" style="padding:22px">
+          <div class="flex justify-between items-center mb-4">
+            <div style="font-weight:800;font-size:14px">🤝 Broker Commission Summary</div>
+            <a href="/brokers" class="btn btn-sm">View All Brokers →</a>
+          </div>
+          <div class="overflow-x">
+            <table class="data-table">
+              <thead><tr><th>Broker</th><th>Jobs</th><th>Revenue</th><th>Commission</th><th>Paid</th><th>Balance</th></tr></thead>
+              <tbody id="finBrokerTable"><tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">Load the Finance tab to see broker data</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Expense type breakdown -->
+        <div class="card mt-4" style="padding:22px">
+          <div class="flex justify-between items-center mb-4">
+            <div style="font-weight:800;font-size:14px">💸 Expense Summary by Type</div>
+            <a href="/expenses" class="btn btn-sm">Manage Expenses →</a>
+          </div>
+          <div id="finExpenseBreakdown" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px"></div>
+        </div>
+
+      </div><!-- /tabFinance -->
+
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Globals ───────────────────────────────────────────────────────────────────
+let dailyChart, monthlyChart, productProfitChart, marginChart;
+let svcBreakdownChart, svcTrendChart;
+let combBreakdownChart, combTrendChart;
+let currentDays = 7;
+let productData = [];
+
+const ACCENT  = '#4F6CF6';
+const SUCCESS = '#10B981';
+const DANGER  = '#EF4444';
+function fmtLKR(v){ return 'LKR '+Number(v||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0}); }
+function fmt(v){ return fmtLKR(v); }
+function today(){ return new Date().toISOString().split('T')[0]; }
+function daysAgo(n){ const d=new Date(); d.setDate(d.getDate()-n); return d.toISOString().split('T')[0]; }
+// Null-safe element accessor — prevents .style crash on missing elements
+function el(id){ return document.getElementById(id); }
+function elSet(id, prop, val){ const e=el(id); if(e) e[prop]=val; }
+function elStyle(id, prop, val){ const e=el(id); if(e) e.style[prop]=val; }
+function elText(id, val){ const e=el(id); if(e) e.textContent=val; }
+function elHtml(id, val){ const e=el(id); if(e) e.innerHTML=val; }
+function elShow(id){ const e=el(id); if(e) e.style.display=''; }
+function elHide(id){ const e=el(id); if(e) e.style.display='none'; }
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+function switchProfitTab(tab, btn) {
+  ['Product','Service','Combined','Finance'].forEach(t=>elHide('tab'+t));
+  document.querySelectorAll('.profit-tabs .ptab').forEach(b=>b.classList.remove('active'));
+  const targetId = 'tab'+tab.charAt(0).toUpperCase()+tab.slice(1);
+  elShow(targetId);
+  if(btn) btn.classList.add('active');
+  if (tab==='service') initServiceProfitTab();
+  if (tab==='combined') initCombinedProfitTab();
+  if (tab==='finance') initFinanceTab();
+}
+
+function switchProductSub(sub, btn) {
+  ['Daily','Monthly','ByProduct'].forEach(s=>elHide('pSub'+s.charAt(0).toUpperCase()+s.slice(1)));
+  document.querySelectorAll('#productSubChips .chip').forEach(c=>c.classList.remove('active'));
+  const targetId = 'pSub'+sub.charAt(0).toUpperCase()+sub.slice(1);
+  elShow(targetId);
+  if(btn) btn.classList.add('active');
+  if (sub==='daily') loadDaily(currentDays);
+  if (sub==='monthly') loadMonthly();
+  if (sub==='byproduct') loadProductProfit();
+}
+
+// ══ PRODUCT TAB ═══════════════════════════════════════════════════════════════
+function updateSummary(data) {
+  if (!data || !Array.isArray(data)) return;
+  const rev=data.reduce((s,r)=>s+(r.revenue||0),0), cost=data.reduce((s,r)=>s+(r.cost||0),0);
+  const profit=rev-cost, margin=rev>0?(profit/rev*100):0;
+  elText('sumRevenue', fmt(rev));
+  elText('sumCost', fmt(cost));
+  elText('sumProfit', fmt(profit));
+  elText('sumMargin', margin.toFixed(1)+'%');
+  elStyle('sumProfit', 'fontSize', '22px');
+  elStyle('sumProfit', 'fontWeight', '800');
+  elStyle('sumProfit', 'color', profit>=0?'var(--accent2)':'var(--danger)');
+}
+
+function setDays(days, el) {
+  currentDays=days;
+  document.querySelectorAll('#dayChips .chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active'); loadDaily(days);
+}
+
+async function loadDaily(days) {
+  const data=await api(`/api/profit/daily?days=${days}`); if(!data)return;
+  updateSummary(data);
+  const labels=data.map(r=>r.day);
+  const chartCanvas = el('dailyChart');
+  if (chartCanvas) {
+    if(dailyChart) dailyChart.destroy();
+    dailyChart=new Chart(chartCanvas,{
+      type:'bar',data:{labels,datasets:[
+        {label:'Revenue',data:data.map(r=>r.revenue),backgroundColor:'rgba(79,108,246,0.7)',borderColor:ACCENT,borderWidth:1},
+        {label:'Cost',data:data.map(r=>r.cost),backgroundColor:'rgba(239,68,68,0.55)',borderColor:DANGER,borderWidth:1},
+        {label:'Profit',data:data.map(r=>r.profit),backgroundColor:'rgba(16,185,129,0.75)',borderColor:SUCCESS,borderWidth:1,type:'line',fill:false,tension:0.3,pointRadius:4},
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{position:'top',labels:{font:{size:11},boxWidth:10}}},
+        scales:{y:{ticks:{callback:v=>'LKR '+v.toLocaleString()}}}}
+    });
+  }
+  const html = data.map(r=>{
+    const m=(r.revenue||0)>0?((r.profit||0)/(r.revenue||1)*100).toFixed(1):'0.0';
+    const pc=(r.profit||0)>=0?'var(--accent2)':'var(--danger)';
+    return `<tr><td>${r.day||r.date||''}</td><td>${r.orders||0}</td><td>${fmt(r.revenue)}</td><td>${fmt(r.cost)}</td>
+      <td style="font-weight:700;color:${pc}">${fmt(r.profit)}</td>
+      <td><span class="badge" style="background:rgba(79,108,246,.12);color:var(--accent)">${m}%</span></td></tr>`;
+  }).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">No data</td></tr>';
+  elHtml('dailyTableBody', html);
+}
+
+async function loadMonthly() {
+  const data=await api('/api/profit/monthly?months=12'); if(!data)return;
+  updateSummary(data);
+  const chartCanvas = el('monthlyChart');
+  if (chartCanvas) {
+    if(monthlyChart) monthlyChart.destroy();
+    monthlyChart=new Chart(chartCanvas,{
+      type:'bar',data:{labels:data.map(r=>r.label),datasets:[
+        {label:'Revenue',data:data.map(r=>r.revenue),backgroundColor:'rgba(79,108,246,0.7)',borderColor:ACCENT,borderWidth:1},
+        {label:'Cost',data:data.map(r=>r.cost),backgroundColor:'rgba(239,68,68,0.55)',borderColor:DANGER,borderWidth:1},
+        {label:'Profit',data:data.map(r=>r.profit),backgroundColor:'rgba(16,185,129,0.75)',borderColor:SUCCESS,borderWidth:1,type:'line',fill:false,tension:0.3,pointRadius:5},
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{position:'top',labels:{font:{size:11},boxWidth:10}}},
+        scales:{y:{ticks:{callback:v=>'LKR '+v.toLocaleString()}}}}
+    });
+  }
+  const html = data.map(r=>{
+    const m=r.revenue>0?(r.profit/r.revenue*100).toFixed(1):'0.0', pc=r.profit>=0?'var(--accent2)':'var(--danger)';
+    return `<tr><td>${r.label}</td><td>${r.orders}</td><td>${fmt(r.revenue)}</td><td>${fmt(r.cost)}</td>
+      <td style="font-weight:700;color:${pc}">${fmt(r.profit)}</td>
+      <td><span class="badge" style="background:rgba(79,108,246,.12);color:var(--accent)">${m}%</span></td></tr>`;
+  }).join('');
+  elHtml('monthlyTableBody', html);
+}
+
+async function loadProductProfit() {
+  const f=document.getElementById('prodFrom')?.value||(today().substring(0,7)+'-01');
+  const t=document.getElementById('prodTo')?.value||today();
+  if(document.getElementById('prodFrom')){document.getElementById('prodFrom').value=f;document.getElementById('prodTo').value=t;}
+  const data=await api(`/api/profit/by-product?from=${f}&to=${t}`); if(!data)return;
+  productData=data;
+  const rev=data.reduce((s,r)=>s+r.revenue,0), cost=data.reduce((s,r)=>s+r.cost,0);
+  const profit=rev-cost, margin=rev>0?(profit/rev*100):0;
+  elText('sumRevenue',fmt(rev)); elText('sumCost',fmt(cost));
+  elText('sumProfit',fmt(profit)); elText('sumMargin',margin.toFixed(1)+'%');
+  elStyle('sumProfit','color',profit>=0?'var(--accent2)':'var(--danger)');
+  const top10=data.slice(0,10), colors=top10.map(r=>r.profit>=0?'rgba(16,185,129,0.75)':'rgba(239,68,68,0.55)');
+  const profitChartCanvas = el('productProfitChart');
+  if (profitChartCanvas) {
+    if(productProfitChart) productProfitChart.destroy();
+    productProfitChart=new Chart(profitChartCanvas,{
+      type:'bar',data:{labels:top10.map(r=>r.name.length>18?r.name.substring(0,18)+'…':r.name),
+        datasets:[{label:'Profit (LKR)',data:top10.map(r=>r.profit),backgroundColor:colors}]},
+      options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+        scales:{x:{ticks:{callback:v=>'LKR '+v.toLocaleString()}}}}
+    });
+  }
+  const buckets={'Loss (<0%)':0,'Low (0–10%)':0,'Good (10–25%)':0,'High (>25%)':0};
+  data.forEach(r=>{if(r.margin<0)buckets['Loss (<0%)']++;else if(r.margin<10)buckets['Low (0–10%)']++;else if(r.margin<=25)buckets['Good (10–25%)']++;else buckets['High (>25%)']++;});
+  const marginChartCanvas = el('marginChart');
+  if (marginChartCanvas) {
+    if(marginChart) marginChart.destroy();
+    marginChart=new Chart(marginChartCanvas,{
+      type:'doughnut',data:{labels:Object.keys(buckets),datasets:[{data:Object.values(buckets),backgroundColor:['rgba(239,68,68,.7)','rgba(245,158,11,.7)','rgba(79,108,246,.7)','rgba(16,185,129,.7)']}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{font:{size:11}}}}}
+    });
+  }
+  renderProductTable(data);
+}
+function renderProductTable(data){
+  const html = data.map(r=>{
+    const pc=r.profit>=0?'var(--accent2)':'var(--danger)';
+    const mc=r.margin>25?'badge-success':r.margin>10?'badge-primary':r.margin>=0?'badge-warning':'badge-danger';
+    return `<tr><td style="font-weight:600">${r.name}</td><td>${r.qty_sold}</td><td>${fmt(r.revenue)}</td><td>${fmt(r.cost)}</td>
+      <td style="font-weight:700;color:${pc}">${fmt(r.profit)}</td>
+      <td><span class="badge ${mc}">${r.margin.toFixed(1)}%</span></td></tr>`;
+  }).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">No sales data for this period</td></tr>';
+  elHtml('productTableBody', html);
+}
+function filterProductTable(){
+  const q=document.getElementById('searchProduct').value.toLowerCase();
+  renderProductTable(productData.filter(r=>r.name.toLowerCase().includes(q)));
+}
+
+// ══ SERVICE PROFIT TAB ════════════════════════════════════════════════════════
+let svcProfitInit=false;
+function setSvcRange(days,btn){
+  document.querySelectorAll('#tabService .chip-group .chip').forEach(c=>c.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  document.getElementById('svcFrom').value=daysAgo(days-1);
+  document.getElementById('svcTo').value=today();
+}
+async function initServiceProfitTab(){
+  if(svcProfitInit)return; svcProfitInit=true;
+  document.getElementById('svcFrom').value=daysAgo(29);
+  document.getElementById('svcTo').value=today();
+  loadServiceProfit(); loadSvcTrendChart();
+}
+async function loadServiceProfit(){
+  const f=document.getElementById('svcFrom').value, t=document.getElementById('svcTo').value;
+  const data=await api(`/api/profit/combined?from=${f}&to=${t}`); if(!data)return;
+  document.getElementById('svcJobCount').textContent=data.job_count;
+  document.getElementById('svcTotalRev').textContent=fmtLKR(data.service_total_revenue);
+  document.getElementById('svcLabourRev').textContent=fmtLKR(data.service_labour_revenue);
+  document.getElementById('svcPartsRev').textContent=fmtLKR(data.service_parts_revenue);
+  document.getElementById('svcPartsCostLbl').textContent='Cost: '+fmtLKR(data.service_parts_cost);
+  const sp=data.service_profit;
+  document.getElementById('svcProfit').textContent=fmtLKR(sp);
+  elStyle('svcProfit','color',sp>=0?'var(--accent2)':'var(--danger)');
+  document.getElementById('svcOutstanding').textContent=fmtLKR(data.outstanding_service_balance);
+  // Breakdown card
+  document.getElementById('brkLabour').textContent=fmtLKR(data.service_labour_revenue);
+  document.getElementById('brkPartsRev').textContent=fmtLKR(data.service_parts_revenue);
+  document.getElementById('brkPartsCost').textContent=fmtLKR(data.service_parts_cost);
+  document.getElementById('brkProfit').textContent=fmtLKR(sp);
+  elStyle('brkProfit','color',sp>=0?'var(--accent2)':'var(--danger)');
+  // Donut: Labour vs Parts Revenue vs Parts Cost (profit breakdown)
+  const breakdownCanvas = el('svcBreakdownChart');
+  if (breakdownCanvas) {
+    if(svcBreakdownChart) svcBreakdownChart.destroy();
+    svcBreakdownChart=new Chart(breakdownCanvas,{
+      type:'doughnut',
+      data:{labels:['Labour Revenue','Parts Revenue','Parts Cost'],
+        datasets:[{data:[data.service_labour_revenue,data.service_parts_revenue,data.service_parts_cost],
+          backgroundColor:['rgba(139,92,246,.8)','rgba(245,158,11,.8)','rgba(239,68,68,.7)'],borderWidth:2,hoverOffset:4}]},
+      options:{responsive:true,maintainAspectRatio:false,cutout:'55%',
+        plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:12,padding:8}}}}
+    });
+  }
+  // Technician profit table
+  const rows=await fetch(`/api/service/technician-performance?from=${f}&to=${t}`).then(r=>r.json());
+  const html = rows.length
+    ?rows.map(r=>`<tr>
+        <td><strong>${r.technician}</strong></td>
+        <td><span class="badge badge-primary">${r.job_count}</span></td>
+        <td style="font-weight:700;color:var(--accent)">${fmtLKR(r.revenue)}</td>
+        <td style="color:#8B5CF6">${fmtLKR(r.labour)}</td>
+        <td style="color:var(--accent2)">${fmtLKR(r.avg_job)}</td>
+      </tr>`).join('')
+    :'<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:16px">No data</td></tr>';
+  elHtml('svcTechProfitBody', html);
+}
+async function loadSvcTrendChart(){
+  const rows=await fetch('/api/service/monthly-trend?months=6').then(r=>r.json());
+  const trendCanvas = el('svcTrendChart');
+  if (trendCanvas) {
+    if(svcTrendChart) svcTrendChart.destroy();
+    svcTrendChart=new Chart(trendCanvas,{
+      type:'bar',data:{labels:rows.map(r=>r.month+' '+r.year),datasets:[
+        {label:'Total Revenue',data:rows.map(r=>r.revenue),backgroundColor:'rgba(16,185,129,.7)',borderColor:SUCCESS,borderWidth:1},
+        {label:'Jobs',data:rows.map(r=>r.count),backgroundColor:'rgba(79,108,246,.5)',borderColor:ACCENT,borderWidth:1,type:'line',yAxisID:'y1',fill:false,tension:0.4,pointRadius:5},
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{position:'top',labels:{font:{size:11},boxWidth:10}}},
+        scales:{y:{ticks:{callback:v=>'LKR '+(v>=1000?(v/1000).toFixed(0)+'k':v)}},y1:{position:'right',grid:{drawOnChartArea:false}}}}
+    });
+  }
+}
+
+// ══ COMBINED TAB ══════════════════════════════════════════════════════════════
+let combProfitInit=false;
+function setCombRange(days,btn){
+  document.querySelectorAll('#tabCombined .chip-group .chip').forEach(c=>c.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  document.getElementById('combFrom').value=daysAgo(days-1);
+  document.getElementById('combTo').value=today();
+}
+async function initCombinedProfitTab(){
+  if(combProfitInit)return; combProfitInit=true;
+  document.getElementById('combFrom').value=daysAgo(29);
+  document.getElementById('combTo').value=today();
+  loadCombinedProfit(); loadCombTrendChart();
+}
+async function loadCombinedProfit(){
+  const f=document.getElementById('combFrom').value, t=document.getElementById('combTo').value;
+  const d=await api(`/api/profit/combined?from=${f}&to=${t}`); if(!d)return;
+  // Top KPI cards
+  document.getElementById('ccCombRev').textContent=fmtLKR(d.combined_revenue);
+  document.getElementById('ccSalesRev').textContent=fmtLKR(d.product_sales_revenue);
+  document.getElementById('ccSalesProfitLbl').textContent='Profit: '+fmtLKR(d.product_sales_profit);
+  document.getElementById('ccServiceRev').textContent=fmtLKR(d.service_total_revenue);
+  document.getElementById('ccServiceProfitLbl').textContent='Profit: '+fmtLKR(d.service_profit);
+  const cp=d.combined_profit;
+  elText('ccCombProfit', fmtLKR(cp));
+  elStyle('ccCombProfit','color',cp>=0?'var(--accent2)':'var(--danger)');
+  elText('ccOutstanding', fmtLKR(d.outstanding_service_balance));
+  // Full breakdown
+  elText('fullSalesRev', fmtLKR(d.product_sales_revenue));
+  elText('fullSalesCost', fmtLKR(d.product_sales_cost));
+  elText('fullSalesProfit', fmtLKR(d.product_sales_profit));
+  elStyle('fullSalesProfit', 'color', d.product_sales_profit>=0?'var(--accent2)':'var(--danger)');
+  elText('fullLabour', fmtLKR(d.service_labour_revenue));
+  elText('fullPartsRev', fmtLKR(d.service_parts_revenue));
+  elText('fullPartsCost', fmtLKR(d.service_parts_cost));
+  elText('fullServiceProfit', fmtLKR(d.service_profit));
+  elStyle('fullServiceProfit', 'color', d.service_profit>=0?'var(--accent2)':'var(--danger)');
+  elText('fullCombProfit', fmtLKR(cp));
+  elStyle('fullCombProfit', 'color', cp>=0?'var(--accent2)':'var(--danger)');
+  elText('fullOutstanding', fmtLKR(d.outstanding_service_balance));
+  // Pie chart breakdown
+  const pieData=[
+    {label:'Product Revenue',val:d.product_sales_revenue,color:'rgba(79,108,246,.8)'},
+    {label:'Service Labour',val:d.service_labour_revenue,color:'rgba(139,92,246,.8)'},
+    {label:'Service Parts',val:d.service_parts_revenue,color:'rgba(245,158,11,.8)'},
+    {label:'Product Cost',val:d.product_sales_cost,color:'rgba(239,68,68,.6)'},
+    {label:'Parts Cost',val:d.service_parts_cost,color:'rgba(239,68,68,.4)'},
+  ].filter(x=>x.val>0);
+  const combCanvas = el('combBreakdownChart');
+  if (combCanvas) {
+    if(combBreakdownChart) combBreakdownChart.destroy();
+    combBreakdownChart=new Chart(combCanvas,{
+      type:'doughnut',data:{labels:pieData.map(x=>x.label),datasets:[{data:pieData.map(x=>x.val),backgroundColor:pieData.map(x=>x.color),borderWidth:2,hoverOffset:6}]},
+      options:{responsive:true,maintainAspectRatio:false,cutout:'50%',plugins:{legend:{display:false}}}
+    });
+  }
+  const total=pieData.reduce((s,x)=>s+x.val,0);
+  const legendHtml = pieData.map(x=>`
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="width:12px;height:12px;border-radius:3px;background:${x.color};flex-shrink:0"></span>
+      <span style="font-size:12px">${x.label}</span>
+      <span style="margin-left:auto;font-size:12px;font-weight:700">${fmtLKR(x.val)} <span style="color:var(--muted);font-weight:400">(${total>0?Math.round(x.val/total*100):0}%)</span></span>
+    </div>`).join('');
+  elHtml('combBreakdownLegend', legendHtml);
+}
+async function loadCombTrendChart(){
+  const rows=await fetch('/api/service/revenue-trend?days=30').then(r=>r.json());
+  const combTrendCanvas = el('combTrendChart');
+  if (combTrendCanvas) {
+    if(combTrendChart) combTrendChart.destroy();
+    combTrendChart=new Chart(combTrendCanvas,{
+      type:'line',data:{labels:rows.map(r=>r.day),datasets:[
+        {label:'Product Sales',data:rows.map(r=>r.sales_rev),borderColor:ACCENT,backgroundColor:'rgba(79,108,246,.1)',fill:true,tension:0.4,pointRadius:0,borderWidth:2},
+        {label:'Service Revenue',data:rows.map(r=>r.service_rev),borderColor:SUCCESS,backgroundColor:'rgba(16,185,129,.1)',fill:true,tension:0.4,pointRadius:0,borderWidth:2},
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,
+        interaction:{mode:'index',intersect:false},
+        plugins:{legend:{position:'top',labels:{font:{size:11},boxWidth:10}},
+          tooltip:{callbacks:{label:c=>' '+c.dataset.label+': LKR '+Number(c.raw||0).toLocaleString()}}},
+        scales:{
+          x:{grid:{display:false},ticks:{maxTicksLimit:12,color:'#64748B',font:{size:10}}},
+          y:{grid:{color:'rgba(128,128,128,.08)'},ticks:{color:'#64748B',callback:v=>v>=1000?(v/1000).toFixed(0)+'k':v}}
+        }}
+    });
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+loadDaily(7);
+
+// ══ FINANCE TAB ════════════════════════════════════════════════════════════════
+let _finLoaded = false;
+
+function setFinThisMonth(){
+  const now=new Date(); const y=now.getFullYear(); const m=String(now.getMonth()+1).padStart(2,'0');
+  const lastDay=new Date(y,now.getMonth()+1,0).getDate();
+  document.getElementById('finFrom').value=`${y}-${m}-01`;
+  document.getElementById('finTo').value=`${y}-${m}-${String(lastDay).padStart(2,'0')}`;
+  loadFinanceTab();
+}
+
+function initFinanceTab(){
+  if(_finLoaded) return;
+  setFinThisMonth();
+}
+
+async function loadFinanceTab(){
+  const f=document.getElementById('finFrom').value;
+  const t=document.getElementById('finTo').value;
+  if(!f||!t) return;
+
+  // Extended profit summary
+  const d = await api(`/api/profit/extended?from=${f}&to=${t}`);
+  if(!d) return;
+  _finLoaded = true;
+
+  const fmt = fmtLKR;
+  elText('finGross',     fmt(d.gross_profit));
+  elText('finGross2',    fmt(d.gross_profit));
+  elText('finDeductions', fmt(d.total_deductions));
+  elText('finDeductions2',fmt(d.total_deductions));
+  elText('finNet',       fmt(d.accounting_net_profit));
+  elText('finNet2',      fmt(d.accounting_net_profit));
+  elText('finCash',      fmt(d.cash_flow_balance));
+  elText('finCash2',     fmt(d.cash_flow_balance));
+
+  // Color net profit
+  const netEl = document.getElementById('finNet');
+  const net2El = document.getElementById('finNet2');
+  const netColor = d.accounting_net_profit >= 0 ? 'var(--accent2)' : 'var(--danger)';
+  if(netEl) netEl.style.color = netColor;
+  if(net2El) net2El.style.color = netColor;
+
+  elText('finProdRev',   fmt(d.product_sales_revenue));
+  elText('finProdCost',  fmt(d.product_sales_cost));
+  elText('finSvcLabour', fmt(d.service_labour_revenue));
+  elText('finSvcParts',  fmt(d.service_parts_revenue));
+  elText('finSvcPartsCost', fmt(d.service_parts_cost));
+  elText('finBrokerComm',fmt(d.total_broker_commission));
+  elText('finShopExp',   fmt(d.shop_expenses));
+  elText('finWorkExp',   fmt(d.work_expenses));
+  elText('finExtraExp',  fmt(d.extra_expenses));
+  elText('finBankLoan',  fmt(d.bank_loan_interest));
+  elText('finSavings',   fmt(d.savings_transfer));
+
+  // Expense breakdown cards
+  const expItems = [
+    {label:'Shop Expenses',   val:d.shop_expenses,    color:'var(--accent)',  icon:'🏪'},
+    {label:'Work Expenses',   val:d.work_expenses,    color:'#10b981',        icon:'🔧'},
+    {label:'Bank / Loans',    val:d.bank_loan_interest,color:'var(--danger)', icon:'🏦'},
+    {label:'Extra Expenses',  val:d.extra_expenses,   color:'#f59e0b',        icon:'➕'},
+    {label:'Savings',         val:d.savings_transfer, color:'#8b5cf6',        icon:'💰'},
+    {label:'Broker Commission',val:d.total_broker_commission,color:'var(--warning)',icon:'🤝'},
+  ];
+  const expBreak = document.getElementById('finExpenseBreakdown');
+  if(expBreak){
+    expBreak.innerHTML = expItems.map(i=>`
+      <div class="stat-card">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">${i.icon} ${i.label}</div>
+        <div style="font-size:18px;font-weight:800;color:${i.color}">${fmt(i.val)}</div>
+      </div>`).join('');
+  }
+
+  // Broker table
+  try {
+    const brokers = await api(`/api/brokers?active=0`);
+    const tbody = document.getElementById('finBrokerTable');
+    if(tbody && Array.isArray(brokers) && brokers.length){
+      tbody.innerHTML = brokers.map(b=>`
+        <tr>
+          <td><strong>${esc(b.name)}</strong>${b.company?`<br><span style="font-size:11px;color:var(--muted)">${esc(b.company)}</span>`:''}</td>
+          <td>${b.job_count||0}</td>
+          <td>${fmt(b.total_revenue)}</td>
+          <td style="color:var(--warning);font-weight:700">${fmt(b.total_commission)}</td>
+          <td style="color:var(--accent2)">${fmt(b.total_paid)}</td>
+          <td style="color:${b.balance_due>0?'var(--danger)':'var(--accent2)'};font-weight:700">${fmt(b.balance_due)}</td>
+        </tr>`).join('');
+    } else if(tbody){
+      tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">No brokers found</td></tr>';
+    }
+  } catch(e) {}
+}
+
+function esc(s){ const d=document.createElement('div');d.textContent=s||'';return d.innerHTML; }
+
+
+</script>
+{% endblock %}

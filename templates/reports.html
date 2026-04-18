@@ -1,0 +1,793 @@
+{% extends "base.html" %}
+{% from "sidebar.html" import sidebar with context %}
+{% block title %} — Reports{% endblock %}
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+.rpt-section-tabs { display:flex; gap:4px; border-bottom:2px solid var(--border); margin-bottom:24px; }
+.rpt-section-tabs .rtab {
+  padding:10px 20px; font-size:13px; font-weight:700; color:var(--muted);
+  border:none; background:none; cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px;
+  transition:all .18s; border-radius:6px 6px 0 0;
+}
+.rpt-section-tabs .rtab:hover { background:var(--stat); color:var(--text); }
+.rpt-section-tabs .rtab.active { color:var(--accent); border-bottom-color:var(--accent); background:rgba(79,108,246,.07); }
+.filter-bar {
+  display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+  padding:14px 18px; background:var(--stat); border-radius:12px; margin-bottom:18px;
+  border:1px solid var(--border);
+}
+.filter-bar label { font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; white-space:nowrap; }
+.filter-bar .form-input, .filter-bar select { height:34px; font-size:13px; }
+.svc-kpi-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; margin-bottom:20px; }
+.svc-kpi { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px 16px; position:relative; overflow:hidden; }
+.svc-kpi .kpi-label { font-size:10px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px; }
+.svc-kpi .kpi-val { font-size:20px; font-weight:900; color:var(--text); }
+.svc-kpi .kpi-sub { font-size:11px; font-weight:500; margin-top:2px; }
+.skeleton { background:linear-gradient(90deg,var(--stat) 25%,var(--border) 50%,var(--stat) 75%); background-size:200%; animation:shimmer 1.4s infinite; border-radius:6px; height:20px; }
+@keyframes shimmer { 0%{background-position:200%} 100%{background-position:-200%} }
+</style>
+{% endblock %}
+{% block body %}
+<div class="app-layout">
+  {{ sidebar('reports') }}
+  <div class="main-area">
+    <div class="topbar">
+      <div style="font-size:18px;font-weight:700">📈 Reports</div>
+      <div class="flex gap-2 items-center" id="salesExportBtns">
+        <div class="chip-group" id="periodChips">
+          <div class="chip active" data-value="7d">7 Days</div>
+          <div class="chip" data-value="today">Today</div>
+          <div class="chip" data-value="30d">30 Days</div>
+          <div class="chip" data-value="90d">90 Days</div>
+          <div class="chip" data-value="1y">1 Year</div>
+          <div class="chip" data-value="custom">Custom</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="exportReport('sales')">⬇ Sales CSV</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportReport('products')">⬇ Products CSV</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportReport('tax')">⬇ Tax CSV</button>
+      </div>
+      <div class="flex gap-2 items-center" id="svcExportBtns" style="display:none!important">
+        <button class="btn btn-ghost btn-sm" onclick="exportServiceCSV()">⬇ Service Jobs CSV</button>
+      </div>
+    </div>
+
+    <!-- Custom date range for sales -->
+    <div id="customDateRow" style="display:none;padding:12px 24px;background:var(--card);border-bottom:1px solid var(--border);gap:12px;align-items:center">
+      <input class="form-input" id="dateFrom" type="date" style="width:160px">
+      <span class="text-muted">to</span>
+      <input class="form-input" id="dateTo" type="date" style="width:160px">
+      <button class="btn btn-primary btn-sm" onclick="loadReport('custom')">Apply</button>
+    </div>
+
+    <div class="page-content fade-in">
+
+      <!-- ── SECTION TABS ─────────────────────────────────────────────────── -->
+      <div class="rpt-section-tabs">
+        <button class="rtab active" onclick="switchSection('sales',this)">🛒 Sales Reports</button>
+        <button class="rtab" onclick="switchSection('service',this)">🔧 Service Reports</button>
+      </div>
+
+      <!-- ══════════ SALES SECTION ══════════════════════════════════════════ -->
+      <div id="secSales">
+        <!-- Summary Cards -->
+        <div class="grid-4 mb-6">
+          <div class="stat-card">
+            <div class="text-muted text-xs mb-2">TOTAL REVENUE</div>
+            <div class="text-xl font-800 text-accent" id="rRevenue">LKR {{ "%.0f"|format(total_revenue) }}</div>
+          </div>
+          <div class="stat-card">
+            <div class="text-muted text-xs mb-2">TOTAL ORDERS</div>
+            <div class="text-xl font-800" id="rOrders">{{ total_sales }}</div>
+          </div>
+          <div class="stat-card">
+            <div class="text-muted text-xs mb-2">AVG ORDER VALUE</div>
+            <div class="text-xl font-800" id="rAvg">LKR {{ "%.0f"|format(avg_basket_all) }}</div>
+          </div>
+          <div class="stat-card">
+            <div class="text-muted text-xs mb-2">TOTAL DISCOUNTS</div>
+            <div class="text-xl font-800 text-danger" id="rDiscount">LKR {{ "%.0f"|format(total_discount) }}</div>
+          </div>
+        </div>
+
+        <div class="grid-2 mb-6">
+          <div class="card">
+            <div style="font-weight:700;margin-bottom:16px">📊 Daily Sales (Last 7 Days)</div>
+            <canvas id="dailyChart" height="200"></canvas>
+          </div>
+          <div class="card">
+            <div style="font-weight:700;margin-bottom:16px">📅 Monthly Revenue</div>
+            <canvas id="monthlyChart" height="200"></canvas>
+          </div>
+        </div>
+
+        <div class="grid-2 mb-6">
+          <div class="card">
+            <div style="font-weight:700;margin-bottom:16px">🏆 Top Products</div>
+            <table class="data-table" id="topProdsTable">
+              <thead><tr><th>#</th><th>Product</th><th>Sold</th><th>Revenue</th></tr></thead>
+              <tbody>
+                {% for p in top_products %}
+                <tr>
+                  <td style="color:var(--muted)">{{ loop.index }}</td>
+                  <td style="font-weight:600">{{ p.name }}</td>
+                  <td>{{ "%.0f"|format(p.sold) }}</td>
+                  <td style="color:var(--accent);font-weight:700">LKR {{ "%.0f"|format(p.revenue) }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <div class="card">
+            <div style="font-weight:700;margin-bottom:16px">💳 Payment Methods</div>
+            {% for p in pay_breakdown %}
+            <div style="margin-bottom:14px">
+              <div class="flex justify-between mb-1">
+                <span style="font-weight:600">{{ p.method }}</span>
+                <span style="font-weight:700;color:var(--accent)">LKR {{ "%.0f"|format(p.total) }}</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill" style="width:{{ [(p.total / (pay_breakdown|map(attribute='total')|sum or 1) * 100)|int, 100]|min }}%;background:var(--accent)"></div>
+              </div>
+              <div class="text-muted text-xs" style="margin-top:3px">{{ p.cnt }} transactions</div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- Recent Transactions -->
+        <div class="table-wrap mb-6">
+          <div class="table-header">
+            <span style="font-weight:700">🧾 Recent Transactions</span>
+          </div>
+          <table class="data-table">
+            <thead><tr><th>Invoice</th><th>Date</th><th>Cashier</th><th>Items</th><th>Total</th><th>Status</th></tr></thead>
+            <tbody>
+              {% for s in recent %}
+              <tr>
+                <td style="font-weight:700;color:var(--accent)">{{ s.invoice_number }}</td>
+                <td class="text-muted text-sm">{{ s.sale_date.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td class="text-sm">{{ s.cashier_user.full_name if s.cashier_user else '—' }}</td>
+                <td class="text-sm">{{ s.items|length }}</td>
+                <td style="font-weight:700">LKR {{ "%.2f"|format(s.total_amount) }}</td>
+                <td><span class="badge {{ 'badge-success' if s.status=='completed' else 'badge-warning' }}">{{ s.status }}</span></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Extra Tabs: Low Stock / Purchases / Cashier / Tax -->
+        <div class="card">
+          <div class="chip-group mb-4" id="extraTabChips">
+            <div class="chip active" onclick="switchExtraTab('lowstock',this)">⚠ Low Stock</div>
+            <div class="chip" onclick="switchExtraTab('purchases',this)">📦 Purchases</div>
+            <div class="chip" onclick="switchExtraTab('cashier',this)">👤 Cashier</div>
+            <div class="chip" onclick="switchExtraTab('tax',this)">💸 Tax</div>
+          </div>
+
+          <div id="tab_lowstock">
+            <div class="flex justify-between items-center mb-3">
+              <span style="font-weight:700">⚠ Products at Low Stock</span>
+              <button class="btn btn-ghost btn-sm" onclick="loadLowStock()">🔄 Refresh</button>
+            </div>
+            <div class="overflow-x">
+              <table class="data-table" id="lowStockTable">
+                <thead><tr><th>Product</th><th>Category</th><th>Supplier</th><th>Stock</th><th>Min Level</th><th>Sell Price</th></tr></thead>
+                <tbody id="lowStockBody"><tr><td colspan="6" class="text-muted" style="text-align:center;padding:20px">Loading…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div id="tab_purchases" style="display:none">
+            <div class="flex justify-between items-center mb-3">
+              <span style="font-weight:700">📦 Purchase Report by Supplier</span>
+              <div class="flex gap-2">
+                <input type="date" class="form-input" id="purFrom" style="width:150px">
+                <input type="date" class="form-input" id="purTo" style="width:150px">
+                <button class="btn btn-primary btn-sm" onclick="loadPurchaseReport()">Apply</button>
+              </div>
+            </div>
+            <div class="overflow-x">
+              <table class="data-table">
+                <thead><tr><th>Supplier</th><th>GRNs</th><th>Total Spend</th><th>Paid</th><th>Outstanding</th></tr></thead>
+                <tbody id="purchaseRptBody"><tr><td colspan="5" class="text-muted" style="text-align:center;padding:20px">Select date range and click Apply</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div id="tab_cashier" style="display:none">
+            <div class="flex justify-between items-center mb-3">
+              <span style="font-weight:700">👤 Cashier Performance</span>
+              <div class="flex gap-2">
+                <input type="date" class="form-input" id="cashFrom" style="width:150px">
+                <input type="date" class="form-input" id="cashTo" style="width:150px">
+                <button class="btn btn-primary btn-sm" onclick="loadCashierReport()">Apply</button>
+              </div>
+            </div>
+            <div class="overflow-x">
+              <table class="data-table">
+                <thead><tr><th>Cashier</th><th>Sales</th><th>Revenue</th><th>Discounts Given</th></tr></thead>
+                <tbody id="cashierRptBody"><tr><td colspan="4" class="text-muted" style="text-align:center;padding:20px">Select date range and click Apply</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div id="tab_tax" style="display:none">
+            <div class="flex justify-between items-center mb-3">
+              <span style="font-weight:700">💸 Tax Collection Summary</span>
+              <div class="flex gap-2">
+                <input type="date" class="form-input" id="taxFrom" style="width:150px">
+                <input type="date" class="form-input" id="taxTo" style="width:150px">
+                <button class="btn btn-primary btn-sm" onclick="loadTaxReport()">Apply</button>
+              </div>
+            </div>
+            <div class="grid-2 mb-4" id="taxSummary" style="display:none">
+              <div class="stat-card"><div class="text-muted text-xs mb-1">TOTAL REVENUE</div><div class="text-xl font-800 text-accent" id="taxRevTotal">—</div></div>
+              <div class="stat-card"><div class="text-muted text-xs mb-1">TAX COLLECTED</div><div class="text-xl font-800 text-warning" id="taxTotal">—</div></div>
+            </div>
+            <div class="overflow-x">
+              <table class="data-table">
+                <thead><tr><th>Date</th><th>Orders</th><th>Revenue</th><th>Tax</th></tr></thead>
+                <tbody id="taxRptBody"><tr><td colspan="4" class="text-muted" style="text-align:center;padding:20px">Select date range and click Apply</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div><!-- /secSales -->
+
+      <!-- ══════════ SERVICE SECTION ════════════════════════════════════════ -->
+      <div id="secService" style="display:none">
+
+        <!-- Filter Bar -->
+        <div class="filter-bar">
+          <label>From</label>
+          <input type="date" class="form-input" id="svcFrom" style="width:150px">
+          <label>To</label>
+          <input type="date" class="form-input" id="svcTo" style="width:150px">
+          <label>Service Type</label>
+          <select class="form-input" id="svcTypeFilter" style="width:150px">
+            <option value="">All Types</option>
+            <option value="repair">Repair</option>
+            <option value="service">Service</option>
+            <option value="electrical">Electrical</option>
+            <option value="bodywork">Bodywork</option>
+            <option value="ac">AC</option>
+            <option value="tyre">Tyre</option>
+            <option value="other">Other</option>
+          </select>
+          <label>Technician</label>
+          <select class="form-input" id="svcTechFilter" style="width:160px">
+            <option value="">All Technicians</option>
+          </select>
+          <label>Status</label>
+          <select class="form-input" id="svcStatusFilter" style="width:150px">
+            <option value="">All Statuses</option>
+            <option value="received">Received</option>
+            <option value="diagnosing">Diagnosing</option>
+            <option value="waiting_parts">Waiting Parts</option>
+            <option value="in_progress">In Progress</option>
+            <option value="ready">Ready</option>
+            <option value="delivered">Delivered</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="loadServiceReport()">Apply</button>
+          <button class="btn btn-ghost btn-sm" onclick="exportServiceCSV()">⬇ CSV</button>
+        </div>
+
+        <!-- KPI Summary Cards (dynamic) -->
+        <div class="svc-kpi-grid" id="svcKpiGrid">
+          <div class="svc-kpi"><div class="kpi-label">Total Jobs</div><div class="kpi-val" id="skTotalJobs">—</div></div>
+          <div class="svc-kpi"><div class="kpi-label">Total Revenue</div><div class="kpi-val" id="skRevenue" style="color:var(--accent)">—</div></div>
+          <div class="svc-kpi"><div class="kpi-label">Labour Revenue</div><div class="kpi-val" id="skLabour">—</div></div>
+          <div class="svc-kpi"><div class="kpi-label">Parts Revenue</div><div class="kpi-val" id="skParts">—</div></div>
+          <div class="svc-kpi"><div class="kpi-label">Advance Paid</div><div class="kpi-val" id="skAdvance" style="color:var(--accent2)">—</div></div>
+          <div class="svc-kpi"><div class="kpi-label">Balance Due</div><div class="kpi-val" id="skBalance" style="color:var(--danger)">—</div></div>
+          <div class="svc-kpi"><div class="kpi-label">Delivered</div><div class="kpi-val" id="skDelivered" style="color:var(--accent2)">—</div></div>
+          <div class="svc-kpi"><div class="kpi-label">Pending</div><div class="kpi-val" id="skPending" style="color:var(--warning)">—</div></div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="grid-2 mb-6" style="gap:20px">
+          <div class="card">
+            <div style="font-size:14px;font-weight:700;margin-bottom:14px">📊 Jobs by Status</div>
+            <div style="position:relative;height:220px"><canvas id="svcStatusChart"></canvas></div>
+          </div>
+          <div class="card">
+            <div style="font-size:14px;font-weight:700;margin-bottom:14px">🛠 Revenue by Service Type</div>
+            <div style="position:relative;height:220px"><canvas id="svcTypeRevChart"></canvas></div>
+          </div>
+        </div>
+
+        <div class="grid-2 mb-6" style="gap:20px">
+          <!-- Monthly trend -->
+          <div class="card">
+            <div style="font-size:14px;font-weight:700;margin-bottom:14px">📅 Monthly Service Trend</div>
+            <div style="position:relative;height:220px"><canvas id="svcMonthlyChart"></canvas></div>
+          </div>
+          <!-- Top customers -->
+          <div class="card">
+            <div style="font-size:14px;font-weight:700;margin-bottom:14px">👑 Top Customers by Spending</div>
+            <div class="overflow-x" style="max-height:240px;overflow-y:auto">
+              <table class="data-table" id="topCustTable">
+                <thead><tr><th>Customer</th><th>Jobs</th><th>Total Spent</th></tr></thead>
+                <tbody id="topCustBody"><tr><td colspan="3" class="text-muted" style="text-align:center;padding:16px">Loading…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Technician + Vehicle type row -->
+        <div class="grid-2 mb-6" style="gap:20px">
+          <div class="card">
+            <div style="font-size:14px;font-weight:700;margin-bottom:14px">👨‍🔧 Technician Performance</div>
+            <div class="overflow-x">
+              <table class="data-table" id="svcTechTable">
+                <thead><tr><th>Technician</th><th>Jobs</th><th>Revenue</th><th>Labour</th><th>Avg/Job</th></tr></thead>
+                <tbody id="svcTechBody"><tr><td colspan="5" class="text-muted" style="text-align:center;padding:16px">Loading…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <div style="font-size:14px;font-weight:700;margin-bottom:14px">🚗 Vehicle Type Breakdown</div>
+            <div style="position:relative;height:220px"><canvas id="svcVehicleChart"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Service Jobs Table -->
+        <div class="table-wrap">
+          <div class="table-header" style="gap:12px;flex-wrap:wrap">
+            <span style="font-weight:700">🔧 Service Jobs</span>
+            <span class="text-muted text-sm" id="svcJobCount">—</span>
+            <input type="text" class="form-input" id="svcSearch" placeholder="Search job / customer / vehicle…" style="width:240px;margin-left:auto" oninput="filterSvcTable()">
+          </div>
+          <div class="overflow-x">
+            <table class="data-table" id="svcJobsTable">
+              <thead>
+                <tr>
+                  <th onclick="sortSvcTable('job_number')" style="cursor:pointer">Job # ↕</th>
+                  <th>Customer</th>
+                  <th>Vehicle</th>
+                  <th onclick="sortSvcTable('service_type')" style="cursor:pointer">Type ↕</th>
+                  <th onclick="sortSvcTable('status')" style="cursor:pointer">Status ↕</th>
+                  <th>Technician</th>
+                  <th onclick="sortSvcTable('received_date')" style="cursor:pointer">Received ↕</th>
+                  <th onclick="sortSvcTable('total_amount')" style="cursor:pointer">Total ↕</th>
+                  <th onclick="sortSvcTable('balance_due')" style="cursor:pointer">Balance ↕</th>
+                  <th>Pay Status</th>
+                </tr>
+              </thead>
+              <tbody id="svcJobsBody">
+                <tr><td colspan="10"><div class="empty-state"><div class="empty-icon">🔧</div>Select filters and click Apply</div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div><!-- /secService -->
+
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+// ── Utilities ─────────────────────────────────────────────────────────────────
+const _weekly  = {{ weekly|safe }};
+const _monthly = {{ monthly|safe }};
+function fmtLKR(v){ return 'LKR ' + Number(v||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0}); }
+function today(){ return new Date().toISOString().split('T')[0]; }
+function monthStart(){ return today().substring(0,8)+'01'; }
+
+// ── Section toggle ────────────────────────────────────────────────────────────
+function switchSection(sec, btn) {
+  document.getElementById('secSales').style.display   = sec==='sales'   ? '' : 'none';
+  document.getElementById('secService').style.display = sec==='service' ? '' : 'none';
+  document.querySelectorAll('.rpt-section-tabs .rtab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('salesExportBtns').style.display = sec==='sales' ? '' : 'none';
+  if (sec==='service') initServiceSection();
+}
+
+// ══ SALES SECTION ════════════════════════════════════════════════════════════
+let dailyChartInst, monthlyChartInst;
+
+function initCharts(weekly, monthly) {
+  if (dailyChartInst)  dailyChartInst.destroy();
+  if (monthlyChartInst) monthlyChartInst.destroy();
+  dailyChartInst = new Chart(document.getElementById('dailyChart'), {
+    type: 'bar',
+    data: {
+      labels: weekly.map(d=>d.day),
+      datasets:[{label:'Revenue (LKR)',data:weekly.map(d=>d.sales),backgroundColor:'rgba(79,108,246,.7)',borderRadius:8}]
+    },
+    options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{callback:v=>'LKR '+(v>=1000?(v/1000).toFixed(0)+'k':v)}}}}
+  });
+  monthlyChartInst = new Chart(document.getElementById('monthlyChart'), {
+    type: 'line',
+    data: {
+      labels: monthly.map(d=>d.month),
+      datasets:[{label:'Revenue (LKR)',data:monthly.map(d=>d.rev),borderColor:'#10B981',backgroundColor:'rgba(16,185,129,.12)',fill:true,tension:0.4,pointRadius:4}]
+    },
+    options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{callback:v=>'LKR '+(v>=1000?(v/1000).toFixed(0)+'k':v)}}}}
+  });
+}
+initCharts(_weekly, _monthly);
+
+document.querySelectorAll('#periodChips .chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('#periodChips .chip').forEach(c=>c.classList.remove('active'));
+    chip.classList.add('active');
+    const val = chip.dataset.value;
+    const cr = document.getElementById('customDateRow');
+    if (val==='custom') { cr.style.display='flex'; }
+    else { cr.style.display='none'; loadReport(val); }
+  });
+});
+
+async function loadReport(period) {
+  let url = `/api/reports/summary?period=${period}`;
+  if (period==='custom') {
+    const f=document.getElementById('dateFrom').value, t=document.getElementById('dateTo').value;
+    if (!f||!t) { toast('Select date range','error'); return; }
+    url = `/api/reports/summary?from=${f}&to=${t}`;
+  }
+  const data = await api(url); if (!data) return;
+  document.getElementById('rRevenue').textContent  = fmtLKR(data.total_revenue);
+  document.getElementById('rOrders').textContent   = data.total_orders;
+  document.getElementById('rAvg').textContent      = fmtLKR(data.avg_order);
+  document.getElementById('rDiscount').textContent = fmtLKR(data.total_discount);
+  initCharts(data.daily, _monthly);
+  const tbody = document.querySelector('#topProdsTable tbody');
+  tbody.innerHTML = data.top_products.map((p,i)=>`<tr>
+    <td style="color:var(--muted)">${i+1}</td>
+    <td style="font-weight:600">${p.name}</td>
+    <td>${Math.round(p.sold)}</td>
+    <td style="color:var(--accent);font-weight:700">${fmtLKR(p.revenue)}</td>
+  </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:16px">No data</td></tr>';
+  toast(`Report updated (${data.start} → ${data.end})`,'info');
+}
+
+function switchExtraTab(tab, el) {
+  ['lowstock','purchases','cashier','tax'].forEach(t=>document.getElementById('tab_'+t).style.display=t===tab?'':'none');
+  document.querySelectorAll('#extraTabChips .chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  if (tab==='lowstock') loadLowStock();
+}
+
+async function loadLowStock() {
+  document.getElementById('lowStockBody').innerHTML='<tr><td colspan="6" class="text-muted" style="text-align:center;padding:20px">Loading…</td></tr>';
+  const data = await api('/api/reports/low-stock'); if (!data) return;
+  const items = Array.isArray(data)?data:[];
+  document.getElementById('lowStockBody').innerHTML = items.length
+    ? items.map(p=>`<tr>
+        <td style="font-weight:600">${p.name}</td>
+        <td class="text-muted text-sm">${p.category||'—'}</td>
+        <td class="text-muted text-sm">${p.supplier||'—'}</td>
+        <td><span style="color:var(--danger);font-weight:700">${p.stock_qty}</span></td>
+        <td class="text-muted text-sm">${p.low_stock_lvl}</td>
+        <td style="font-weight:600">${fmtLKR(p.sell_price)}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">✅ No low-stock products</td></tr>';
+}
+
+async function loadPurchaseReport() {
+  const f=document.getElementById('purFrom').value, t=document.getElementById('purTo').value;
+  if (!f||!t){toast('Select date range','error');return;}
+  document.getElementById('purchaseRptBody').innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">Loading…</td></tr>';
+  const data=await api(`/api/reports/purchases?from=${f}&to=${t}`); if(!data)return;
+  const rows=Array.isArray(data)?data:[];
+  document.getElementById('purchaseRptBody').innerHTML=rows.length
+    ?rows.map(r=>`<tr>
+        <td style="font-weight:600">${r.supplier}</td><td>${r.grn_count??r.grns??0}</td>
+        <td style="font-weight:700">${fmtLKR(r.total_spend)}</td>
+        <td style="color:var(--accent2);font-weight:600">${fmtLKR(r.paid)}</td>
+        <td style="color:${(r.unpaid??r.outstanding??0)>0?'var(--danger)':'var(--muted)'};font-weight:600">${fmtLKR(r.unpaid??r.outstanding??0)}</td>
+      </tr>`).join('')
+    :'<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">No data</td></tr>';
+}
+
+async function loadCashierReport() {
+  const f=document.getElementById('cashFrom').value, t=document.getElementById('cashTo').value;
+  if (!f||!t){toast('Select date range','error');return;}
+  document.getElementById('cashierRptBody').innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px">Loading…</td></tr>';
+  const data=await api(`/api/reports/cashier-summary?from=${f}&to=${t}`); if(!data)return;
+  const rows=Array.isArray(data)?data:[];
+  document.getElementById('cashierRptBody').innerHTML=rows.length
+    ?rows.map(r=>`<tr>
+        <td style="font-weight:600">${r.cashier}</td>
+        <td>${r.sale_count??r.sales??0}</td>
+        <td style="font-weight:700;color:var(--accent)">${fmtLKR(r.revenue)}</td>
+        <td style="color:var(--danger)">${fmtLKR(r.discounts_given??r.discounts??0)}</td>
+      </tr>`).join('')
+    :'<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px">No data</td></tr>';
+}
+
+async function loadTaxReport() {
+  const f=document.getElementById('taxFrom').value, t=document.getElementById('taxTo').value;
+  if (!f||!t){toast('Select date range','error');return;}
+  document.getElementById('taxRptBody').innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px">Loading…</td></tr>';
+  const data=await api(`/api/reports/tax?from=${f}&to=${t}`); if(!data)return;
+  const rows=data.daily||[];
+  document.getElementById('taxSummary').style.display='';
+  document.getElementById('taxRevTotal').textContent=fmtLKR(data.total_revenue||0);
+  document.getElementById('taxTotal').textContent=fmtLKR(data.total_tax||0);
+  document.getElementById('taxRptBody').innerHTML=rows.length
+    ?rows.map(r=>`<tr>
+        <td class="text-muted text-sm">${r.date}</td><td>${r.orders}</td>
+        <td style="font-weight:600">${fmtLKR(r.revenue)}</td>
+        <td style="font-weight:700;color:var(--warning)">${fmtLKR(r.tax)}</td>
+      </tr>`).join('')
+    :'<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px">No data</td></tr>';
+}
+
+loadLowStock();
+
+function exportReport(type) {
+  const chip=document.querySelector('#periodChips .chip.active')?.dataset?.value||'7d';
+  const today_str=today(), days=chip==='today'?0:chip==='30d'?29:chip==='90d'?89:chip==='1y'?364:6;
+  const s=new Date(); s.setDate(s.getDate()-days);
+  const from=document.getElementById('dateFrom')?.value||s.toISOString().slice(0,10);
+  const to=document.getElementById('dateTo')?.value||today_str;
+  window.location.href=`/api/reports/export?type=${type}&from=${from}&to=${to}`;
+}
+
+// ══ SERVICE SECTION ═══════════════════════════════════════════════════════════
+let svcJobsAll = [];
+let svcSortKey = 'received_date', svcSortAsc = false;
+let svcStatusChartInst, svcTypeRevChartInst, svcMonthlyChartInst, svcVehicleChartInst;
+let serviceSecInit = false;
+
+const STATUS_BADGE = {
+  received:'badge-primary', diagnosing:'badge-warning', waiting_parts:'badge-warning',
+  in_progress:'badge-warning', ready:'badge-success', delivered:'badge-secondary', cancelled:'badge-danger'
+};
+const STATUS_COLOR = {
+  received:'#4F6CF6', diagnosing:'#F59E0B', waiting_parts:'#EF4444',
+  in_progress:'#F97316', ready:'#10B981', delivered:'#64748B', cancelled:'#9CA3AF'
+};
+
+async function initServiceSection() {
+  if (serviceSecInit) return;
+  serviceSecInit = true;
+  // Set default date range
+  document.getElementById('svcFrom').value = (() => { const d=new Date(); d.setDate(d.getDate()-29); return d.toISOString().split('T')[0]; })();
+  document.getElementById('svcTo').value = today();
+  // Load technician list for filter
+  try {
+    const rows = await fetch('/api/service/technician-performance').then(r=>r.json());
+    const sel = document.getElementById('svcTechFilter');
+    rows.forEach(r=>{ const o=document.createElement('option'); o.value=r.technician_id; o.textContent=r.technician; sel.appendChild(o); });
+  } catch(e){}
+  // Load monthly trend + top customers (independent of filter)
+  loadSvcMonthlyChart();
+  loadTopCustomers();
+  loadSvcTechnicianTable();
+  loadSvcStatusChart();
+  loadSvcTypeRevChart();
+  loadSvcVehicleChart();
+  loadServiceReport();
+}
+
+async function loadServiceReport() {
+  const f = document.getElementById('svcFrom').value;
+  const t = document.getElementById('svcTo').value;
+  const svcType = document.getElementById('svcTypeFilter').value;
+  const techId  = document.getElementById('svcTechFilter').value;
+  const status  = document.getElementById('svcStatusFilter').value;
+
+  document.getElementById('svcJobsBody').innerHTML = '<tr><td colspan="10"><div style="padding:20px;text-align:center;color:var(--muted)">Loading…</div></td></tr>';
+  // Set KPIs to loading skeleton
+  ['skTotalJobs','skRevenue','skLabour','skParts','skAdvance','skBalance','skDelivered','skPending']
+    .forEach(id=>{document.getElementById(id).textContent='…';});
+
+  let url = `/api/service/report?from=${f}&to=${t}`;
+  if (svcType) url += `&service_type=${svcType}`;
+  if (techId) url += `&technician_id=${techId}`;
+  if (status) url += `&status=${status}`;
+
+  const data = await api(url); if (!data) return;
+
+  const s = data.summary;
+  document.getElementById('skTotalJobs').textContent = s.total_jobs;
+  document.getElementById('skRevenue').textContent   = fmtLKR(s.total_revenue);
+  document.getElementById('skLabour').textContent    = fmtLKR(s.total_labour);
+  document.getElementById('skParts').textContent     = fmtLKR(s.total_parts);
+  document.getElementById('skAdvance').textContent   = fmtLKR(s.total_advance_paid);
+  document.getElementById('skBalance').textContent   = fmtLKR(s.balance_due);
+  document.getElementById('skDelivered').textContent = s.delivered_count;
+  document.getElementById('skPending').textContent   = s.pending_count;
+  document.getElementById('svcJobCount').textContent = `${s.total_jobs} jobs`;
+
+  svcJobsAll = data.jobs;
+  renderSvcTable(svcJobsAll);
+
+  // Reload charts with new date range
+  loadSvcStatusChart(f, t);
+  loadSvcTypeRevChart(f, t);
+  loadSvcVehicleChart(f, t);
+  loadTopCustomers(f, t);
+  loadSvcTechnicianTable(f, t);
+}
+
+function renderSvcTable(jobs) {
+  if (!jobs.length) {
+    document.getElementById('svcJobsBody').innerHTML = '<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">🔧</div>No service jobs found for selected filters</div></td></tr>';
+    return;
+  }
+  document.getElementById('svcJobsBody').innerHTML = jobs.map(j => {
+    const badgeCls = STATUS_BADGE[j.status] || 'badge-secondary';
+    const balColor = j.balance_due > 0 ? 'var(--danger)' : 'var(--accent2)';
+    const payBadge = j.payment_status==='paid' ? 'badge-success' : j.payment_status==='partial' ? 'badge-warning' : 'badge-danger';
+    return `<tr>
+      <td style="font-weight:700;color:var(--accent)">${j.job_number}</td>
+      <td>${j.customer_name||'Walk-in'}<br><span class="text-muted" style="font-size:11px">${j.customer_phone||''}</span></td>
+      <td>${(j.vehicle_make+' '+j.vehicle_model).trim()||'—'}<br><span class="text-muted" style="font-size:11px">${j.vehicle_reg_no||''}</span></td>
+      <td><span class="badge badge-purple">${j.service_type||'other'}</span></td>
+      <td><span class="badge ${badgeCls}">${(j.status||'').replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())}</span></td>
+      <td>${j.technician||'—'}</td>
+      <td class="text-muted text-sm">${j.received_date||'—'}</td>
+      <td style="font-weight:700">${fmtLKR(j.total_amount)}</td>
+      <td style="font-weight:700;color:${balColor}">${j.balance_due>0?fmtLKR(j.balance_due):'Paid'}</td>
+      <td><span class="badge ${payBadge}">${j.payment_status||'unpaid'}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function filterSvcTable() {
+  const q = document.getElementById('svcSearch').value.toLowerCase();
+  const filtered = svcJobsAll.filter(j =>
+    (j.job_number||'').toLowerCase().includes(q) ||
+    (j.customer_name||'').toLowerCase().includes(q) ||
+    (j.vehicle_make||'').toLowerCase().includes(q) ||
+    (j.vehicle_model||'').toLowerCase().includes(q) ||
+    (j.vehicle_reg_no||'').toLowerCase().includes(q)
+  );
+  renderSvcTable(filtered);
+}
+
+function sortSvcTable(key) {
+  if (svcSortKey===key) svcSortAsc=!svcSortAsc;
+  else { svcSortKey=key; svcSortAsc=true; }
+  const sorted=[...svcJobsAll].sort((a,b)=>{
+    let va=a[key]||'', vb=b[key]||'';
+    if (typeof va==='number') return svcSortAsc?va-vb:vb-va;
+    return svcSortAsc?String(va).localeCompare(String(vb)):String(vb).localeCompare(String(va));
+  });
+  renderSvcTable(sorted);
+}
+
+async function loadSvcStatusChart(f, t) {
+  try {
+    const rows = await fetch('/api/service/status-breakdown').then(r=>r.json());
+    if (svcStatusChartInst) svcStatusChartInst.destroy();
+    svcStatusChartInst = new Chart(document.getElementById('svcStatusChart'), {
+      type: 'doughnut',
+      data: {
+        labels: rows.map(r=>r.label),
+        datasets:[{data:rows.map(r=>r.count), backgroundColor:rows.map(r=>STATUS_COLOR[r.status]||'#94A3B8'), borderWidth:2, hoverOffset:6}]
+      },
+      options:{responsive:true,maintainAspectRatio:false,cutout:'55%',
+        plugins:{legend:{position:'right',labels:{font:{size:11},boxWidth:12,padding:8}}}}
+    });
+  } catch(e){}
+}
+
+async function loadSvcTypeRevChart(f, t) {
+  try {
+    let url = '/api/service/type-breakdown';
+    if (f&&t) url += `?from=${f}&to=${t}`;
+    const rows = await fetch(url).then(r=>r.json());
+    if (!rows.length) return;
+    if (svcTypeRevChartInst) svcTypeRevChartInst.destroy();
+    const COLORS=['#4F6CF6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#06B6D4','#84CC16'];
+    svcTypeRevChartInst = new Chart(document.getElementById('svcTypeRevChart'), {
+      type: 'bar',
+      data: {
+        labels: rows.map(r=>r.service_type),
+        datasets:[
+          {label:'Jobs',data:rows.map(r=>r.count),backgroundColor:'rgba(79,108,246,.7)',borderRadius:6,yAxisID:'y'},
+          {label:'Revenue',data:rows.map(r=>r.revenue),backgroundColor:'rgba(16,185,129,.7)',borderRadius:6,yAxisID:'y1'},
+        ]
+      },
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{position:'top',labels:{font:{size:11},boxWidth:10}}},
+        scales:{
+          x:{grid:{display:false}},
+          y:{type:'linear',position:'left'},
+          y1:{type:'linear',position:'right',grid:{drawOnChartArea:false},ticks:{callback:v=>'LKR '+(v>=1000?(v/1000).toFixed(0)+'k':v)}}
+        }}
+    });
+  } catch(e){}
+}
+
+async function loadSvcMonthlyChart() {
+  try {
+    const rows = await fetch('/api/service/monthly-trend?months=6').then(r=>r.json());
+    if (svcMonthlyChartInst) svcMonthlyChartInst.destroy();
+    svcMonthlyChartInst = new Chart(document.getElementById('svcMonthlyChart'), {
+      type: 'line',
+      data: {
+        labels: rows.map(r=>r.month+' '+r.year),
+        datasets:[
+          {label:'Revenue',data:rows.map(r=>r.revenue),borderColor:'#10B981',backgroundColor:'rgba(16,185,129,.1)',fill:true,tension:0.4,pointRadius:4,yAxisID:'y'},
+          {label:'Jobs',data:rows.map(r=>r.count),borderColor:'#4F6CF6',backgroundColor:'rgba(79,108,246,.08)',fill:false,tension:0.4,pointRadius:4,yAxisID:'y1',borderDash:[4,4]},
+        ]
+      },
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{position:'top',labels:{font:{size:11},boxWidth:10}}},
+        scales:{
+          x:{grid:{display:false}},
+          y:{ticks:{callback:v=>'LKR '+(v>=1000?(v/1000).toFixed(0)+'k':v)}},
+          y1:{position:'right',grid:{drawOnChartArea:false}}
+        }}
+    });
+  } catch(e){}
+}
+
+async function loadTopCustomers(f, t) {
+  try {
+    let url = '/api/service/top-customers?limit=8';
+    if (f&&t) url += `&from=${f}&to=${t}`;
+    const rows = await fetch(url).then(r=>r.json());
+    document.getElementById('topCustBody').innerHTML = rows.length
+      ? rows.map((r,i)=>`<tr>
+          <td><span style="color:var(--muted);font-size:11px">#${i+1}</span> <strong>${r.customer}</strong><br><span class="text-muted" style="font-size:11px">${r.phone||''}</span></td>
+          <td><span class="badge badge-primary">${r.job_count}</span></td>
+          <td style="font-weight:700;color:var(--accent)">${fmtLKR(r.total_spent)}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:16px">No data</td></tr>';
+  } catch(e){}
+}
+
+async function loadSvcTechnicianTable(f, t) {
+  try {
+    let url = '/api/service/technician-performance';
+    if (f&&t) url += `?from=${f}&to=${t}`;
+    const rows = await fetch(url).then(r=>r.json());
+    document.getElementById('svcTechBody').innerHTML = rows.length
+      ? rows.map(r=>`<tr>
+          <td><strong>${r.technician}</strong></td>
+          <td><span class="badge badge-primary">${r.job_count}</span></td>
+          <td style="font-weight:700">${fmtLKR(r.revenue)}</td>
+          <td>${fmtLKR(r.labour)}</td>
+          <td style="color:var(--accent2)">${fmtLKR(r.avg_job)}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:16px">No data</td></tr>';
+  } catch(e){}
+}
+
+async function loadSvcVehicleChart(f, t) {
+  try {
+    let url = '/api/service/vehicle-breakdown';
+    if (f&&t) url += `?from=${f}&to=${t}`;
+    const rows = await fetch(url).then(r=>r.json());
+    if (!rows.length) return;
+    if (svcVehicleChartInst) svcVehicleChartInst.destroy();
+    const COLORS=['#4F6CF6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899'];
+    svcVehicleChartInst = new Chart(document.getElementById('svcVehicleChart'), {
+      type: 'pie',
+      data: {
+        labels: rows.map(r=>r.vehicle_type),
+        datasets:[{data:rows.map(r=>r.count), backgroundColor:COLORS.slice(0,rows.length), borderWidth:2, hoverOffset:6}]
+      },
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{position:'right',labels:{font:{size:11},boxWidth:12,padding:8}}}}
+    });
+  } catch(e){}
+}
+
+function exportServiceCSV() {
+  const f=document.getElementById('svcFrom')?.value||monthStart();
+  const t=document.getElementById('svcTo')?.value||today();
+  const svcType=document.getElementById('svcTypeFilter')?.value||'';
+  const techId=document.getElementById('svcTechFilter')?.value||'';
+  const status=document.getElementById('svcStatusFilter')?.value||'';
+  let url=`/api/service/export?from=${f}&to=${t}`;
+  if (svcType) url+=`&service_type=${svcType}`;
+  if (techId) url+=`&technician_id=${techId}`;
+  if (status) url+=`&status=${status}`;
+  window.location.href = url;
+}
+</script>
+{% endblock %}

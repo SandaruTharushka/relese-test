@@ -1,0 +1,553 @@
+{% extends "base.html" %}
+{% from "sidebar.html" import sidebar with context %}
+{% block title %} — {{ customer.name }}{% endblock %}
+{% block body %}
+<div class="app-layout">
+  {{ sidebar('customers') }}
+  <div class="main-area">
+    <!-- ── Top Bar ─────────────────────────────────────────────────── -->
+    <div class="topbar" style="padding:0 24px;align-items:stretch">
+      <div style="display:flex;align-items:center;gap:16px;padding:14px 0">
+        <a href="/customers" style="color:var(--muted);font-size:13px;text-decoration:none;white-space:nowrap">← Customers</a>
+        <div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#7C3AED);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;color:#fff;flex-shrink:0" id="avatarInitials">?</div>
+        <div>
+          <div style="font-size:20px;font-weight:800;line-height:1.2">{{ customer.name }}</div>
+          <div id="headMeta" style="color:var(--muted);font-size:12px;margin-top:2px">Loading...</div>
+        </div>
+        <span id="statusBadge" style="display:none;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;margin-top:2px"></span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;padding:14px 0">
+        <a href="/repairs?prefill_customer={{ customer.id }}" class="btn btn-ghost btn-sm" id="btnNewJob">🔧 New Job</a>
+        <a href="/billing?retail_customer_id={{ customer.id }}" class="btn btn-ghost btn-sm" id="btnNewSale">🧾 New Sale</a>
+        <button class="btn btn-primary btn-sm" onclick="openEditModal()" id="btnEditCustomer">✏️ Edit</button>
+      </div>
+    </div>
+
+    <div class="content-area" style="display:flex;flex-direction:column;gap:14px">
+
+      <!-- ── KPI Cards ─────────────────────────────────────────────── -->
+      <div id="summaryCards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px"></div>
+
+      <!-- ── Tab Navigation ─────────────────────────────────────────── -->
+      <div class="card" style="padding:10px 14px">
+        <div style="display:flex;gap:6px;flex-wrap:wrap" id="tabNav"></div>
+      </div>
+
+      <!-- ── Tab Content ────────────────────────────────────────────── -->
+      <div class="card" style="padding:18px;min-height:320px;overflow:auto" id="tabContent">
+        <div style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--muted)">
+          <div style="text-align:center"><div style="font-size:32px;margin-bottom:8px">⏳</div>Loading profile...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Edit Customer Modal ─────────────────────────────────────────────── -->
+<div class="modal-backdrop" id="editCustomerModal" onclick="closeModal('editCustomerModal')">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:500px">
+    <div class="modal-header">
+      <div class="modal-title">✏️ Edit Customer</div>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('editCustomerModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div>
+          <label class="label">Name *</label>
+          <input id="editCustName" type="text" class="input" placeholder="Full name">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <label class="label">Phone</label>
+            <input id="editCustPhone" type="text" class="input" placeholder="07X XXXXXXX">
+          </div>
+          <div>
+            <label class="label">NIC</label>
+            <input id="editCustNIC" type="text" class="input" placeholder="XXXXXXXXX(V/X)">
+          </div>
+        </div>
+        <div>
+          <label class="label">Email</label>
+          <input id="editCustEmail" type="email" class="input" placeholder="email@example.com">
+        </div>
+        <div>
+          <label class="label">Address</label>
+          <textarea id="editCustAddress" class="input" rows="2" placeholder="Address..."></textarea>
+        </div>
+        <div>
+          <label class="label">Notes</label>
+          <textarea id="editCustNotes" class="input" rows="2" placeholder="Optional notes..."></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('editCustomerModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEdit()">Save Changes</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+/* ── Customer Profile Styles ─────────────────────────────────────── */
+.cp-tab-btn {
+  padding: 7px 16px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .2s;
+  white-space: nowrap;
+}
+.cp-tab-btn:hover { background: var(--hover); color: var(--text); }
+.cp-tab-btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.cp-kpi {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: transform .15s;
+}
+.cp-kpi:hover { transform: translateY(-2px); }
+.cp-kpi-label { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.cp-kpi-value { font-size: 20px; font-weight: 800; }
+.cp-kpi-sub { font-size: 11px; color: var(--muted); }
+
+.cp-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+.cp-info-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border-radius: 10px;
+}
+.cp-info-key { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; }
+.cp-info-val { font-size: 14px; font-weight: 600; }
+
+.cp-badge {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.cp-badge.paid    { background: rgba(16,185,129,.15); color: #10b981; }
+.cp-badge.partial { background: rgba(245,158,11,.15); color: #f59e0b; }
+.cp-badge.unpaid  { background: rgba(239,68,68,.15);  color: #ef4444; }
+.cp-badge.active  { background: rgba(99,102,241,.15); color: #6366f1; }
+.cp-badge.completed { background: rgba(16,185,129,.15); color: #10b981; }
+.cp-badge.defaulted { background: rgba(239,68,68,.15); color: #ef4444; }
+
+.cp-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cp-tbl th {
+  text-align: left; padding: 8px 12px;
+  font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--muted); font-weight: 700;
+  border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+.cp-tbl td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.cp-tbl tbody tr:hover { background: var(--hover); }
+.cp-tbl tbody tr:last-child td { border-bottom: none; }
+
+.cp-empty {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; padding: 60px 20px; color: var(--muted);
+  gap: 8px;
+}
+.cp-empty-icon { font-size: 40px; }
+.cp-empty-msg { font-size: 14px; font-weight: 600; }
+
+.cp-outstanding-banner {
+  background: linear-gradient(135deg, rgba(239,68,68,.12), rgba(239,68,68,.05));
+  border: 1px solid rgba(239,68,68,.3);
+  border-radius: 12px;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.cp-vehicle-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cp-timeline-item {
+  display: flex;
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  align-items: flex-start;
+}
+.cp-timeline-item:last-child { border-bottom: none; }
+.cp-timeline-icon {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: var(--surface); border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; flex-shrink: 0;
+}
+.cp-timeline-body { flex: 1; min-width: 0; }
+.cp-timeline-title { font-size: 13px; font-weight: 700; }
+.cp-timeline-sub { font-size: 12px; color: var(--muted); margin-top: 1px; }
+.cp-timeline-date { font-size: 11px; color: var(--muted); white-space: nowrap; flex-shrink: 0; }
+.cp-timeline-amount { font-size: 13px; font-weight: 700; color: var(--accent); white-space: nowrap; flex-shrink: 0; }
+</style>
+
+<script>
+const CUST_ID = parseInt('{{ customer.id or 0 }}');
+let profileData = null;
+
+const TABS = [
+  { id: 'overview',     label: '📋 Overview' },
+  { id: 'service_jobs', label: '🔧 Service Jobs' },
+  { id: 'sales',        label: '🧾 Sales / Invoices' },
+  { id: 'payments',     label: '💳 Payments' },
+  { id: 'credit',       label: '⚠️ Outstanding' },
+  { id: 'vehicles',     label: '🚗 Vehicles' },
+  { id: 'installments', label: '📋 Finance Plans' },
+  { id: 'timeline',     label: '🕐 Timeline' },
+];
+let activeTab = 'overview';
+
+function money(v) {
+  const n = parseFloat(v || 0);
+  return 'LKR ' + n.toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function esc(s) {
+  return String(s || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function badge(status) {
+  const s = String(status || '').toLowerCase();
+  const map = {
+    paid: 'paid', partial: 'partial', unpaid: 'unpaid',
+    active: 'active', completed: 'completed', defaulted: 'defaulted',
+    received: 'active', diagnosing: 'active', in_progress: 'active',
+    waiting_parts: 'partial', ready: 'paid', delivered: 'paid', cancelled: 'unpaid',
+  };
+  const cls = map[s] || 'active';
+  return `<span class="cp-badge ${cls}">${esc(status)}</span>`;
+}
+
+function renderTabNav() {
+  const el = document.getElementById('tabNav');
+  el.innerHTML = TABS.map(t =>
+    `<button class="cp-tab-btn${t.id === activeTab ? ' active' : ''}" onclick="switchTab('${t.id}')">${t.label}</button>`
+  ).join('');
+}
+function switchTab(id) { activeTab = id; renderTabNav(); renderTabContent(); }
+
+function renderKPI(label, value, sub, colorClass) {
+  return `<div class="cp-kpi">
+    <div class="cp-kpi-label">${label}</div>
+    <div class="cp-kpi-value${colorClass ? ' ' + colorClass : ''}">${value}</div>
+    ${sub ? `<div class="cp-kpi-sub">${sub}</div>` : ''}
+  </div>`;
+}
+
+function renderSummary() {
+  const s = profileData.summary;
+  const c = profileData.customer;
+  // Avatar initials
+  const names = (c.name || '').trim().split(/\s+/);
+  const initials = names.length >= 2 ? names[0][0] + names[names.length-1][0] : (names[0] || '?')[0];
+  document.getElementById('avatarInitials').textContent = initials.toUpperCase();
+
+  // Status badge
+  const sb = document.getElementById('statusBadge');
+  if (c.status === 'inactive') {
+    sb.textContent = 'INACTIVE'; sb.style.background = 'rgba(239,68,68,.15)'; sb.style.color = '#ef4444'; sb.style.display = '';
+  }
+
+  // Head meta
+  const parts = [];
+  if (c.phone) parts.push('📞 ' + c.phone);
+  if (c.customer_code) parts.push('🏷️ ' + c.customer_code);
+  if (profileData.last_activity_date) parts.push('🕐 Last: ' + profileData.last_activity_date);
+  document.getElementById('headMeta').textContent = parts.join('  ·  ') || 'No contact info';
+
+  // KPI cards
+  const outstanding = s.outstanding_balance;
+  document.getElementById('summaryCards').innerHTML = [
+    renderKPI('Service Jobs', s.total_service_jobs, 'Total jobs done', ''),
+    renderKPI('Invoices', s.total_invoices, 'Sales invoices', ''),
+    renderKPI('Vehicles', s.vehicles_count, 'Unique plates', ''),
+    renderKPI('Outstanding', money(outstanding), outstanding > 0 ? 'Due balance' : 'All clear ✓', outstanding > 0 ? 'text-danger' : ''),
+    renderKPI('Sales Value', money(s.total_purchases_value), 'Product sales', ''),
+    renderKPI('Service Value', money(s.total_service_value), 'Repair & service', ''),
+    renderKPI('Total Paid', money(s.total_paid), 'All payments received', ''),
+  ].join('');
+
+  // inject text-danger style if needed
+  document.querySelectorAll('.text-danger').forEach(el => el.style.color = 'var(--danger, #ef4444)');
+}
+
+function emptyState(msg) {
+  return `<div class="cp-empty"><div class="cp-empty-icon">📭</div><div class="cp-empty-msg">${msg}</div></div>`;
+}
+
+/* ── TAB RENDERS ─────────────────────────────────────────────── */
+function renderOverview() {
+  const c = profileData.customer;
+  const fields = [
+    ['Name', c.name],
+    ['Phone', c.phone || '—'],
+    ['Email', c.email || '—'],
+    ['NIC', c.nic || '—'],
+    ['Address', c.address || '—'],
+    ['Customer Code', c.customer_code || '—'],
+    ['Status', c.status],
+    ['Joined', c.created_at || '—'],
+    ['Last Updated', c.updated_at || '—'],
+    ['Notes', c.notes || '—'],
+  ];
+  return `<div class="cp-info-grid">${fields.map(([k,v]) =>
+    `<div class="cp-info-row"><div class="cp-info-key">${esc(k)}</div><div class="cp-info-val">${esc(v)}</div></div>`
+  ).join('')}</div>`;
+}
+
+function renderServiceJobs() {
+  const jobs = profileData.service_jobs;
+  if (!jobs.length) return emptyState('No service jobs found for this customer');
+  return `<table class="cp-tbl">
+    <thead><tr>
+      <th>Job #</th><th>Date</th><th>Vehicle</th><th>Issue</th>
+      <th>Status</th><th>Total</th><th>Paid</th><th>Balance</th><th></th>
+    </tr></thead>
+    <tbody>${jobs.map(j => `<tr>
+      <td><strong>${esc(j.job_number)}</strong></td>
+      <td style="white-space:nowrap">${esc(j.date)}</td>
+      <td>${esc(j.vehicle || '—')}</td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(j.issue)}">${esc(j.issue || '—')}</td>
+      <td>${badge(j.status)}</td>
+      <td style="white-space:nowrap">${money(j.total)}</td>
+      <td style="white-space:nowrap">${money(j.paid)}</td>
+      <td style="white-space:nowrap;color:${j.balance>0?'var(--danger,#ef4444)':'var(--text)'}">${money(j.balance)}</td>
+      <td><a href="/repairs" class="btn btn-ghost btn-sm">View</a></td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+function renderSales() {
+  const sales = profileData.sales;
+  if (!sales.length) return emptyState('No sales invoices found for this customer');
+  return `<table class="cp-tbl">
+    <thead><tr>
+      <th>Invoice #</th><th>Date</th><th>Type</th><th>Items</th>
+      <th>Total</th><th>Paid</th><th>Balance</th><th>Status</th><th></th>
+    </tr></thead>
+    <tbody>${sales.map(s => `<tr>
+      <td><strong>${esc(s.invoice_number)}</strong></td>
+      <td style="white-space:nowrap">${esc(s.date)}</td>
+      <td><span class="cp-badge active">${esc(s.invoice_type)}</span></td>
+      <td style="text-align:center">${s.items_count}</td>
+      <td style="white-space:nowrap">${money(s.total)}</td>
+      <td style="white-space:nowrap">${money(s.paid)}</td>
+      <td style="white-space:nowrap;color:${s.balance>0?'var(--danger,#ef4444)':'var(--text)'}">${money(s.balance)}</td>
+      <td>${badge(s.payment_status)}</td>
+      <td><a href="/invoice/${esc(s.invoice_number)}" class="btn btn-ghost btn-sm">View</a></td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+function renderPayments() {
+  const pmts = profileData.payments;
+  if (!pmts.length) return emptyState('No payments recorded for this customer');
+  return `<table class="cp-tbl">
+    <thead><tr>
+      <th>Date</th><th>Type</th><th>Reference</th><th>Method</th><th>Amount</th><th>Note</th>
+    </tr></thead>
+    <tbody>${pmts.map(p => `<tr>
+      <td style="white-space:nowrap">${esc(p.date)}</td>
+      <td><span class="cp-badge active">${esc(p.type_label || p.type)}</span></td>
+      <td>${esc(p.reference || '—')}</td>
+      <td>${esc(p.method || '—')}</td>
+      <td style="white-space:nowrap"><strong>${money(p.amount)}</strong></td>
+      <td style="color:var(--muted);font-size:12px">${esc(p.note || '—')}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+function renderCredit() {
+  const items = profileData.outstanding;
+  const total_outstanding = profileData.summary.outstanding_balance;
+  let html = '';
+  if (total_outstanding > 0) {
+    html += `<div class="cp-outstanding-banner">
+      <div>
+        <div style="font-size:12px;font-weight:700;color:var(--danger,#ef4444);text-transform:uppercase;letter-spacing:.04em">⚠️ Total Outstanding Balance</div>
+        <div style="font-size:24px;font-weight:800;color:var(--danger,#ef4444);margin-top:4px">${money(total_outstanding)}</div>
+      </div>
+      <div style="font-size:12px;color:var(--muted)">${items.length} unpaid item${items.length !== 1 ? 's' : ''}</div>
+    </div>`;
+  }
+  if (!items.length) {
+    html += emptyState('No outstanding balances — all paid up! ✓');
+    return html;
+  }
+  html += `<table class="cp-tbl">
+    <thead><tr>
+      <th>Type</th><th>Reference</th><th>Date</th>
+      <th>Total</th><th>Paid</th><th>Balance</th><th>Status</th>
+    </tr></thead>
+    <tbody>${items.map(i => `<tr>
+      <td><span class="cp-badge active">${esc(i.type)}</span></td>
+      <td><strong>${esc(i.number)}</strong></td>
+      <td style="white-space:nowrap">${esc(i.date || '—')}</td>
+      <td style="white-space:nowrap">${money(i.total)}</td>
+      <td style="white-space:nowrap">${money(i.paid)}</td>
+      <td style="white-space:nowrap;color:var(--danger,#ef4444);font-weight:700">${money(i.balance)}</td>
+      <td>${badge(i.status)}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+  return html;
+}
+
+function renderVehicles() {
+  const veh = profileData.vehicles;
+  if (!veh.length) return emptyState('No vehicles linked to this customer');
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">
+    ${veh.map(v => `<div class="cp-vehicle-card">
+      <div style="font-size:16px;font-weight:800;letter-spacing:.05em">${esc(v.plate_number || '—')}</div>
+      <div style="color:var(--muted);font-size:13px">${esc([v.make, v.model, v.year].filter(Boolean).join(' ') || 'Unknown vehicle')}</div>
+      ${v.color ? `<div style="font-size:12px;color:var(--muted)">Color: ${esc(v.color)}</div>` : ''}
+      <div style="display:flex;gap:16px;margin-top:6px">
+        <div><div style="font-size:11px;color:var(--muted);font-weight:700">LAST SERVICE</div><div style="font-size:13px;font-weight:600">${esc(v.last_service_date || '—')}</div></div>
+        <div><div style="font-size:11px;color:var(--muted);font-weight:700">SERVICES</div><div style="font-size:13px;font-weight:600">${v.service_count}</div></div>
+      </div>
+    </div>`).join('')}
+  </div>`;
+}
+
+function renderInstallments() {
+  const plans = profileData.installment_plans;
+  if (!plans.length) return emptyState('No installment/finance plans for this customer');
+  return `<table class="cp-tbl">
+    <thead><tr>
+      <th>Agreement</th><th>Invoice</th><th>Product</th><th>Start</th>
+      <th>Total</th><th>Monthly</th><th>Instalments</th><th>Paid</th><th>Outstanding</th><th>Status</th>
+    </tr></thead>
+    <tbody>${plans.map(p => `<tr>
+      <td><strong>${esc(p.agreement_no)}</strong></td>
+      <td>${esc(p.invoice_number || '—')}</td>
+      <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.product_name || '—')}</td>
+      <td style="white-space:nowrap">${esc(p.start_date || '—')}</td>
+      <td style="white-space:nowrap">${money(p.total_amount)}</td>
+      <td style="white-space:nowrap">${money(p.monthly_amount)}</td>
+      <td style="text-align:center">${p.num_installments}</td>
+      <td style="white-space:nowrap">${money(p.paid)}</td>
+      <td style="white-space:nowrap;color:${p.outstanding>0?'var(--danger,#ef4444)':'var(--text)'};font-weight:700">${money(p.outstanding)}</td>
+      <td>${badge(p.status)}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+function renderTimeline() {
+  const events = profileData.timeline;
+  if (!events.length) return emptyState('No activity recorded yet');
+  return `<div style="max-width:700px">
+    ${events.map(e => `<div class="cp-timeline-item">
+      <div class="cp-timeline-icon">${e.icon || '•'}</div>
+      <div class="cp-timeline-body">
+        <div class="cp-timeline-title">${esc(e.title)}</div>
+        ${e.subtitle ? `<div class="cp-timeline-sub">${esc(e.subtitle)}</div>` : ''}
+      </div>
+      <div class="cp-timeline-date">${esc(e.date)}</div>
+      ${e.amount > 0 ? `<div class="cp-timeline-amount">${money(e.amount)}</div>` : '<div></div>'}
+    </div>`).join('')}
+  </div>`;
+}
+
+function renderTabContent() {
+  const el = document.getElementById('tabContent');
+  const renders = {
+    overview:     renderOverview,
+    service_jobs: renderServiceJobs,
+    sales:        renderSales,
+    payments:     renderPayments,
+    credit:       renderCredit,
+    vehicles:     renderVehicles,
+    installments: renderInstallments,
+    timeline:     renderTimeline,
+  };
+  el.innerHTML = (renders[activeTab] || (() => '<div>Unknown tab</div>'))();
+}
+
+/* ── Edit Modal ──────────────────────────────────────────────── */
+function openEditModal() {
+  const c = profileData.customer;
+  document.getElementById('editCustName').value    = c.name || '';
+  document.getElementById('editCustPhone').value   = c.phone || '';
+  document.getElementById('editCustNIC').value     = c.nic || '';
+  document.getElementById('editCustEmail').value   = c.email || '';
+  document.getElementById('editCustAddress').value = c.address || '';
+  document.getElementById('editCustNotes').value   = c.notes || '';
+  openModal('editCustomerModal');
+}
+
+async function saveEdit() {
+  const name = document.getElementById('editCustName').value.trim();
+  if (!name) { toast('Name is required', 'error'); return; }
+  const payload = {
+    name,
+    phone:   document.getElementById('editCustPhone').value.trim(),
+    nic:     document.getElementById('editCustNIC').value.trim(),
+    email:   document.getElementById('editCustEmail').value.trim(),
+    address: document.getElementById('editCustAddress').value.trim(),
+    notes:   document.getElementById('editCustNotes').value.trim(),
+  };
+  const csrf = document.querySelector('meta[name=csrf-token]');
+  const res = await fetch(`/api/retail-customers/${CUST_ID}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...(csrf ? {'X-CSRFToken': csrf.content} : {}) },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) { toast(data.error || 'Error updating customer', 'error'); return; }
+  toast('Customer updated!', 'success');
+  closeModal('editCustomerModal');
+  loadProfile(); // refresh
+}
+
+/* ── Bootstrap ────────────────────────────────────────────────── */
+async function loadProfile() {
+  try {
+    const res = await fetch(`/api/retail-customers/${CUST_ID}/profile`);
+    if (!res.ok) throw new Error('Failed to load profile');
+    profileData = await res.json();
+    renderSummary();
+    renderTabNav();
+    renderTabContent();
+  } catch (err) {
+    document.getElementById('tabContent').innerHTML =
+      `<div class="cp-empty"><div class="cp-empty-icon">❌</div><div class="cp-empty-msg">Failed to load profile: ${esc(err.message)}</div></div>`;
+  }
+}
+
+loadProfile();
+</script>
+{% endblock %}

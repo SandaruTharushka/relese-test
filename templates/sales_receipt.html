@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sales Receipt — {{ sale.invoice_number }}</title>
+  <style>
+    :root { --ink:#111827; --muted:#6b7280; }
+    @page { size: {{ paper_width or '80mm' }} auto; margin: 3mm; }
+    * { box-sizing: border-box; font-family: 'Inter', 'Segoe UI', Arial, sans-serif; }
+    body { margin: 0; background: #f5f5f5; color: var(--ink); }
+    .wrap { width: {{ paper_width or '80mm' }}; margin: 10px auto; }
+    .receipt { background: #fff; padding: 8px 6px; font-size: 11px; line-height: 1.35; }
+    .center { text-align: center; }
+    .line { border-top: 1px dashed #444; margin: 7px 0; }
+    .row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin: 2px 0; }
+    .value { text-align: right; white-space: nowrap; font-weight: 600; }
+    .receipt-logo {
+      width: 24px;
+      height: 24px;
+      margin: 0 auto 4px;
+      border: 1px solid #111;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: .06em;
+    }
+    .store-name { font-size: 15px; font-weight: 800; letter-spacing: .03em; }
+    .store-line { font-size: 10px; color: var(--muted); margin-top: 1px; }
+    .meta-grid .row span:first-child { color: #374151; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 4px 0; font-size: 10px; vertical-align: top; }
+    th { text-transform: uppercase; letter-spacing: .06em; font-weight: 700; border-bottom: 1px dashed #666; }
+    td { border-bottom: 1px dashed #d1d5db; }
+    tbody tr:last-child td { border-bottom: none; }
+    .item-sub { font-size: 9px; color: var(--muted); }
+    .net-total { font-size: 12px; font-weight: 800; }
+    .savings { font-weight: 700; }
+    .codes { text-align: center; margin-top: 4px; }
+    .barcode { width: 100%; max-width: 230px; height: auto; image-rendering: pixelated; }
+    .caption { font-size: 9px; color: var(--muted); letter-spacing: .08em; margin-top: 2px; }
+    .thanks { margin-top: 2px; font-weight: 700; font-size: 12px; }
+    .provider-text { margin-top: 2px; font-size: 9px; color: var(--muted); }
+    .receipt.compact-58 { font-size: 10px; }
+    .receipt.compact-58 .store-name { font-size: 13px; }
+    .receipt.compact-58 th,
+    .receipt.compact-58 td { font-size: 9px; padding: 3px 0; }
+    .print-btn { display:block; margin:12px auto 0; border:0; border-radius:6px; padding:8px 16px; background:#111827; color:#fff; cursor:pointer; }
+    @media print {
+      body { background: #fff; }
+      .wrap { margin: 0 auto; }
+      .receipt { padding: 0; }
+      .no-print { display:none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    {% include '_receipt_content.html' %}
+    <button class="print-btn no-print" onclick="window.print()">🖨 Print Receipt</button>
+  </div>
+
+  <script>
+    window.addEventListener('load', () => {
+      if ({% if auto_print %}true{% else %}false{% endif %}) {
+        window.setTimeout(() => {
+          try { window.focus(); } catch (_) {}
+          window.print();
+        }, 180);
+      }
+    });
+
+    window.addEventListener('afterprint', () => {
+      if ({% if auto_print %}true{% else %}false{% endif %}) {
+        try { window.close(); } catch (_) {}
+      }
+    });
+  </script>
+</body>
+</html>

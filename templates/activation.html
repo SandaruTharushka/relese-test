@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %} — Offline Activation{% endblock %}
+{% block body %}
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--bg)">
+  <div class="card" style="max-width:760px;width:100%;padding:24px 24px 20px">
+    <h2 style="margin:0 0 8px">Offline Activation Setup</h2>
+    <p style="color:var(--muted);margin:0 0 18px">
+      This device is in trial mode. You can continue using the 7-day trial, or activate now with a manual key.
+    </p>
+
+    <div class="grid" style="grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">
+      <div class="card" style="padding:12px">
+        <div style="font-size:12px;color:var(--muted)">Install ID</div>
+        <div id="installId" style="font-family:monospace;font-size:14px;font-weight:700;word-break:break-all">{{ status.install_id }}</div>
+      </div>
+      <div class="card" style="padding:12px">
+        <div style="font-size:12px;color:var(--muted)">Trial Status</div>
+        <div id="trialText" style="font-weight:700">
+          {% if status.trial_expired %}
+            Trial expired
+          {% else %}
+            {{ status.trial_days_left }} day(s) left
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:12px;margin-bottom:16px">
+      <div style="font-weight:700;margin-bottom:6px">Contact owner for activation key</div>
+      <div style="font-size:14px;display:flex;flex-wrap:wrap;gap:8px 16px">
+        <a href="mailto:{{ status.owner_contact.email }}?subject=SuperMart%20POS%20Activation%20Request&body=Install%20ID:%20{{ status.install_id }}">
+          📧 {{ status.owner_contact.email }}
+        </a>
+        <a href="https://wa.me/{{ status.owner_contact.whatsapp|replace('0','94',1) }}?text=SuperMart%20POS%20activation%20request.%20Install%20ID:%20{{ status.install_id }}" target="_blank" rel="noopener noreferrer">
+          💬 WhatsApp: {{ status.owner_contact.whatsapp }}
+        </a>
+      </div>
+    </div>
+
+    <div id="activationAlert" class="alert" style="display:none;margin-bottom:14px"></div>
+    <div class="form-group" style="margin-bottom:10px">
+      <label class="form-label">Manual Activation Key</label>
+      <input id="activationKey" class="form-input" placeholder="SMPOS-XXXXXXXX-XXXXXXXX-XXXXXXXX" autocomplete="off" spellcheck="false">
+    </div>
+
+    <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
+      <button id="copyInstallBtn" class="btn btn-ghost">Copy Install ID</button>
+      {% if not status.trial_expired %}
+      <a href="{{ continue_url }}" class="btn btn-ghost">Continue Trial</a>
+      {% endif %}
+      <button id="activateBtn" class="btn btn-primary">Activate Offline</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showAlert(msg, type='error') {
+  const el = document.getElementById('activationAlert');
+  el.style.display = 'block';
+  el.className = `alert alert-${type}`;
+  el.textContent = msg;
+}
+
+document.getElementById('copyInstallBtn').addEventListener('click', async () => {
+  const installId = document.getElementById('installId').textContent.trim();
+  try {
+    await navigator.clipboard.writeText(installId);
+    showAlert('Install ID copied.', 'success');
+  } catch (_) {
+    showAlert('Could not copy automatically. Please copy manually.', 'warning');
+  }
+});
+
+document.getElementById('activateBtn').addEventListener('click', async () => {
+  const key = (document.getElementById('activationKey').value || '').trim();
+  if (!key) {
+    showAlert('Enter your activation key.');
+    return;
+  }
+  const btn = document.getElementById('activateBtn');
+  btn.disabled = true;
+  btn.textContent = 'Activating...';
+  try {
+    const res = await fetch('/api/activation/activate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({key}),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      showAlert(data.msg || 'Activation failed.');
+      return;
+    }
+    showAlert('Activation successful. Redirecting...', 'success');
+    setTimeout(() => {
+      window.location.href = data.redirect || '/login';
+    }, 600);
+  } catch (e) {
+    showAlert('Activation request failed.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Activate Offline';
+  }
+});
+</script>
+{% endblock %}

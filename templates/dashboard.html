@@ -1,0 +1,376 @@
+{% extends "base.html" %}
+{% from "sidebar.html" import sidebar with context %}
+{% block title %} — Dashboard{% endblock %}
+{% block body %}
+<div class="app-layout">
+  {{ sidebar('dashboard') }}
+  <div class="main-area">
+    <div class="topbar">
+      <div style="font-size:18px;font-weight:700">📊 Dashboard</div>
+      <div class="flex items-center gap-3">
+        <span class="text-muted text-sm" id="clockDate"></span>
+        {% if low_stock %}
+        <span class="badge badge-danger">⚠ {{ low_stock|length }} low stock</span>
+        {% endif %}
+      </div>
+    </div>
+    <div class="page-content fade-in">
+
+      <!-- Section Tabs -->
+      <div class="flex gap-2 mb-5" id="dashTabs">
+        <button class="chip active" onclick="switchDashTab('sales',this)">🛒 Sales</button>
+        <button class="chip" onclick="switchDashTab('service',this)">🔧 Service</button>
+        <button class="chip" onclick="switchDashTab('combined',this)">📊 Combined</button>
+      </div>
+
+      <!-- ══ SALES TAB ════════════════════════════════════════════════════ -->
+      <div id="tabSales">
+        <div class="grid-4 mb-6">
+          {% set stats = [
+            ('Today Revenue',  'LKR ' ~ '{:,.0f}'.format(today_revenue), 'Sales today',  '#4F6CF6', '💰'),
+            ('Transactions',   today_count|string,                        'Today',        '#10B981', '🧾'),
+            ('Products',       total_products|string,                     (low_stock|length)|string ~ ' low', '#F59E0B', '📦'),
+            ('Avg Basket',     'LKR ' ~ '{:,.0f}'.format(avg_basket),    'Per sale',     '#8B5CF6', '🛒'),
+          ] %}
+          {% for label, val, sub, color, icon in stats %}
+          <div class="stat-card">
+            <div style="position:absolute;top:-20px;right:-20px;width:80px;height:80px;border-radius:50%;background:{{ color }}18"></div>
+            <div class="flex justify-between items-center mb-2">
+              <span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">{{ label }}</span>
+              <span style="width:34px;height:34px;background:{{ color }}18;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px">{{ icon }}</span>
+            </div>
+            <div style="font-size:26px;font-weight:900;color:var(--text);margin-bottom:4px">{{ val }}</div>
+            <div style="font-size:12px;color:{{ color }};font-weight:500">{{ sub }}</div>
+          </div>
+          {% endfor %}
+        </div>
+
+        <div class="grid-2 mb-6" style="gap:20px;align-items:start">
+          <div class="card">
+            <div style="font-size:15px;font-weight:700;margin-bottom:14px">📈 Weekly Sales</div>
+            <div style="position:relative;height:200px"><canvas id="weeklyChart"></canvas></div>
+          </div>
+          <div class="card">
+            <div style="font-size:15px;font-weight:700;margin-bottom:16px">🧾 Recent Transactions</div>
+            {% for s in recent %}
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:var(--stat);border-radius:10px;margin-bottom:8px">
+              <div>
+                <div style="font-size:12px;font-weight:600">{{ s.invoice_number }}</div>
+                <div style="font-size:11px;color:var(--muted)">{{ s.sale_date.strftime('%H:%M') }} · {{ s.cashier_user.full_name if s.cashier_user else '—' }}</div>
+              </div>
+              <div style="text-align:right">
+                <div style="font-size:13px;font-weight:700">LKR {{ '{:,.0f}'.format(s.total_amount) }}</div>
+                {% set m = s.payments[0].method if s.payments else 'Cash' %}
+                <span class="badge {{ 'badge-success' if m=='Cash' else 'badge-primary' if m in ['Card','PayHere'] else 'badge-purple' }}">{{ m }}</span>
+              </div>
+            </div>
+            {% else %}
+            <div class="empty-state"><div class="empty-icon">🧾</div>No transactions yet</div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- Profit Margin Distribution -->
+        <div class="card mb-6">
+          <div class="flex items-center justify-between mb-4">
+            <div style="font-size:15px;font-weight:700">📊 Profit Margin Distribution</div>
+            <span class="text-muted text-sm" id="marginTotal"></span>
+          </div>
+          <div class="grid-2" style="gap:20px;align-items:center">
+            <div style="position:relative;height:200px;max-width:200px;margin:0 auto">
+              <canvas id="marginChart"></canvas>
+            </div>
+            <div id="marginLegend" style="display:flex;flex-direction:column;gap:10px">
+              <div class="text-muted text-sm">Loading…</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ SERVICE TAB ══════════════════════════════════════════════════ -->
+      <div id="tabService" style="display:none">
+
+        <!-- Service stat cards from server -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin-bottom:24px">
+          {% set svc_stats = [
+            ('Received Today',    service_today|string,                                   '#4F6CF6', '🚗'),
+            ('In Progress',       service_in_progress|string,                             '#F59E0B', '🔧'),
+            ('Ready for Pickup',  service_ready|string,                                   '#10B981', '✅'),
+            ('Revenue Today',     'LKR ' ~ '{:,.0f}'.format(service_revenue_today),      '#8B5CF6', '💰'),
+            ('Revenue This Month','LKR ' ~ '{:,.0f}'.format(service_revenue_month),      '#EC4899', '📅'),
+          ] %}
+          {% for label, val, color, icon in svc_stats %}
+          <div class="stat-card" style="padding:16px">
+            <div style="position:absolute;top:-15px;right:-15px;width:60px;height:60px;border-radius:50%;background:{{ color }}18"></div>
+            <div class="flex justify-between items-center mb-2">
+              <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">{{ label }}</span>
+              <span style="width:30px;height:30px;background:{{ color }}18;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px">{{ icon }}</span>
+            </div>
+            <div style="font-size:22px;font-weight:900;color:var(--text);margin-bottom:2px">{{ val }}</div>
+          </div>
+          {% endfor %}
+          <!-- JS-loaded cards -->
+          <div class="stat-card" style="padding:16px">
+            <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Pending Payments</div>
+            <div style="font-size:22px;font-weight:900;color:var(--text)" id="sdPendingCount">—</div>
+            <div style="font-size:11px;color:#EF4444;font-weight:500" id="sdPendingAmt">Loading…</div>
+          </div>
+          <div class="stat-card" style="padding:16px">
+            <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Avg Job Value</div>
+            <div style="font-size:22px;font-weight:900;color:var(--text)" id="sdAvgJob">—</div>
+            <div style="font-size:11px;color:#10B981;font-weight:500">Per job</div>
+          </div>
+        </div>
+
+        <!-- Charts row -->
+        <div class="grid-2 mb-6" style="gap:20px;align-items:start">
+          <div class="card">
+            <div style="font-size:15px;font-weight:700;margin-bottom:14px">📊 Job Status Breakdown</div>
+            <div style="position:relative;height:220px"><canvas id="statusChart"></canvas></div>
+          </div>
+          <div class="card">
+            <div style="font-size:15px;font-weight:700;margin-bottom:14px">🛠 Service Type Breakdown</div>
+            <div style="position:relative;height:220px"><canvas id="serviceTypeChart"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Technician Performance -->
+        <div class="card mb-6">
+          <div style="font-size:15px;font-weight:700;margin-bottom:16px">👨‍🔧 Technician Performance (30 days)</div>
+          <div class="overflow-x">
+            <table class="data-table">
+              <thead><tr><th>Technician</th><th>Jobs</th><th>Revenue</th><th>Labour</th><th>Avg / Job</th></tr></thead>
+              <tbody id="techTableBody"><tr><td colspan="5" class="text-muted text-center">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Recent Service Jobs -->
+        <div class="card">
+          <div class="flex items-center justify-between mb-4">
+            <div style="font-size:15px;font-weight:700">🔧 Recent Service Jobs</div>
+            <a href="/repairs" class="btn btn-outline btn-sm">View All</a>
+          </div>
+          <div class="overflow-x">
+            <table class="data-table">
+              <thead>
+                <tr><th>Job #</th><th>Customer</th><th>Vehicle</th><th>Type</th><th>Status</th><th>Total</th><th>Balance</th></tr>
+              </thead>
+              <tbody>
+                {% for j in recent_jobs %}
+                {% set add_paid = j.payments|sum(attribute='amount') %}
+                {% set total_paid = j.advance_paid + add_paid %}
+                {% set balance = [0, j.total_amount - total_paid]|max %}
+                <tr>
+                  <td><a href="/repairs" style="color:var(--accent);font-weight:600">{{ j.job_number }}</a></td>
+                  <td>{{ j.customer_name or '—' }}<br><span class="text-muted" style="font-size:11px">{{ j.customer_phone or '' }}</span></td>
+                  <td>{{ j.vehicle_make or '' }} {{ j.vehicle_model or '' }}<br><span class="text-muted" style="font-size:11px">{{ j.vehicle_reg_no or '' }}</span></td>
+                  <td><span class="badge badge-purple">{{ j.service_type or 'other' }}</span></td>
+                  <td>
+                    {% set sc = {'received':'badge-primary','diagnosing':'badge-warning','waiting_parts':'badge-warning','in_progress':'badge-warning','ready':'badge-success','delivered':'badge-secondary','cancelled':'badge-danger'} %}
+                    <span class="badge {{ sc.get(j.status,'badge-secondary') }}">{{ j.status.replace('_',' ').title() }}</span>
+                  </td>
+                  <td>LKR {{ '{:,.0f}'.format(j.total_amount) }}</td>
+                  <td style="color:{{ 'var(--danger)' if balance > 0 else 'var(--success)' }};font-weight:600">
+                    {% if balance > 0 %}LKR {{ '{:,.0f}'.format(balance) }}{% else %}Paid{% endif %}
+                  </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="7"><div class="empty-state"><div class="empty-icon">🔧</div>No service jobs yet</div></td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ COMBINED TAB ════════════════════════════════════════════════ -->
+      <div id="tabCombined" style="display:none">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin-bottom:24px">
+          <div class="stat-card"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Combined Revenue</div><div style="font-size:24px;font-weight:900;color:var(--accent)" id="ccRevenue">—</div></div>
+          <div class="stat-card"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Sales Revenue</div><div style="font-size:24px;font-weight:900;color:#4F6CF6" id="ccSales">—</div></div>
+          <div class="stat-card"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Service Revenue</div><div style="font-size:24px;font-weight:900;color:#10B981" id="ccService">—</div></div>
+          <div class="stat-card"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Outstanding Balance</div><div style="font-size:24px;font-weight:900;color:#EF4444" id="ccOutstanding">—</div></div>
+        </div>
+
+        <div class="card mb-6">
+          <div class="flex items-center justify-between mb-4">
+            <div style="font-size:15px;font-weight:700">📈 Sales vs Service Revenue Trend</div>
+            <div class="chip-group">
+              <div class="chip active" onclick="loadTrendChart(14,this)">14d</div>
+              <div class="chip" onclick="loadTrendChart(30,this)">30d</div>
+              <div class="chip" onclick="loadTrendChart(60,this)">60d</div>
+            </div>
+          </div>
+          <div style="position:relative;height:260px"><canvas id="combinedTrendChart"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Low Stock warning -->
+      {% if low_stock %}
+      <div class="card mt-4" style="border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.05)">
+        <div class="flex items-center gap-2 mb-4">
+          <span>⚠️</span>
+          <span style="font-size:15px;font-weight:700;color:var(--danger)">Low Stock ({{ low_stock|length }} products)</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px">
+          {% for p in low_stock %}
+          <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:11px 14px">
+            <div style="font-size:13px;font-weight:600;margin-bottom:2px">{{ p.name }}</div>
+            <div style="font-size:12px;color:var(--danger);font-weight:600">{{ p.stock_qty }} units left</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+function fmtLKR(v){ return 'LKR '+Number(v||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0}); }
+
+function tick(){
+  document.getElementById('clockDate').textContent =
+    new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+}
+tick(); setInterval(tick,60000);
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+function switchDashTab(tab, btn) {
+  ['tabSales','tabService','tabCombined'].forEach(id=>document.getElementById(id).style.display='none');
+  document.querySelectorAll('#dashTabs .chip').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab'+tab.charAt(0).toUpperCase()+tab.slice(1)).style.display='';
+  btn.classList.add('active');
+  if(tab==='service') initServiceTab();
+  if(tab==='combined') initCombinedTab();
+}
+
+// ── Weekly Chart ──────────────────────────────────────────────────────────────
+const weekly = {{ weekly|safe }};
+new Chart(document.getElementById('weeklyChart'),{
+  type:'bar',
+  data:{labels:weekly.map(d=>d.day),datasets:[{data:weekly.map(d=>d.sales),
+    backgroundColor:weekly.map((_,i)=>i===weekly.length-1?'rgba(79,108,246,1)':'rgba(79,108,246,.5)'),
+    borderRadius:8,borderSkipped:false,barPercentage:0.55}]},
+  options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'  LKR '+Number(c.raw||0).toLocaleString()}}},
+    scales:{
+      x:{grid:{display:false},ticks:{color:'#64748B',font:{size:12}}},
+      y:{grid:{color:'rgba(128,128,128,.08)'},ticks:{color:'#64748B',callback:v=>v===0?'0':'LKR '+(v>=1000?(v/1000).toFixed(0)+'k':v)}}
+    }}
+});
+
+// ── Margin Chart ─────────────────────────────────────────────────────────────
+(async function(){
+  try {
+    const data=await fetch('/api/dashboard/profit-margins').then(r=>r.json());
+    if(!data.ok)return;
+    const COLORS=['#EF4444','#F59E0B','#10B981'];
+    document.getElementById('marginTotal').textContent=data.total+' active products';
+    document.getElementById('marginLegend').innerHTML=data.labels.map((lbl,i)=>`
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="width:12px;height:12px;border-radius:3px;background:${COLORS[i]};flex-shrink:0"></span>
+        <div>
+          <div style="font-size:13px;font-weight:600">${lbl}</div>
+          <div style="font-size:12px;color:var(--muted)">${data.data[i]} product(s) ${data.total>0?'('+Math.round(data.data[i]/data.total*100)+'%)':''}</div>
+        </div>
+      </div>`).join('');
+    new Chart(document.getElementById('marginChart'),{
+      type:'doughnut',
+      data:{labels:data.labels,datasets:[{data:data.data,backgroundColor:COLORS,borderColor:['#DC2626','#D97706','#059669'],borderWidth:2,hoverOffset:6}]},
+      options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{display:false}}}
+    });
+  } catch(e){
+    const el=document.getElementById('marginLegend');
+    if(el)el.innerHTML='<div class="text-muted text-sm">Could not load margin data</div>';
+  }
+})();
+
+// ══ SERVICE TAB ═══════════════════════════════════════════════════════════════
+let serviceTabInit=false;
+const STATUS_COLORS={received:'#4F6CF6',diagnosing:'#F59E0B',waiting_parts:'#EF4444',in_progress:'#F97316',ready:'#10B981',delivered:'#64748B',cancelled:'#9CA3AF'};
+
+async function initServiceTab(){
+  if(serviceTabInit)return; serviceTabInit=true;
+  // Summary KPIs
+  try {
+    const d=await fetch('/api/service/dashboard-summary').then(r=>r.json());
+    document.getElementById('sdPendingCount').textContent=d.pending_payment_count;
+    document.getElementById('sdPendingAmt').textContent=fmtLKR(d.pending_payment_amount)+' due';
+    document.getElementById('sdAvgJob').textContent=fmtLKR(d.avg_job_value);
+  } catch(e){}
+  // Status doughnut
+  try {
+    const rows=await fetch('/api/service/status-breakdown').then(r=>r.json());
+    new Chart(document.getElementById('statusChart'),{
+      type:'doughnut',
+      data:{labels:rows.map(r=>r.label),datasets:[{data:rows.map(r=>r.count),backgroundColor:rows.map(r=>STATUS_COLORS[r.status]||'#94A3B8'),borderWidth:2,hoverOffset:6}]},
+      options:{responsive:true,maintainAspectRatio:false,cutout:'55%',plugins:{legend:{position:'right',labels:{font:{size:11},boxWidth:12,padding:10}}}}
+    });
+  } catch(e){}
+  // Service type bar
+  try {
+    const rows=await fetch('/api/service/type-breakdown').then(r=>r.json());
+    new Chart(document.getElementById('serviceTypeChart'),{
+      type:'bar',
+      data:{labels:rows.map(r=>r.service_type),datasets:[
+        {label:'Jobs',data:rows.map(r=>r.count),backgroundColor:'rgba(79,108,246,.7)',borderRadius:6,yAxisID:'y'},
+        {label:'Revenue',data:rows.map(r=>r.revenue),backgroundColor:'rgba(16,185,129,.7)',borderRadius:6,yAxisID:'y1'},
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{position:'top',labels:{font:{size:11},boxWidth:10,padding:8}}},
+        scales:{x:{grid:{display:false}},y:{type:'linear',position:'left'},y1:{type:'linear',position:'right',grid:{drawOnChartArea:false},ticks:{callback:v=>'LKR '+(v>=1000?(v/1000).toFixed(0)+'k':v)}}}}
+    });
+  } catch(e){}
+  // Technician table
+  try {
+    const rows=await fetch('/api/service/technician-performance').then(r=>r.json());
+    const tbody=document.getElementById('techTableBody');
+    tbody.innerHTML=rows.length
+      ?rows.map(r=>`<tr><td><strong>${r.technician}</strong></td><td><span class="badge badge-primary">${r.job_count}</span></td><td>${fmtLKR(r.revenue)}</td><td>${fmtLKR(r.labour)}</td><td>${fmtLKR(r.avg_job)}</td></tr>`).join('')
+      :'<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">👨‍🔧</div>No data for this period</div></td></tr>';
+  } catch(e){}
+}
+
+// ══ COMBINED TAB ══════════════════════════════════════════════════════════════
+let combinedTabInit=false, trendChartInst;
+async function initCombinedTab(){
+  if(combinedTabInit)return; combinedTabInit=true;
+  try {
+    const d=await fetch('/api/profit/combined').then(r=>r.json());
+    document.getElementById('ccRevenue').textContent=fmtLKR(d.combined_revenue);
+    document.getElementById('ccSales').textContent=fmtLKR(d.product_sales_revenue);
+    document.getElementById('ccService').textContent=fmtLKR(d.service_total_revenue);
+    document.getElementById('ccOutstanding').textContent=fmtLKR(d.outstanding_service_balance);
+  } catch(e){}
+  loadTrendChart(14, document.querySelector('#tabCombined .chip'));
+}
+async function loadTrendChart(days, btn){
+  document.querySelectorAll('#tabCombined .chip').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  try {
+    const rows=await fetch(`/api/service/revenue-trend?days=${days}`).then(r=>r.json());
+    if(trendChartInst)trendChartInst.destroy();
+    trendChartInst=new Chart(document.getElementById('combinedTrendChart'),{
+      type:'line',
+      data:{labels:rows.map(r=>r.day),datasets:[
+        {label:'Sales',data:rows.map(r=>r.sales_rev),borderColor:'#4F6CF6',backgroundColor:'rgba(79,108,246,.1)',fill:true,tension:0.4,pointRadius:0,borderWidth:2},
+        {label:'Service',data:rows.map(r=>r.service_rev),borderColor:'#10B981',backgroundColor:'rgba(16,185,129,.1)',fill:true,tension:0.4,pointRadius:0,borderWidth:2},
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,
+        interaction:{mode:'index',intersect:false},
+        plugins:{legend:{position:'top',labels:{font:{size:11},boxWidth:10,padding:8}},
+          tooltip:{callbacks:{label:c=>' '+c.dataset.label+': LKR '+Number(c.raw||0).toLocaleString()}}},
+        scales:{
+          x:{grid:{display:false},ticks:{maxTicksLimit:10,color:'#64748B',font:{size:10}}},
+          y:{grid:{color:'rgba(128,128,128,.08)'},ticks:{color:'#64748B',callback:v=>v>=1000?(v/1000).toFixed(0)+'k':v}}
+        }}
+    });
+  } catch(e){}
+}
+</script>
+{% endblock %}

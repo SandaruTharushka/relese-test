@@ -1,0 +1,95 @@
+<div class="receipt{% if compact_mode %} compact-58{% endif %}">
+  <!-- Header -->
+  <div style="text-align:{{ header_align }};font-size:14px;font-weight:800">{% if show.store_name %}{{ store.name }}{% endif %}</div>
+  {% if show.branch and store.branch %}<div style="text-align:{{ header_align }};font-size:10px;color:var(--muted)">{{ store.branch }}</div>{% endif %}
+  {% if show.address and store.address %}<div style="text-align:{{ header_align }};font-size:10px;color:var(--muted)">{{ store.address }}</div>{% endif %}
+  {% if show.phone and store.phone %}<div style="text-align:{{ header_align }};font-size:10px;color:var(--muted)">Tel: {{ store.phone }}</div>{% endif %}
+  {% if show.email and store.email %}<div style="text-align:{{ header_align }};font-size:10px;color:var(--muted)">{{ store.email }}</div>{% endif %}
+
+  <div class="line"></div>
+  <div class="center title">{% if print_mode == 'a4' %}TAX INVOICE{% else %}SALES RECEIPT{% endif %}</div>
+  <div class="line"></div>
+
+  <!-- Invoice Details -->
+  {% if show.invoice %}<div class="row"><span>Invoice #</span><span class="value">{{ sale.invoice_number }}</span></div>{% endif %}
+  {% if show.datetime %}<div class="row"><span>Date / Time</span><span class="value">{{ sale_datetime.strftime('%Y-%m-%d %H:%M') if sale_datetime else '—' }}</span></div>{% endif %}
+  {% if show.cashier %}<div class="row"><span>Cashier</span><span class="value">{{ cashier_name }}</span></div>{% endif %}
+  {% if show.customer %}<div class="row"><span>Customer</span><span class="value">{{ customer_name }}</span></div>{% endif %}
+  {% if show.customer_phone %}<div class="row"><span>Phone</span><span class="value">{{ customer_phone or '—' }}</span></div>{% endif %}
+  {% if show.payment_method and payment_method_label %}<div class="row"><span>Payment</span><span class="value">{{ payment_method_label }}</span></div>{% endif %}
+
+  <div class="line"></div>
+
+  <!-- Items Table -->
+  <table>
+    <thead>
+      <tr>
+        <th style="text-align:left">ITEM</th>
+        {% if show.qty %}<th style="text-align:center">QTY</th>{% endif %}
+        {% if show.unit_price and not compact_mode %}<th style="text-align:right">PRICE</th>{% endif %}
+        {% if show.discount and not compact_mode %}<th style="text-align:right">DISC</th>{% endif %}
+        {% if show.line_total %}<th style="text-align:right">TOTAL</th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in item_rows %}
+      <tr>
+        <td>
+          {{ item.name }}
+          {% if show.sku and item.sku %}<div style="font-size:9px;color:var(--muted)">SKU: {{ item.sku }}</div>{% endif %}
+          {% if item.imei %}<div style="font-size:9px;color:var(--muted)">IMEI: {{ item.imei }}</div>{% endif %}
+        </td>
+        {% if show.qty %}<td style="text-align:center">{{ item.qty }}</td>{% endif %}
+        {% if show.unit_price and not compact_mode %}<td style="text-align:right">{{ item.unit_price }}</td>{% endif %}
+        {% if show.discount and not compact_mode %}<td style="text-align:right">{{ item.discount }}</td>{% endif %}
+        {% if show.line_total %}<td style="text-align:right">{{ item.line_total }}</td>{% endif %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="line"></div>
+
+  <!-- Totals -->
+  {% if show.subtotal %}<div class="row"><span>Subtotal</span><span class="value">{{ totals.subtotal }}</span></div>{% endif %}
+  {% if show.discount_total %}<div class="row"><span>Discount</span><span class="value">{{ totals.discount }}</span></div>{% endif %}
+  {% if show.tax %}<div class="row"><span>Tax</span><span class="value">{{ totals.tax }}</span></div>{% endif %}
+  {% if show.grand_total %}<div class="row" style="font-size:12px;font-weight:800"><span>Grand Total</span><span class="value">{{ totals.grand_total }}</span></div>{% endif %}
+  {% if show.paid %}<div class="row"><span>Tendered</span><span class="value">{{ totals.paid }}</span></div>{% endif %}
+  {% if show.change %}<div class="row"><span>Change</span><span class="value">{{ totals.change }}</span></div>{% endif %}
+
+  <!-- Payment Methods -->
+  {% if payments %}
+  <div class="line"></div>
+  <div style="font-weight:700;font-size:10px">Payment Methods</div>
+  {% for p in payments %}
+  <div class="row"><span>{{ p.method }}</span><span class="value">{{ p.amount }}</span></div>
+  {% endfor %}
+  {% endif %}
+
+  <!-- Footer -->
+  <div class="line"></div>
+  <div style="text-align:{{ footer_align }};font-size:10px;color:var(--muted)">
+    {% for line in footer_lines %}
+      <div>{{ line }}</div>
+    {% endfor %}
+  </div>
+  {% if show.powered_by %}<div style="text-align:{{ footer_align }};font-size:9px;color:var(--muted);margin-top:4px">Powered by SuperMart POS</div>{% endif %}
+
+  <!-- Barcode / QR Section -->
+  {% if barcode_url and profile.get('enable_barcode', True) %}
+  <div class="line"></div>
+  <div style="text-align:center;margin-top:6px">
+    <img src="{{ barcode_url }}" alt="Barcode" style="width:100%;max-width:260px;height:auto;image-rendering:pixelated">
+    {% if profile.get('show_barcode_text', True) %}
+    <div style="font-size:9px;color:var(--muted);margin-top:2px;letter-spacing:1px">{{ sale.invoice_number }}</div>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% if qr_url %}
+  <div style="text-align:center;margin-top:6px">
+    <img src="{{ qr_url }}" alt="QR Code" style="width:100px;height:100px;image-rendering:pixelated">
+    {% if invoice_detail_url %}<div style="font-size:8px;color:var(--muted);margin-top:2px;word-break:break-all">{{ invoice_detail_url }}</div>{% endif %}
+  </div>
+  {% endif %}
+</div>

@@ -1,0 +1,589 @@
+{% extends "base.html" %}
+{% from "sidebar.html" import sidebar with context %}
+{% block title %} — Purchases / GRN{% endblock %}
+
+{% block body %}
+<div class="app-layout">
+  {{ sidebar('purchases') }}
+  <div class="main-area">
+    <div class="topbar">
+      <div>
+        <div style="font-size:18px;font-weight:800">📦 Purchases / GRN</div>
+        <div style="font-size:12px;color:var(--muted)">Goods Received Notes &amp; supplier stock intake</div>
+      </div>
+      <button class="btn btn-primary" onclick="openModal('addGRNModal')">+ New GRN</button>
+    </div>
+
+    <div class="page-content fade-in">
+
+      <!-- Stats row -->
+      <div class="grid-4 mb-6">
+        <div class="stat-card">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Total GRNs</div>
+          <div style="font-size:28px;font-weight:800" id="statTotal">{{ purchases|length }}</div>
+        </div>
+        <div class="stat-card">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">This Month</div>
+          <div style="font-size:28px;font-weight:800;color:var(--accent)" id="statMonth">0</div>
+        </div>
+        <div class="stat-card">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Total Spend</div>
+          <div style="font-size:22px;font-weight:800;color:var(--warning)" id="statSpend">LKR 0</div>
+        </div>
+        <div class="stat-card">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Items Received</div>
+          <div style="font-size:28px;font-weight:800;color:var(--accent2)" id="statItems">0</div>
+        </div>
+      </div>
+
+      <!-- Purchases table -->
+      <div class="table-wrap">
+        <div class="table-header">
+          <div style="font-weight:700">Purchase History</div>
+          <input type="text" class="form-input" id="searchGRN" placeholder="Search GRN / supplier…"
+                 style="width:240px" oninput="filterTable()">
+        </div>
+        <div class="overflow-x">
+          <table class="data-table" id="grnTable">
+            <thead>
+              <tr>
+                <th>GRN #</th>
+                <th>Date</th>
+                <th>Supplier</th>
+                <th>Items</th>
+                <th>Total Amount</th>
+                <th>Payment</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="grnBody">
+              {% if purchases %}
+                {% for p in purchases %}
+                <tr>
+                  <td><span class="badge badge-primary">{{ p.grn_number }}</span></td>
+                  <td>{{ p.purchase_date.strftime('%Y-%m-%d %H:%M') if p.purchase_date else '' }}</td>
+                  <td>{{ p.supplier.name if p.supplier else '—' }}</td>
+                  <td>{{ p.items|length }} item(s)</td>
+                  <td style="font-weight:700">LKR {{ '{:,.2f}'.format(p.total_amount) }}</td>
+                  <td>
+                    {% set ps = p.payment_status or 'unpaid' %}
+                    <span class="badge {{ 'badge-success' if ps=='paid' else 'badge-warning' if ps=='partial' else 'badge-danger' }}">
+                      {{ '✓ Paid' if ps=='paid' else '⊘ Partial' if ps=='partial' else '✗ Unpaid' }}
+                    </span>
+                    {% if ps != 'paid' %}
+                    <button class="btn btn-ghost btn-sm" style="margin-left:4px"
+                            onclick="openPaymentModal({{ p.id }},'{{ p.grn_number }}',{{ p.total_amount }},{{ p.paid_amount or 0 }})">Pay</button>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <button class="btn btn-ghost btn-sm" onclick="viewGRN({{ p.id }})">View</button>
+                  </td>
+                </tr>
+                {% endfor %}
+              {% else %}
+                <tr><td colspan="7" class="empty-state"><div class="empty-icon">📦</div>No purchases yet</td></tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── ADD GRN MODAL ──────────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="addGRNModal">
+  <div class="modal" style="width:720px;max-width:96vw">
+    <div class="flex items-center justify-between mb-4">
+      <div class="modal-title" style="margin-bottom:0">New Purchase / GRN</div>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('addGRNModal')">✕</button>
+    </div>
+
+    <div class="grid-2 mb-4">
+      <div class="form-group">
+        <label class="form-label">Supplier (optional)</label>
+        <select data-custom-select class="form-select" data-custom-select-search="true" id="grn_supplier">
+          <option value="">— No Supplier —</option>
+          {% for s in suppliers %}
+          <option value="{{ s.id }}">{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <input type="text" class="form-input" id="grn_notes" placeholder="Optional notes…">
+      </div>
+    </div>
+
+    <!-- Product search -->
+    <div class="form-group mb-4">
+      <label class="form-label" for="grn_product_search">Add Product</label>
+      <div class="flex gap-2 grn-product-row">
+        <div class="grn-product-picker" id="grnProductPicker">
+          <input type="hidden" id="grn_product_id">
+          <div class="grn-product-input-wrap">
+            <input
+              type="text"
+              class="form-input grn-product-input"
+              id="grn_product_search"
+              placeholder="Search product by name…"
+              autocomplete="off"
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded="false"
+              aria-controls="grn_product_dropdown"
+            >
+            <button type="button" class="grn-product-toggle" id="grn_product_toggle" aria-label="Toggle product list">⌄</button>
+          </div>
+          <div class="grn-product-dropdown" id="grn_product_dropdown" role="listbox">
+            <div class="grn-product-options" id="grn_product_options"></div>
+          </div>
+        </div>
+        <input type="number" class="form-input" id="grn_qty" placeholder="Qty" style="width:90px" min="1" value="1">
+        <input type="number" class="form-input" id="grn_unit_cost" placeholder="Unit cost" style="width:130px" step="0.01">
+        <button class="btn btn-success btn-sm" onclick="addGRNItem()">+ Add</button>
+      </div>
+    </div>
+
+    <!-- Items list -->
+    <div class="table-wrap mb-4" id="grnItemsWrap" style="display:none">
+      <table class="data-table" id="grnItemsTable">
+        <thead>
+          <tr><th>Product</th><th>Qty</th><th>Unit Cost</th><th>Total</th><th></th></tr>
+        </thead>
+        <tbody id="grnItemsBody"></tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3" style="font-weight:700;text-align:right;padding:12px 16px">Grand Total:</td>
+            <td style="font-weight:800;font-size:16px;color:var(--accent)" id="grnGrandTotal">LKR 0.00</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <!-- Payment section -->
+    <div class="card" style="background:var(--stat);margin-bottom:16px" id="grnPaySection">
+      <div class="flex items-center justify-between mb-3">
+        <span style="font-size:14px;font-weight:600">💳 Record Payment</span>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+          <input type="checkbox" id="grn_pay_now" onchange="togglePayNow(this.checked)"
+                 style="width:15px;height:15px;accent-color:var(--accent)">
+          Pay Now
+        </label>
+      </div>
+      <div id="grnPayFields" style="display:none">
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Amount Paid (LKR)</label>
+          <input type="number" class="form-input" id="grn_paid_amount" placeholder="0.00"
+                 step="0.01" min="0" style="max-width:220px">
+          <div style="font-size:12px;color:var(--muted);margin-top:4px">Leave blank or 0 to mark as unpaid</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex gap-2 justify-between">
+      <button class="btn btn-ghost" onclick="closeModal('addGRNModal')">Cancel</button>
+      <button class="btn btn-primary" id="saveGRNBtn" onclick="saveGRN()" disabled>Save GRN</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── VIEW GRN MODAL ─────────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="viewGRNModal">
+  <div class="modal" style="width:680px;max-width:96vw">
+    <div class="flex items-center justify-between mb-4">
+      <div class="modal-title" style="margin-bottom:0" id="viewGRNTitle">GRN Detail</div>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('viewGRNModal')">✕</button>
+    </div>
+    <div id="viewGRNContent"></div>
+  </div>
+</div>
+
+<!-- ── RECORD PAYMENT MODAL ───────────────────────────────────────────────── -->
+<div class="modal-overlay" id="recordPayModal">
+  <div class="modal" style="width:440px;max-width:96vw">
+    <div class="flex items-center justify-between mb-4">
+      <div class="modal-title" style="margin-bottom:0">💳 Record Payment</div>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('recordPayModal')">✕</button>
+    </div>
+    <div id="recordPayInfo" class="alert alert-warning" style="margin-bottom:16px"></div>
+    <div class="form-group mb-4">
+      <label class="form-label">Amount to Pay (LKR)</label>
+      <input type="number" class="form-input" id="recordPayAmount" step="0.01" min="0.01">
+    </div>
+    <div class="flex gap-2 justify-between">
+      <button class="btn btn-ghost" onclick="closeModal('recordPayModal')">Cancel</button>
+      <button class="btn btn-success" id="recordPayBtn" onclick="submitPayment()">Record Payment</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<style>
+#addGRNModal .modal{transform:none;opacity:0;transition:opacity .2s ease;overflow:visible}
+#addGRNModal.show .modal{opacity:1}
+.grn-product-row{align-items:flex-start}
+.grn-product-picker{position:relative;flex:1;min-width:0}
+.grn-product-input-wrap{position:relative}
+.grn-product-input{padding-right:42px}
+.grn-product-input.has-selection{border-color:rgba(79,108,246,.45);box-shadow:0 0 0 3px rgba(79,108,246,.08)}
+.grn-product-toggle{position:absolute;top:50%;right:10px;transform:translateY(-50%);width:26px;height:26px;border:none;border-radius:8px;background:transparent;color:var(--muted);font-size:16px;cursor:pointer;transition:background .18s ease,color .18s ease,transform .18s ease}
+.grn-product-toggle:hover{background:var(--hover);color:var(--text)}
+.grn-product-picker.open .grn-product-toggle{transform:translateY(-50%) rotate(180deg);color:var(--accent)}
+.grn-product-dropdown{position:absolute;top:calc(100% + 8px);left:0;right:0;background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadowL);padding:8px;opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity .18s ease,transform .18s ease;z-index:20}
+.grn-product-picker.open .grn-product-dropdown{opacity:1;transform:translateY(0);pointer-events:auto}
+.grn-product-options{display:flex;flex-direction:column;gap:4px;max-height:240px;overflow:auto}
+.grn-product-option,.grn-product-empty{padding:10px 12px;border-radius:10px}
+.grn-product-option{cursor:pointer;border:1px solid transparent;transition:background .18s ease,border-color .18s ease,color .18s ease}
+.grn-product-option:hover,.grn-product-option.active{background:var(--hover);border-color:rgba(79,108,246,.18)}
+.grn-product-option-name{font-size:14px;font-weight:600;color:var(--text)}
+.grn-product-option-meta{font-size:12px;color:var(--muted);margin-top:3px}
+.grn-product-empty{font-size:13px;color:var(--muted);background:var(--stat);text-align:center}
+@media (max-width: 760px){
+  .grn-product-row{flex-wrap:wrap}
+  .grn-product-picker{width:100%;flex-basis:100%}
+}
+</style>
+<script>
+const grnItems = [];
+const grnProductCatalog = [
+  {% for p in products %}
+  { id: {{ p.id }}, name: {{ p.name|tojson }}, buy_price: {{ p.buy_price|default(0) }} }{% if not loop.last %},{% endif %}
+  {% endfor %}
+];
+
+const grnProductPicker = {
+  root: document.getElementById('grnProductPicker'),
+  input: document.getElementById('grn_product_search'),
+  hidden: document.getElementById('grn_product_id'),
+  dropdown: document.getElementById('grn_product_dropdown'),
+  options: document.getElementById('grn_product_options'),
+  toggle: document.getElementById('grn_product_toggle'),
+  filtered: [],
+  activeIndex: -1,
+  selected: null,
+};
+
+function renderProductOptions(items) {
+  grnProductPicker.filtered = items;
+  grnProductPicker.activeIndex = items.length ? 0 : -1;
+
+  if (!items.length) {
+    grnProductPicker.options.innerHTML = '<div class="grn-product-empty">No matching products found</div>';
+    return;
+  }
+
+  grnProductPicker.options.innerHTML = items.map((product, index) => `
+    <button
+      type="button"
+      class="grn-product-option ${index === grnProductPicker.activeIndex ? 'active' : ''}"
+      data-index="${index}"
+      data-product-id="${product.id}"
+      role="option"
+      aria-selected="${grnProductPicker.selected && grnProductPicker.selected.id === product.id}"
+    >
+      <div class="grn-product-option-name">${product.name}</div>
+      <div class="grn-product-option-meta">Buy price: ${fmt(product.buy_price)}</div>
+    </button>
+  `).join('');
+}
+
+function openProductDropdown() {
+  grnProductPicker.root.classList.add('open');
+  grnProductPicker.input.setAttribute('aria-expanded', 'true');
+}
+
+function closeProductDropdown() {
+  grnProductPicker.root.classList.remove('open');
+  grnProductPicker.input.setAttribute('aria-expanded', 'false');
+  grnProductPicker.activeIndex = -1;
+}
+
+function syncProductSelection(product, { updateInput = true, focusInput = false } = {}) {
+  grnProductPicker.selected = product || null;
+  grnProductPicker.hidden.value = product ? product.id : '';
+  grnProductPicker.input.classList.toggle('has-selection', Boolean(product));
+
+  if (updateInput) {
+    grnProductPicker.input.value = product ? product.name : '';
+  }
+
+  if (product) {
+    document.getElementById('grn_unit_cost').value = product.buy_price || '';
+  }
+
+  if (focusInput) {
+    grnProductPicker.input.focus();
+  }
+}
+
+function filterProducts(query = '') {
+  const normalized = query.trim().toLowerCase();
+  const matches = normalized
+    ? grnProductCatalog.filter(product => product.name.toLowerCase().includes(normalized))
+    : grnProductCatalog.slice();
+  renderProductOptions(matches);
+}
+
+function highlightActiveOption() {
+  const options = [...grnProductPicker.options.querySelectorAll('.grn-product-option')];
+  options.forEach((option, index) => {
+    option.classList.toggle('active', index === grnProductPicker.activeIndex);
+  });
+  const activeOption = options[grnProductPicker.activeIndex];
+  if (activeOption) activeOption.scrollIntoView({ block: 'nearest' });
+}
+
+function selectProductByIndex(index) {
+  const product = grnProductPicker.filtered[index];
+  if (!product) return;
+  syncProductSelection(product, { updateInput: true, focusInput: true });
+  filterProducts(product.name);
+  closeProductDropdown();
+}
+
+function resetProductPicker() {
+  syncProductSelection(null, { updateInput: true });
+  filterProducts('');
+}
+
+function initializeProductPicker() {
+  filterProducts('');
+
+  grnProductPicker.input.addEventListener('focus', () => {
+    filterProducts(grnProductPicker.input.value);
+    openProductDropdown();
+  });
+
+  grnProductPicker.input.addEventListener('input', event => {
+    syncProductSelection(null, { updateInput: false });
+    filterProducts(event.target.value);
+    openProductDropdown();
+  });
+
+  grnProductPicker.input.addEventListener('keydown', event => {
+    if (!grnProductPicker.root.classList.contains('open') && ['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) {
+      openProductDropdown();
+    }
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      if (!grnProductPicker.filtered.length) return;
+      grnProductPicker.activeIndex = Math.min(grnProductPicker.activeIndex + 1, grnProductPicker.filtered.length - 1);
+      highlightActiveOption();
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (!grnProductPicker.filtered.length) return;
+      grnProductPicker.activeIndex = Math.max(grnProductPicker.activeIndex - 1, 0);
+      highlightActiveOption();
+    } else if (event.key === 'Enter') {
+      if (grnProductPicker.root.classList.contains('open') && grnProductPicker.activeIndex >= 0) {
+        event.preventDefault();
+        selectProductByIndex(grnProductPicker.activeIndex);
+      }
+    } else if (event.key === 'Escape') {
+      closeProductDropdown();
+    }
+  });
+
+  grnProductPicker.toggle.addEventListener('click', () => {
+    if (grnProductPicker.root.classList.contains('open')) {
+      closeProductDropdown();
+    } else {
+      filterProducts(grnProductPicker.input.value);
+      openProductDropdown();
+      grnProductPicker.input.focus();
+    }
+  });
+
+  grnProductPicker.options.addEventListener('click', event => {
+    const option = event.target.closest('.grn-product-option');
+    if (!option) return;
+    selectProductByIndex(Number(option.dataset.index));
+  });
+
+  document.addEventListener('click', event => {
+    if (!grnProductPicker.root.contains(event.target)) closeProductDropdown();
+  });
+}
+
+initializeProductPicker();
+
+function addGRNItem() {
+  const pid  = parseInt(grnProductPicker.hidden.value, 10);
+  const product = grnProductCatalog.find(item => item.id === pid);
+  const qty  = parseFloat(document.getElementById('grn_qty').value) || 0;
+  const cost = parseFloat(document.getElementById('grn_unit_cost').value) || 0;
+
+  if (!pid || !product || qty <= 0 || cost <= 0) {
+    toast('Please select a product and enter qty & cost', 'error'); return;
+  }
+
+  const existing = grnItems.findIndex(i => i.product_id === pid);
+  if (existing >= 0) {
+    grnItems[existing].quantity  += qty;
+    grnItems[existing].unit_cost  = cost;
+    grnItems[existing].total      = grnItems[existing].quantity * cost;
+  } else {
+    grnItems.push({ product_id: pid, name: product.name, quantity: qty, unit_cost: cost, total: qty * cost });
+  }
+  renderGRNItems();
+  resetProductPicker();
+  document.getElementById('grn_qty').value = 1;
+  document.getElementById('grn_unit_cost').value = '';
+}
+
+function renderGRNItems() {
+  const tbody = document.getElementById('grnItemsBody');
+  tbody.innerHTML = grnItems.map((it, idx) => `
+    <tr>
+      <td>${it.name}</td>
+      <td>${it.quantity}</td>
+      <td>LKR ${it.unit_cost.toFixed(2)}</td>
+      <td style="font-weight:700">LKR ${it.total.toFixed(2)}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="removeGRNItem(${idx})">✕</button></td>
+    </tr>`).join('');
+  const total = grnItems.reduce((s, i) => s + i.total, 0);
+  document.getElementById('grnGrandTotal').textContent = fmt(total);
+  document.getElementById('grnItemsWrap').style.display = grnItems.length ? '' : 'none';
+  document.getElementById('saveGRNBtn').disabled = grnItems.length === 0;
+}
+
+function removeGRNItem(idx) { grnItems.splice(idx, 1); renderGRNItems(); }
+
+function togglePayNow(checked) {
+  document.getElementById('grnPayFields').style.display = checked ? '' : 'none';
+  if (!checked) document.getElementById('grn_paid_amount').value = '';
+}
+
+async function saveGRN() {
+  const btn = document.getElementById('saveGRNBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  const payNow   = document.getElementById('grn_pay_now').checked;
+  const paidAmt  = payNow ? parseFloat(document.getElementById('grn_paid_amount').value) || 0 : 0;
+  const res = await api('/api/purchases', {
+    method: 'POST',
+    body: {
+      supplier_id: document.getElementById('grn_supplier').value || null,
+      notes: document.getElementById('grn_notes').value,
+      paid_amount: paidAmt,
+      items: grnItems,
+    }
+  });
+  btn.disabled = false; btn.textContent = 'Save GRN';
+  if (res && res.ok) {
+    const statusMsg = res.payment_status === 'paid' ? ' (Fully Paid)' : res.payment_status === 'partial' ? ' (Partial Payment)' : ' (Unpaid)';
+    toast(`GRN saved: ${res.grn_number}${statusMsg}`, 'success');
+    grnItems.length = 0; renderGRNItems();
+    document.getElementById('grn_notes').value = '';
+    document.getElementById('grn_supplier').value = '';
+    CustomSelect.refresh(document.getElementById('grn_supplier'));
+    resetProductPicker();
+    document.getElementById('grn_qty').value = 1;
+    document.getElementById('grn_unit_cost').value = '';
+    document.getElementById('grn_pay_now').checked = false;
+    togglePayNow(false);
+    closeModal('addGRNModal');
+    setTimeout(() => location.reload(), 1200);
+  } else {
+    toast(res?.error || 'Failed to save GRN', 'error');
+  }
+}
+
+// Record payment against existing GRN
+let _payPurchaseId = null;
+function openPaymentModal(pid, grn, total, paid) {
+  _payPurchaseId = pid;
+  const remaining = total - paid;
+  document.getElementById('recordPayInfo').innerHTML =
+    `GRN: <strong>${grn}</strong><br>Total: LKR ${total.toFixed(2)} | Paid: LKR ${paid.toFixed(2)} | <strong>Outstanding: LKR ${remaining.toFixed(2)}</strong>`;
+  document.getElementById('recordPayAmount').value = remaining.toFixed(2);
+  openModal('recordPayModal');
+}
+
+async function submitPayment() {
+  if (!_payPurchaseId) return;
+  const amount = parseFloat(document.getElementById('recordPayAmount').value) || 0;
+  if (amount <= 0) { toast('Enter a valid amount', 'error'); return; }
+  const btn = document.getElementById('recordPayBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  const res = await api(`/api/purchases/${_payPurchaseId}/payment`, {
+    method: 'POST', body: { amount }
+  });
+  btn.disabled = false; btn.textContent = 'Record Payment';
+  if (res && res.ok) {
+    toast(`Payment recorded. Status: ${res.payment_status}`, 'success');
+    closeModal('recordPayModal');
+    setTimeout(() => location.reload(), 1000);
+  } else {
+    toast(res?.error || 'Payment failed', 'error');
+  }
+}
+
+async function viewGRN(id) {
+  const res = await api(`/api/purchases/${id}`);
+  if (!res) return;
+  document.getElementById('viewGRNTitle').textContent = `GRN: ${res.grn_number}`;
+  document.getElementById('viewGRNContent').innerHTML = `
+    <div class="grid-2 mb-4">
+      <div><span class="form-label">Supplier</span><div style="font-weight:600;margin-top:4px">${res.supplier}</div></div>
+      <div><span class="form-label">Date</span><div style="font-weight:600;margin-top:4px">${res.purchase_date}</div></div>
+      <div><span class="form-label">Created By</span><div style="font-weight:600;margin-top:4px">${res.created_by}</div></div>
+      <div><span class="form-label">Notes</span><div style="margin-top:4px">${res.notes || '—'}</div></div>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Product</th><th>Qty</th><th>Unit Cost</th><th>Total</th></tr></thead>
+        <tbody>
+          ${res.items.map(i => `<tr>
+            <td>${i.product_name}</td>
+            <td>${i.quantity}</td>
+            <td>${fmt(i.unit_cost)}</td>
+            <td style="font-weight:700">${fmt(i.total)}</td>
+          </tr>`).join('')}
+        </tbody>
+        <tfoot>
+          <tr><td colspan="3" style="font-weight:700;text-align:right;padding:12px 16px">Total:</td>
+              <td style="font-weight:800;color:var(--accent)">${fmt(res.total_amount)}</td></tr>
+        </tfoot>
+      </table>
+    </div>`;
+  openModal('viewGRNModal');
+}
+
+function filterTable() {
+  const q = document.getElementById('searchGRN').value.toLowerCase();
+  document.querySelectorAll('#grnBody tr').forEach(row => {
+    row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+// Compute stats
+(function() {
+  const now = new Date();
+  let monthCount = 0, totalSpend = 0, totalItems = 0;
+  document.querySelectorAll('#grnBody tr[data-month]')?.forEach(() => {});
+  // We read from server-rendered rows
+  const rows = document.querySelectorAll('#grnBody tr');
+  rows.forEach(row => {
+    const cells = row.querySelectorAll('td');
+    if (cells.length < 5) return;
+    const dateStr = cells[1]?.textContent?.trim();
+    if (dateStr) {
+      const d = new Date(dateStr);
+      if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) monthCount++;
+    }
+    const amtStr = cells[4]?.textContent?.replace(/[^0-9.]/g,'') || '0';
+    totalSpend += parseFloat(amtStr) || 0;
+    const itemsStr = cells[3]?.textContent?.match(/\d+/)?.[0] || '0';
+    totalItems += parseInt(itemsStr) || 0;
+  });
+  document.getElementById('statMonth').textContent = monthCount;
+  document.getElementById('statSpend').textContent = fmt(totalSpend);
+  document.getElementById('statItems').textContent = totalItems;
+})();
+</script>
+{% endblock %}

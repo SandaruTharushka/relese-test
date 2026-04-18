@@ -1,0 +1,274 @@
+{% extends "base.html" %}
+{% from "sidebar.html" import sidebar with context %}
+{% block title %} — Barcode & Scanner Management{% endblock %}
+{% block body %}
+<div class="app-layout">
+  {{ sidebar('settings') }}
+  <div class="main-area">
+    <div class="topbar">
+      <div style="font-size:18px;font-weight:700">🏷️ Barcode & Scanner Management</div>
+      <a class="btn btn-ghost btn-sm" href="/settings#barcode">← Back to Settings</a>
+    </div>
+    <div class="page-content fade-in">
+      <div class="card" style="margin-bottom:16px;display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:700">Commercial barcode, scanner, and label workflow</div>
+          <div class="text-muted text-sm">Real product auto-fill, real barcode generation, real label rendering, and scanner search validation.</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <span class="badge badge-primary" id="chipType">Type: CODE128</span>
+          <span class="badge badge-purple" id="chipSize">Label: 30x20mm</span>
+          <span class="badge badge-success" id="chipPrinter">Printer: Not set</span>
+          <button class="btn btn-primary btn-sm" onclick="saveAllSettings()">💾 Save All Settings</button>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+        <button class="btn btn-sm btn-primary" data-tab="scanner">📡 Scanner Config</button>
+        <button class="btn btn-sm btn-ghost" data-tab="generate">🧬 Generate Barcode</button>
+        <button class="btn btn-sm btn-ghost" data-tab="print">🖨️ Print Labels</button>
+        <button class="btn btn-sm btn-ghost" data-tab="label">⚙️ Label Settings</button>
+        <button class="btn btn-sm btn-ghost" data-tab="search">🔎 Scan Test / Search</button>
+        <button class="btn btn-sm btn-ghost" data-tab="history">📜 Print History</button>
+      </div>
+
+      <div id="tab-scanner" class="tab-panel card"></div>
+      <div id="tab-generate" class="tab-panel card" style="display:none"></div>
+      <div id="tab-print" class="tab-panel card" style="display:none"></div>
+      <div id="tab-label" class="tab-panel card" style="display:none"></div>
+      <div id="tab-search" class="tab-panel card" style="display:none"></div>
+      <div id="tab-history" class="tab-panel card" style="display:none"></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const state={products:[],product:null,settings:{},activeTab:'scanner',printers:[],savedLabelPrinter:'',printersLoaded:false};
+const $=(id)=>document.getElementById(id);
+function toastMsg(m,t='info'){ if(window.toast) toast(m,t); else alert(m); }
+
+async function api(url,opt={}){ const csrf=(window.__csrfToken||window.__csrf_token||window.__csrf||window.__CSRF_TOKEN__||document.querySelector('meta[name=\"csrf-token\"]')?.getAttribute('content')||'').trim(); const headers={'Content-Type':'application/json',...(opt.headers||{})}; if(csrf&&!headers['X-CSRFToken']&&!headers['X-CSRF-Token']) headers['X-CSRFToken']=csrf; const r=await fetch(url,{...opt,headers}); const d=await r.json(); if(!r.ok) throw new Error(d.error||d.msg||'Request failed'); return d; }
+function money(v){return `LKR ${Number(v||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;}
+function esc(v){ return String(v||'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#39;"); }
+
+function renderScanner(){ $('tab-scanner').innerHTML=`<div class="grid-2" style="gap:16px"><div>
+<h3>Scanner Configuration</h3>
+<div class="form-group"><label class="form-label">Input Mode</label><select id="sc_mode" class="form-select"><option value="usb_hid">USB HID</option><option value="serial">Serial</option></select></div>
+<div class="form-group"><label class="form-label">Prefix</label><input id="sc_prefix" class="form-input" placeholder="Optional prefix"></div>
+<div class="form-group"><label class="form-label">Suffix</label><input id="sc_suffix" class="form-input" placeholder="Optional suffix"></div>
+<div class="form-group"><label class="form-label">Search Target</label><select id="sc_target" class="form-select"><option value="product">Product</option><option value="invoice">Invoice</option><option value="both">Both</option></select></div>
+<div class="form-group"><label class="form-label">Auto Search After Scan</label><select id="sc_auto" class="form-select"><option value="true">Enabled</option><option value="false">Disabled</option></select></div>
+<button class="btn btn-primary btn-sm" onclick="saveScannerConfig()">💾 Save Scanner Config</button>
+</div><div><h3>Keyboard-wedge Test</h3>
+<input id="scan_inline" class="form-input" placeholder="Focus here and scan" onkeydown="if(event.key==='Enter'){runScanTest();}">
+<div id="scan_feedback" class="card" style="margin-top:10px;padding:12px;background:var(--stat)">No scan yet.</div>
+</div></div>`;
+ ['scanner_input_mode','scanner_prefix','scanner_suffix','scanner_target','scanner_auto_search'].forEach(()=>{});
+ $('sc_mode').value=state.settings.scanner_input_mode||'usb_hid';$('sc_prefix').value=state.settings.scanner_prefix||'';$('sc_suffix').value=state.settings.scanner_suffix||'';$('sc_target').value=state.settings.scanner_target||'product';$('sc_auto').value=state.settings.scanner_auto_search||'true';
+}
+
+function productOptions(selId, filter='', includeBlank=true){
+  const q = String(filter || '').trim().toLowerCase();
+  const el=$(selId);
+  const rows = !q ? state.products : state.products.filter(p => (`${p.name} ${p.barcode||''}`).toLowerCase().includes(q));
+  const first = includeBlank ? '<option value="">Select product</option>' : '';
+  el.innerHTML=first+rows.map(p=>`<option value="${p.id}">${p.name} (${p.barcode||'No barcode'})</option>`).join('');
+}
+
+function renderGenerate(){ $('tab-generate').innerHTML=`<div class="grid-2" style="gap:16px"><div>
+<h3>Generate Barcode</h3>
+<div class="form-group"><label class="form-label">Search Product</label><input id="gen_product_search" class="form-input" placeholder="Type to filter products…" oninput="productOptions('gen_product',this.value)"></div>
+<div class="form-group"><label class="form-label">Select Product</label><select id="gen_product" class="form-select" onchange="loadProduct(this.value,'gen')"></select></div>
+<div class="form-group"><label class="form-label">Barcode Type</label><select id="gen_type" class="form-select"><option value="code128">CODE-128</option><option value="ean13">EAN13</option><option value="code39">CODE39</option><option value="qr">QR</option></select></div>
+<div class="form-group"><label class="form-label">Mode</label><select id="gen_mode" class="form-select" onchange="togglePrefix()"><option value="random">Random</option><option value="product_id">Product ID based</option><option value="prefix">Prefix based</option><option value="manual">Manual</option></select></div>
+<div class="form-group" id="gen_prefix_row"><label class="form-label">Prefix</label><input id="gen_prefix" class="form-input" placeholder="SM"></div>
+<div class="form-group"><label class="form-label">Barcode Value</label><input id="gen_barcode" class="form-input" oninput="renderBarcodePreview()"></div>
+<div class="form-group"><label class="form-label">Overwrite Existing During Bulk</label><select id="gen_overwrite" class="form-select"><option value="false">No</option><option value="true">Yes</option></select></div>
+<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-primary btn-sm" onclick="generateBarcode()">Generate Barcode</button><button class="btn btn-ghost btn-sm" onclick="saveGenerated()">Save to Product</button><button class="btn btn-ghost btn-sm" onclick="printFromGenerate()">Print Barcode</button><button class="btn btn-ghost btn-sm" onclick="bulkGenerate()">Generate for All Products</button></div>
+</div><div><h3>Preview</h3><div id="gen_preview" class="card" style="padding:14px;text-align:center;background:var(--stat)">No barcode</div></div></div>`;
+ productOptions('gen_product'); $('gen_type').value=state.settings.label_barcode_type||'code128'; $('gen_mode').value=state.settings.barcode_auto_mode||'random'; $('gen_prefix').value=state.settings.barcode_prefix||'SM'; togglePrefix();
+}
+
+function renderPrint(){ $('tab-print').innerHTML=`<div class="grid-2" style="gap:16px"><div>
+<h3>Print Labels</h3>
+<div class="form-group"><label class="form-label">Search Product</label><input id="pr_product_search" class="form-input" placeholder="Type to filter products…" oninput="productOptions('pr_product',this.value)"></div>
+<div class="form-group"><label class="form-label">Select Product</label><select id="pr_product" class="form-select" onchange="loadProduct(this.value,'print')"></select></div>
+<div class="grid-2"><div class="form-group"><label class="form-label">Product Name</label><input id="pr_name" class="form-input"></div><div class="form-group"><label class="form-label">Barcode</label><input id="pr_barcode" class="form-input" oninput="renderLabelPreview()"></div></div>
+<div class="grid-2"><div class="form-group"><label class="form-label">Selling Price</label><input id="pr_sell" class="form-input"></div><div class="form-group"><label class="form-label">Wholesale Price</label><input id="pr_ws" class="form-input"></div></div>
+<div class="grid-3"><div class="form-group"><label class="form-label">SKU</label><input id="pr_sku" class="form-input"></div><div class="form-group"><label class="form-label">Rack</label><input id="pr_rack" class="form-input"></div><div class="form-group"><label class="form-label">Section</label><input id="pr_section" class="form-input"></div></div>
+<div class="form-group"><label class="form-label">Copies</label><div style="display:flex;gap:8px"><button class="btn btn-ghost btn-sm" onclick="adjCopies(-1)">-</button><input id="pr_copies" class="form-input" type="number" min="1" value="1" style="max-width:100px"><button class="btn btn-ghost btn-sm" onclick="adjCopies(1)">+</button></div></div>
+<div style="display:flex;gap:8px"><button class="btn btn-primary btn-sm" onclick="printLabel()">Print Label</button><button class="btn btn-ghost btn-sm" onclick="testPrintLabel()">Test Label Print</button></div>
+<div class="card" style="margin-top:12px;background:var(--stat)"><h4 style="margin-bottom:8px">Bulk Label Print</h4><div class="text-xs text-muted" style="margin-bottom:8px">Select multiple products and print same copies for each.</div><select id="pr_bulk_products" class="form-select" multiple size="7"></select><div style="margin-top:8px;display:flex;gap:8px"><button class="btn btn-primary btn-sm" onclick="bulkPrintLabels()">Print Selected</button><button class="btn btn-ghost btn-sm" onclick="selectAllBulk()">Select All</button></div></div>
+</div><div><h3>Label Preview</h3><div id="label_preview" class="card" style="padding:12px;background:var(--stat)">No preview</div></div></div>`;
+ productOptions('pr_product');
+ productOptions('pr_bulk_products','',false);
+}
+
+function renderLabelSettings(){ $('tab-label').innerHTML=`<h3>Label Settings</h3><div class="grid-3">
+<div class="form-group" style="grid-column:span 3"><label class="form-label">Printer Selection</label><div style="display:flex;gap:8px;align-items:center"><select id="ls_printer" class="form-select" disabled><option value="">Loading printers…</option></select><button class="btn btn-ghost btn-sm" type="button" onclick="refreshLabelPrinters()">↻</button></div><div id="ls_printer_help" class="text-muted text-xs" style="margin-top:6px">Detecting installed printers…</div></div>
+<div class="form-group"><label class="form-label">Width (mm)</label><input id="ls_w" class="form-input" type="number" step="0.5"></div>
+<div class="form-group"><label class="form-label">Height (mm)</label><input id="ls_h" class="form-input" type="number" step="0.5"></div>
+<div class="form-group"><label class="form-label">Gap</label><input id="ls_gap" class="form-input" type="number" step="0.1"></div>
+<div class="form-group"><label class="form-label">Font Size</label><input id="ls_font" class="form-input" type="number"></div>
+<div class="form-group"><label class="form-label">Preview Style</label><select id="ls_style" class="form-select"><option value="classic">Classic</option><option value="dense">Dense</option><option value="minimal">Minimal</option></select></div>
+<div class="form-group"><label class="form-label">Show Price</label><select id="ls_show_price" class="form-select"><option value="true">Show</option><option value="false">Hide</option></select></div>
+<div class="form-group"><label class="form-label">Show Wholesale</label><select id="ls_show_ws" class="form-select"><option value="true">Show</option><option value="false">Hide</option></select></div>
+<div class="form-group"><label class="form-label">Show SKU</label><select id="ls_show_sku" class="form-select"><option value="true">Show</option><option value="false">Hide</option></select></div>
+<div class="form-group"><label class="form-label">Show Rack</label><select id="ls_show_rack" class="form-select"><option value="true">Show</option><option value="false">Hide</option></select></div>
+<div class="form-group"><label class="form-label">Show Section</label><select id="ls_show_section" class="form-select"><option value="true">Show</option><option value="false">Hide</option></select></div>
+<div class="form-group"><label class="form-label">Show Barcode Text</label><select id="ls_show_barcode" class="form-select"><option value="true">Show</option><option value="false">Hide</option></select></div>
+</div><button class="btn btn-primary btn-sm" onclick="saveLabelSettings()">💾 Save Label Settings</button>`;
+ $('ls_w').value=state.settings.label_width_mm||'30'; $('ls_h').value=state.settings.label_height_mm||'20'; $('ls_gap').value=state.settings.label_gap_mm||'2'; $('ls_font').value=state.settings.label_font_size||'9'; $('ls_style').value=state.settings.label_preview_style||'classic'; $('ls_show_price').value=state.settings.label_show_price||'true'; $('ls_show_ws').value=state.settings.label_show_wholesale_price||'false'; $('ls_show_sku').value=state.settings.label_show_sku||'true'; $('ls_show_rack').value=state.settings.label_show_rack||'true'; $('ls_show_section').value=state.settings.label_show_section||'true'; $('ls_show_barcode').value=state.settings.label_show_barcode||'true';
+ renderPrinterOptions();
+ if(!state.printersLoaded){ refreshLabelPrinters(); }
+}
+
+function selectPreferredPrinter(){
+  const select=$('ls_printer'); if(!select) return;
+  const names=state.printers.map(p=>p.name);
+  const saved=(state.settings.label_printer_name||state.savedLabelPrinter||'').trim();
+  if(saved && names.includes(saved)){ select.value=saved; return 'saved'; }
+  if(saved && !names.includes(saved)){ select.value=''; return 'missing'; }
+  if(!saved && names.length===1){ select.value=names[0]; return 'single'; }
+  select.value=''; return 'none';
+}
+
+function renderPrinterOptions(){
+  const select=$('ls_printer'); const help=$('ls_printer_help'); if(!select||!help) return;
+  const selectedCurrent=(select.value||'').trim();
+  if(!state.printersLoaded){
+    select.disabled=true; select.innerHTML='<option value="">Loading printers…</option>'; help.textContent='Detecting installed printers…'; return;
+  }
+  const options=['<option value="">Select installed printer</option>'];
+  state.printers.forEach(p=>{ options.push(`<option value="${esc(p.name)}">${esc(p.name)}${p.is_default?' (Default)':''}${p.printer_type==='label'?' · Label':''}</option>`); });
+  if(!state.printers.length){
+    select.disabled=true; select.innerHTML='<option value="">No printers detected</option>'; help.textContent='No printers detected'; return;
+  }
+  select.disabled=false; select.innerHTML=options.join('');
+  const auto=selectPreferredPrinter();
+  if(auto==='missing'){ help.textContent='Saved printer not found. Please reselect.'; }
+  else if(auto==='single'){ help.textContent='Single installed printer auto-selected.'; }
+  else if(selectedCurrent && state.printers.some(p=>p.name===selectedCurrent)){ select.value=selectedCurrent; help.textContent='Choose a label printer from installed devices.'; }
+  else { help.textContent='Choose a label printer from installed devices.'; }
+}
+
+async function refreshLabelPrinters(){
+  state.printersLoaded=false;
+  renderPrinterOptions();
+  try{
+    const d=await api('/api/barcode-scanner/printers');
+    state.printers=Array.isArray(d.items)?d.items:[];
+    state.savedLabelPrinter=(d.saved||'').trim();
+    state.printersLoaded=true;
+    renderPrinterOptions();
+  }catch(e){
+    state.printers=[]; state.printersLoaded=true; renderPrinterOptions();
+    const help=$('ls_printer_help'); if(help) help.textContent='Failed to load printers.';
+    toastMsg(`Failed to load printers: ${e.message}`,'error');
+  }
+}
+
+function renderSearch(){ $('tab-search').innerHTML=`<h3>Scan Test / Search</h3><div class="grid-2"><div><input id="search_val" class="form-input" placeholder="Scan barcode or invoice" onkeydown="if(event.key==='Enter'){scanSearch();}"><div style="margin-top:8px"><button class="btn btn-primary btn-sm" onclick="scanSearch()">Search</button></div></div><div id="search_result" class="card" style="padding:12px;background:var(--stat)">No result.</div></div>`; }
+function renderHistory(){ $('tab-history').innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h3>Label Print History</h3><button class="btn btn-ghost btn-sm" onclick="loadPrintHistory()">Refresh</button></div><div id="print_history_wrap" class="card" style="padding:0;background:var(--stat)">Loading...</div>`; loadPrintHistory(); }
+
+function togglePrefix(){ const mode=$('gen_mode').value; $('gen_prefix_row').style.display=(mode==='prefix'||mode==='random')?'block':'none'; }
+async function loadProduct(id,target){ if(!id) return; const d=await api(`/api/barcode-scanner/product/${id}`); const p=d.product; state.product=p; if(target==='gen'){ $('gen_barcode').value=p.barcode||''; $('gen_type').value=(p.barcode_type==='normal'?'code128':(p.barcode_type||$('gen_type').value)); renderBarcodePreview(); } else { $('pr_name').value=p.name||''; $('pr_sell').value=p.sell_price||''; $('pr_ws').value=p.wholesale_price||''; $('pr_sku').value=p.sku||''; $('pr_rack').value=p.rack_number||''; $('pr_section').value=p.section_number||''; $('pr_barcode').value=p.barcode||''; await renderLabelPreview(); } }
+function renderBarcodePreview(){ const v=$('gen_barcode').value.trim(); const t=$('gen_type').value; $('gen_preview').innerHTML=v?`<img src="/api/barcode/image?value=${encodeURIComponent(v)}&type=${encodeURIComponent(t)}" style="max-width:100%;max-height:130px"><div class='text-muted text-sm'>${t.toUpperCase()} · ${v}</div>`:'No barcode'; }
+async function generateBarcode(){
+  if(!$('gen_product').value){ toastMsg('Please select a product first.','error'); return; }
+  try {
+    const d=await api('/api/barcode-scanner/generate',{method:'POST',body:JSON.stringify({product_id:$('gen_product').value,mode:$('gen_mode').value,barcode_type:$('gen_type').value,prefix:$('gen_prefix').value,barcode:$('gen_barcode').value})});
+    $('gen_barcode').value=d.barcode; $('gen_type').value=d.barcode_type;
+    state.settings.barcode_auto_mode=$('gen_mode').value; state.settings.barcode_prefix=$('gen_prefix').value;
+    renderBarcodePreview();
+    toastMsg('Barcode generated ✓','success');
+  } catch(e){ toastMsg('Generate failed: '+e.message,'error'); }
+}
+async function saveGenerated(){
+  if(!$('gen_product').value){ toastMsg('Please select a product first.','error'); return; }
+  if(!$('gen_barcode').value){ toastMsg('Generate a barcode first.','error'); return; }
+  try {
+    await api('/api/barcode/save',{method:'POST',body:JSON.stringify({product_id:$('gen_product').value,barcode:$('gen_barcode').value,barcode_type:$('gen_type').value})});
+    if(state.product){ state.product.barcode=$('gen_barcode').value; state.product.barcode_type=$('gen_type').value; }
+    toastMsg('Barcode saved','success');
+  } catch(e){ toastMsg('Save failed: '+e.message,'error'); }
+}
+async function printFromGenerate(){
+  if(!$('gen_barcode').value){ toastMsg('Generate a barcode first.','error'); return; }
+  try {
+    await api('/api/barcode/print',{method:'POST',body:JSON.stringify({barcode:$('gen_barcode').value,barcode_type:$('gen_type').value,copies:1})});
+    toastMsg('Barcode print sent ✓','success');
+  } catch(e){ toastMsg('Print failed: '+e.message,'error'); }
+}
+async function bulkGenerate(){ const overwrite=$('gen_overwrite').value==='true'; const d=await api('/api/barcode/generate-missing',{method:'POST',body:JSON.stringify({mode:$('gen_mode').value,prefix:$('gen_prefix').value,overwrite})}); toastMsg(`Generated ${d.updated} products (skipped ${d.skipped})`, d.updated?'success':'warning'); }
+
+function adjCopies(n){ const el=$('pr_copies'); el.value=Math.max(1,Number(el.value||1)+n); }
+function currentPrintProduct(){ return {id:state.product?.id||null,name:$('pr_name').value,barcode:$('pr_barcode').value,sell_price:$('pr_sell').value,wholesale_price:$('pr_ws').value,sku:$('pr_sku').value,rack_number:$('pr_rack').value,section_number:$('pr_section').value}; }
+async function renderLabelPreview(){ try { const d=await api('/api/barcode-scanner/label-preview',{method:'POST',body:JSON.stringify({product:currentPrintProduct(),settings:state.settings})}); $('label_preview').innerHTML=`<img src="${d.image_data_url}" style="max-width:100%">`; } catch(e){ $('label_preview').innerHTML=`<div class='text-muted'>Preview unavailable: ${e.message}</div>`; } }
+async function printLabel(){
+  const p=currentPrintProduct();
+  if(!p.barcode){ toastMsg('Please select a product with a barcode first.','error'); return; }
+  try { await api('/api/barcode/label',{method:'POST',body:JSON.stringify({product:p,copies:Number($('pr_copies').value||1)})}); toastMsg('Label print dispatched ✓','success'); }
+  catch(e){ toastMsg('Print failed: '+e.message,'error'); }
+}
+async function testPrintLabel(){
+  try { await api('/api/barcode-label/sample',{method:'POST',body:JSON.stringify({...currentPrintProduct(),copies:Number($('pr_copies').value||1)})}); toastMsg('Test label print dispatched ✓','success'); }
+  catch(e){ toastMsg('Test print failed: '+e.message,'error'); }
+}
+function selectAllBulk(){ [...$('pr_bulk_products').options].forEach(o=>{ if(o.value) o.selected=true; }); }
+async function bulkPrintLabels(){ const ids=[...$('pr_bulk_products').selectedOptions].map(o=>Number(o.value)).filter(Boolean); if(!ids.length){ toastMsg('Select at least one product','error'); return; } const d=await api('/api/barcode/label/bulk',{method:'POST',body:JSON.stringify({product_ids:ids,copies:Number($('pr_copies').value||1)})}); toastMsg(`Printed: ${d.printed}, Failed: ${d.failed}`, d.failed?'warning':'success'); }
+
+async function saveScannerConfig(){ const payload={scanner_input_mode:$('sc_mode').value,scanner_prefix:$('sc_prefix').value,scanner_suffix:$('sc_suffix').value,scanner_target:$('sc_target').value,scanner_auto_search:$('sc_auto').value,barcode_auto_mode:state.settings.barcode_auto_mode||'random',barcode_prefix:state.settings.barcode_prefix||'SM'}; await api('/api/scanner/settings',{method:'POST',body:JSON.stringify(payload)}); Object.assign(state.settings,payload); toastMsg('Scanner config saved','success'); }
+async function saveLabelSettings(){
+  const selected=($('ls_printer')?.value||'').trim();
+  if(!selected){ toastMsg('Please select a printer before saving label settings.','error'); return; }
+  const printerPayload={
+    label_printer_name:selected,
+    label_width_mm:$('ls_w').value,
+    label_height_mm:$('ls_h').value,
+    label_gap_mm:$('ls_gap').value,
+    label_font_size:$('ls_font').value,
+    label_show_price:$('ls_show_price').value,
+    label_show_wholesale_price:$('ls_show_ws').value,
+    label_show_sku:$('ls_show_sku').value,
+    label_show_rack:$('ls_show_rack').value,
+    label_show_section:$('ls_show_section').value,
+    label_show_barcode:$('ls_show_barcode').value
+  };
+  await api('/api/printer/settings',{method:'POST',body:JSON.stringify(printerPayload)});
+  Object.assign(state.settings,printerPayload);
+  state.savedLabelPrinter=selected;
+  syncChips();
+  toastMsg('Label settings saved','success');
+}
+async function saveAllSettings(){
+  const payload={
+    barcode_auto_mode: $('gen_mode')?.value || state.settings.barcode_auto_mode || 'random',
+    barcode_prefix: $('gen_prefix')?.value || state.settings.barcode_prefix || 'SM',
+    label_barcode_type: $('gen_type')?.value || state.settings.label_barcode_type || 'code128',
+  };
+  await saveScannerConfig();
+  await saveLabelSettings();
+  await api('/api/scanner/settings',{method:'POST',body:JSON.stringify(payload)});
+  Object.assign(state.settings,payload);
+  syncChips();
+  toastMsg('All barcode/scanner/label settings saved','success');
+}
+function productQuickOpenLink(product){ const q=encodeURIComponent(product.barcode||product.name||''); return `<a class="btn btn-ghost btn-sm" href="/products?q=${q}" target="_blank">Open Product</a>`; }
+async function runScanTest(){ const value=$('scan_inline').value; try{ const d=await api('/api/barcode-scanner/search',{method:'POST',body:JSON.stringify({value,target:$('sc_target').value})}); $('scan_feedback').innerHTML=d.type==='product'?`✓ Product: <strong>${d.product.name}</strong> (${money(d.product.sell_price)}) <div style='margin-top:8px'>${productQuickOpenLink(d.product)}</div>`:`✓ Invoice: <strong>${d.invoice.invoice_number}</strong> (${money(d.invoice.total_amount)})`; }catch(e){ $('scan_feedback').innerHTML=`⚠ ${e.message}`; }}
+async function scanSearch(){ const val=$('search_val').value; try{ const d=await api('/api/barcode-scanner/search',{method:'POST',body:JSON.stringify({value:val,target:state.settings.scanner_target||'both'})}); if(d.type==='product'){ $('search_result').innerHTML=`<div><strong>${d.product.name}</strong><div class='text-muted text-sm'>${d.product.barcode||''}</div><div style='margin-top:8px'>${productQuickOpenLink(d.product)}</div></div>`; } else if(d.type==='invoice'){ $('search_result').innerHTML=`<div><strong>Invoice ${d.invoice.invoice_number}</strong><div class='text-muted text-sm'>${money(d.invoice.total_amount)} · ${d.invoice.sale_date}</div></div>`; } else { $('search_result').innerHTML=JSON.stringify(d); } }catch(e){ $('search_result').innerHTML=`⚠ ${e.message}`; }}
+async function loadPrintHistory(){ const d=await api('/api/barcode/label-history?limit=40'); const rows=d.history||[]; $('print_history_wrap').innerHTML=rows.length?`<table class="data-table"><thead><tr><th>Date</th><th>User</th><th>Details</th><th>IP</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.date}</td><td>${r.user||'—'}</td><td>${r.metadata||r.action}</td><td>${r.ip||'—'}</td></tr>`).join('')}</tbody></table>`:`<div style="padding:12px">No label print history yet.</div>`; }
+
+function syncChips(){ $('chipType').textContent=`Type: ${(state.settings.label_barcode_type||'code128').toUpperCase()}`; $('chipSize').textContent=`Label: ${state.settings.label_width_mm||30}x${state.settings.label_height_mm||20}mm`; $('chipPrinter').textContent=`Printer: ${state.settings.label_printer_name||'Not set'}`; }
+function openTab(name){ state.activeTab=name; document.querySelectorAll('.tab-panel').forEach(p=>p.style.display='none'); $('tab-'+name).style.display='block'; document.querySelectorAll('[data-tab]').forEach(b=>b.className='btn btn-sm btn-ghost'); document.querySelector(`[data-tab="${name}"]`).className='btn btn-sm btn-primary'; }
+
+(async function init(){
+  const [p,c,pl]=await Promise.all([api('/api/barcode-scanner/products'),api('/api/barcode-scanner/config'),api('/api/barcode-scanner/printers')]); state.products=p.products; state.settings=c.settings; state.printers=Array.isArray(pl.items)?pl.items:[]; state.savedLabelPrinter=(pl.saved||'').trim(); state.printersLoaded=true; syncChips();
+  renderScanner(); renderGenerate(); renderPrint(); renderLabelSettings(); renderSearch();
+  renderHistory();
+  document.querySelectorAll('[data-tab]').forEach(btn=>btn.onclick=()=>openTab(btn.dataset.tab));
+  openTab('scanner');
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,406 @@
+{% extends "base.html" %}
+{% from "sidebar.html" import sidebar with context %}
+{% block title %} — Expenses{% endblock %}
+
+{% block extra_head %}
+<style>
+.exp-tab { padding:9px 20px;font-size:13px;font-weight:700;color:var(--muted);border:none;background:none;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;border-radius:6px 6px 0 0;transition:all .18s; }
+.exp-tab:hover { background:var(--stat);color:var(--text); }
+.exp-tab.active { color:var(--accent);border-bottom-color:var(--accent);background:rgba(79,108,246,.07); }
+.exp-tabs { display:flex;gap:4px;border-bottom:2px solid var(--border);margin-bottom:22px; }
+.tag-type { display:inline-block;padding:2px 10px;border-radius:12px;font-size:10px;font-weight:700;text-transform:uppercase; }
+.tag-shop_expense  { background:rgba(79,108,246,.12);color:var(--accent); }
+.tag-work_expense  { background:rgba(16,185,129,.12);color:#10b981; }
+.tag-bank_loan     { background:rgba(239,68,68,.12);color:var(--danger); }
+.tag-extra_expense { background:rgba(245,158,11,.12);color:#f59e0b; }
+.tag-savings       { background:rgba(139,92,246,.12);color:#8b5cf6; }
+.tag-other         { background:var(--stat);color:var(--muted); }
+.modal-overlay { display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:900;align-items:center;justify-content:center; }
+.modal-overlay.open, .modal-overlay.show { display:flex; opacity:1; pointer-events:all; }
+.modal-box { background:var(--card);border-radius:16px;padding:28px;width:min(520px,95vw);max-height:92vh;overflow-y:auto; }
+.form-grid2 { display:grid;grid-template-columns:1fr 1fr;gap:14px; }
+@media(max-width:540px){ .form-grid2 { grid-template-columns:1fr; } }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="app-layout">
+  {{ sidebar('expenses') }}
+  <div class="main-area">
+    <div class="topbar">
+      <div>
+        <div style="font-size:18px;font-weight:800">💸 Expenses &amp; Finance</div>
+        <div style="font-size:12px;color:var(--muted)">Track shop expenses, loans, work costs &amp; savings</div>
+      </div>
+      <div class="flex gap-2">
+        <button class="btn" onclick="openCategoryModal()">⚙ Categories</button>
+        <button class="btn btn-primary" onclick="openEntryModal()">+ Add Expense</button>
+      </div>
+    </div>
+
+    <div class="page-content fade-in">
+
+      <!-- Date filter -->
+      <div class="flex gap-3 mb-4 flex-wrap items-center">
+        <div class="flex items-center gap-2">
+          <label class="form-label" style="margin:0">From</label>
+          <input id="filterFrom" class="form-control" type="date" style="width:150px" onchange="loadAll()">
+        </div>
+        <div class="flex items-center gap-2">
+          <label class="form-label" style="margin:0">To</label>
+          <input id="filterTo" class="form-control" type="date" style="width:150px" onchange="loadAll()">
+        </div>
+        <button class="btn btn-sm" onclick="setThisMonth()">This Month</button>
+        <button class="btn btn-sm" onclick="setToday()">Today</button>
+      </div>
+
+      <!-- Summary cards -->
+      <div id="summaryCards" class="grid-4 mb-5"></div>
+
+      <!-- Tabs -->
+      <div class="exp-tabs">
+        <button class="exp-tab active" onclick="switchTab('all',this)">📋 All</button>
+        <button class="exp-tab" onclick="switchTab('shop_expense',this)">🏪 Shop</button>
+        <button class="exp-tab" onclick="switchTab('work_expense',this)">🔧 Work</button>
+        <button class="exp-tab" onclick="switchTab('bank_loan',this)">🏦 Bank / Loan</button>
+        <button class="exp-tab" onclick="switchTab('extra_expense',this)">➕ Extra</button>
+        <button class="exp-tab" onclick="switchTab('savings',this)">🏦 Savings</button>
+      </div>
+
+      <!-- Table -->
+      <div class="table-wrap">
+        <div class="table-header">
+          <div style="font-weight:700" id="tableTitle">All Expenses</div>
+          <div style="color:var(--muted);font-size:13px" id="tableTotal"></div>
+        </div>
+        <div class="overflow-x">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Date</th><th>Category</th><th>Title</th>
+                <th>Method</th><th>Ref</th><th style="text-align:right">Amount</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="expenseBody">
+              <tr><td colspan="7" style="text-align:center;color:var(--muted);padding:40px">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ADD/EDIT EXPENSE MODAL ═══════════════════════════════════════════ -->
+<div class="modal-overlay" id="entryModal">
+  <div class="modal-box">
+    <div class="flex justify-between items-center mb-5">
+      <div style="font-size:16px;font-weight:800" id="entryModalTitle">Add Expense</div>
+      <button class="btn btn-sm" onclick="closeModal('entryModal')">✕</button>
+    </div>
+    <input type="hidden" id="editEntryId">
+    <div class="form-grid2">
+      <div>
+        <label class="form-label">Date *</label>
+        <input id="eDate" class="form-control" type="date">
+      </div>
+      <div>
+        <label class="form-label">Category *</label>
+        <select id="eCat" class="form-control"></select>
+      </div>
+    </div>
+    <div class="mt-3">
+      <label class="form-label">Title *</label>
+      <input id="eTitle" class="form-control" placeholder="e.g. Monthly Rent">
+    </div>
+    <div class="mt-3">
+      <label class="form-label">Description</label>
+      <textarea id="eDesc" class="form-control" rows="2" placeholder="Optional details…"></textarea>
+    </div>
+    <div class="form-grid2 mt-3">
+      <div>
+        <label class="form-label">Amount (Rs) *</label>
+        <input id="eAmount" class="form-control" type="number" min="0.01" step="0.01" placeholder="0.00">
+      </div>
+      <div>
+        <label class="form-label">Payment Method</label>
+        <select id="eMethod" class="form-control">
+          <option value="cash">Cash</option>
+          <option value="bank_transfer">Bank Transfer</option>
+          <option value="cheque">Cheque</option>
+          <option value="card">Card</option>
+          <option value="online">Online</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Reference No.</label>
+        <input id="eRef" class="form-control" placeholder="Cheque / TXN no.">
+      </div>
+      <div class="flex flex-col gap-2" style="padding-top:4px">
+        <label class="flex items-center gap-2" style="font-size:13px;font-weight:600;padding-top:22px">
+          <input type="checkbox" id="eRecurring"> Recurring expense
+        </label>
+        <label class="flex items-center gap-2" style="font-size:13px;font-weight:600">
+          <input type="checkbox" id="eAffectsProfit" checked> Affects profit
+        </label>
+      </div>
+    </div>
+    <div class="flex gap-3 mt-5 justify-end">
+      <button class="btn" onclick="closeModal('entryModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEntry()">Save Expense</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MANAGE CATEGORIES MODAL ══════════════════════════════════════════ -->
+<div class="modal-overlay" id="catModal">
+  <div class="modal-box" style="max-width:460px">
+    <div class="flex justify-between items-center mb-4">
+      <div style="font-size:16px;font-weight:800">⚙ Expense Categories</div>
+      <button class="btn btn-sm" onclick="closeModal('catModal')">✕</button>
+    </div>
+    <div class="flex gap-2 mb-4">
+      <input id="newCatName" class="form-control" placeholder="New category name" style="flex:1">
+      <select id="newCatType" class="form-control" style="width:160px">
+        <option value="shop_expense">Shop Expense</option>
+        <option value="work_expense">Work Expense</option>
+        <option value="bank_loan">Bank / Loan</option>
+        <option value="extra_expense">Extra Expense</option>
+        <option value="savings">Savings</option>
+        <option value="other">Other</option>
+      </select>
+      <button class="btn btn-primary" onclick="addCategory()">Add</button>
+    </div>
+    <div id="catList"></div>
+  </div>
+</div>
+
+<script>
+const fmtLKR = v => 'Rs ' + (parseFloat(v)||0).toLocaleString('en-LK',{minimumFractionDigits:2,maximumFractionDigits:2});
+let _allEntries = [], _currentTab = 'all', _categories = [];
+
+const TYPE_LABELS = {
+  shop_expense:'Shop Expense', work_expense:'Work Expense',
+  bank_loan:'Bank / Loan', extra_expense:'Extra Expense', savings:'Savings', other:'Other'
+};
+
+async function api(url, opts={}){
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content||'';
+  const res = await fetch(url, {headers:{'Content-Type':'application/json','X-CSRFToken':csrf},...opts});
+  return res.json();
+}
+function closeModal(id){ const m=document.getElementById(id); if(m){m.classList.remove('open');m.classList.remove('show');} }
+function openModal(id){ const m=document.getElementById(id); if(m){m.classList.add('show');} }
+function esc(s){ const d=document.createElement('div');d.textContent=s||'';return d.innerHTML; }
+
+// ── Init dates ────────────────────────────────────────────────────────────
+function setThisMonth(){
+  const now=new Date(); const y=now.getFullYear(); const m=String(now.getMonth()+1).padStart(2,'0');
+  document.getElementById('filterFrom').value=`${y}-${m}-01`;
+  document.getElementById('filterTo').value=`${y}-${m}-${String(new Date(y,now.getMonth()+1,0).getDate()).padStart(2,'0')}`;
+  loadAll();
+}
+function setToday(){
+  const d=new Date().toISOString().split('T')[0];
+  document.getElementById('filterFrom').value=d;
+  document.getElementById('filterTo').value=d;
+  loadAll();
+}
+
+function switchTab(tab, btn){
+  _currentTab=tab;
+  document.querySelectorAll('.exp-tab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTable();
+}
+
+async function loadAll(){
+  const from=document.getElementById('filterFrom').value;
+  const to=document.getElementById('filterTo').value;
+  const data = await api(`/api/expenses?from=${from}&to=${to}`);
+  _allEntries = data.entries||[];
+  renderSummaryCards(data.summary||{}, data.total||0);
+  renderTable();
+}
+
+function renderSummaryCards(summary, total){
+  const items = [
+    {label:'Total Expenses',  val:total,                       color:'var(--danger)',  icon:'💸'},
+    {label:'Shop Expenses',   val:summary.shop_expense||0,     color:'var(--accent)',  icon:'🏪'},
+    {label:'Work Expenses',   val:summary.work_expense||0,     color:'#10b981',        icon:'🔧'},
+    {label:'Bank / Loans',    val:summary.bank_loan||0,        color:'var(--danger)',  icon:'🏦'},
+    {label:'Extra Expenses',  val:summary.extra_expense||0,    color:'#f59e0b',        icon:'➕'},
+    {label:'Savings',         val:summary.savings||0,          color:'#8b5cf6',        icon:'💰'},
+  ];
+  document.getElementById('summaryCards').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;grid-column:1/-1">
+      ${items.map(i=>`
+        <div class="stat-card">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">${i.icon} ${i.label}</div>
+          <div style="font-size:18px;font-weight:800;color:${i.color}">${fmtLKR(i.val)}</div>
+        </div>`).join('')}
+    </div>`;
+}
+
+function renderTable(){
+  const tab = _currentTab;
+  const entries = tab==='all' ? _allEntries : _allEntries.filter(e=>e.category_type===tab);
+  const total = entries.reduce((s,e)=>s+e.amount,0);
+  const titles = {all:'All Expenses', shop_expense:'Shop Expenses', work_expense:'Work Expenses',
+                  bank_loan:'Bank / Loan', extra_expense:'Extra Expenses', savings:'Savings'};
+  document.getElementById('tableTitle').textContent = titles[tab]||tab;
+  document.getElementById('tableTotal').textContent = `Total: ${fmtLKR(total)}`;
+  const tbody = document.getElementById('expenseBody');
+  if(!entries.length){
+    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:40px">No entries found for this period</td></tr>';
+    return;
+  }
+  tbody.innerHTML = entries.map(e=>`
+    <tr>
+      <td>${esc(e.entry_date)}</td>
+      <td>
+        <span class="tag-type tag-${esc(e.category_type)}">${esc(TYPE_LABELS[e.category_type]||e.category_type)}</span><br>
+        <span style="font-size:11px;color:var(--muted)">${esc(e.category_name)}</span>
+      </td>
+      <td>
+        <div style="font-weight:600">${esc(e.title)}</div>
+        ${e.description?`<div style="font-size:11px;color:var(--muted)">${esc(e.description)}</div>`:''}
+        ${e.is_recurring?'<span style="font-size:10px;color:var(--accent)">🔁 Recurring</span>':''}
+      </td>
+      <td>${esc(e.payment_method)}</td>
+      <td style="font-size:12px;color:var(--muted)">${esc(e.reference_no)}</td>
+      <td style="text-align:right;font-weight:700">${fmtLKR(e.amount)}</td>
+      <td>
+        <div class="flex gap-1">
+          <button class="btn btn-sm" onclick="editEntry(${e.id})">✏️</button>
+          <button class="btn btn-sm" style="color:var(--danger);background:rgba(239,68,68,.1)"
+                  onclick="deleteEntry(${e.id})">🗑</button>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+// ── Entry modal ───────────────────────────────────────────────────────────
+async function loadCategories(){
+  _categories = await api('/api/expense-categories');
+  refreshCatSelect();
+}
+function refreshCatSelect(){
+  const sel = document.getElementById('eCat');
+  if(!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = _categories.map(c=>`<option value="${c.id}">${esc(c.name)} (${esc(TYPE_LABELS[c.type]||c.type)})</option>`).join('');
+  if(cur) sel.value=cur;
+}
+
+function openEntryModal(){
+  document.getElementById('editEntryId').value='';
+  document.getElementById('entryModalTitle').textContent='Add Expense';
+  document.getElementById('eDate').value=new Date().toISOString().split('T')[0];
+  document.getElementById('eTitle').value='';
+  document.getElementById('eDesc').value='';
+  document.getElementById('eAmount').value='';
+  document.getElementById('eMethod').value='cash';
+  document.getElementById('eRef').value='';
+  document.getElementById('eRecurring').checked=false;
+  document.getElementById('eAffectsProfit').checked=true;
+  refreshCatSelect();
+  openModal('entryModal');
+}
+
+function editEntry(id){
+  const e = _allEntries.find(x=>x.id===id);
+  if(!e) return;
+  document.getElementById('editEntryId').value=id;
+  document.getElementById('entryModalTitle').textContent='Edit Expense';
+  document.getElementById('eDate').value=e.entry_date||'';
+  document.getElementById('eTitle').value=e.title||'';
+  document.getElementById('eDesc').value=e.description||'';
+  document.getElementById('eAmount').value=e.amount||'';
+  document.getElementById('eMethod').value=e.payment_method||'cash';
+  document.getElementById('eRef').value=e.reference_no||'';
+  document.getElementById('eRecurring').checked=!!e.is_recurring;
+  document.getElementById('eAffectsProfit').checked=!!e.affects_profit;
+  refreshCatSelect();
+  document.getElementById('eCat').value=e.category_id;
+  openModal('entryModal');
+}
+
+async function saveEntry(){
+  const id = document.getElementById('editEntryId').value;
+  const payload = {
+    entry_date: document.getElementById('eDate').value,
+    category_id: parseInt(document.getElementById('eCat').value)||0,
+    title: document.getElementById('eTitle').value.trim(),
+    description: document.getElementById('eDesc').value.trim(),
+    amount: parseFloat(document.getElementById('eAmount').value)||0,
+    payment_method: document.getElementById('eMethod').value,
+    reference_no: document.getElementById('eRef').value.trim(),
+    is_recurring: document.getElementById('eRecurring').checked,
+    affects_profit: document.getElementById('eAffectsProfit').checked,
+  };
+  if(!payload.title){ alert('Title is required'); return; }
+  if(!payload.category_id){ alert('Select a category'); return; }
+  if(payload.amount<=0){ alert('Amount must be positive'); return; }
+  const url = id ? `/api/expenses/${id}` : '/api/expenses';
+  const method = id ? 'PUT' : 'POST';
+  const res = await api(url, {method, body:JSON.stringify(payload)});
+  if(!res.ok){ alert(res.error||'Save failed'); return; }
+  closeModal('entryModal');
+  loadAll();
+}
+
+async function deleteEntry(id){
+  if(!confirm('Delete this expense?')) return;
+  const res = await api(`/api/expenses/${id}`, {method:'DELETE'});
+  if(!res.ok){ alert(res.error||'Delete failed'); return; }
+  loadAll();
+}
+
+// ── Category modal ────────────────────────────────────────────────────────
+async function openCategoryModal(){
+  await loadCategories();
+  renderCatList();
+  openModal('catModal');
+}
+
+function renderCatList(){
+  document.getElementById('catList').innerHTML = _categories.map(c=>`
+    <div class="flex justify-between items-center" style="padding:8px 10px;border-radius:8px;background:var(--stat);margin-bottom:6px">
+      <div>
+        <span style="font-weight:600;font-size:13px">${esc(c.name)}</span>
+        <span class="tag-type tag-${esc(c.type)}" style="margin-left:6px">${esc(TYPE_LABELS[c.type]||c.type)}</span>
+      </div>
+      <button class="btn btn-sm" style="color:var(--danger);background:rgba(239,68,68,.1)"
+              onclick="toggleCat(${c.id},${c.is_active})">${c.is_active?'Disable':'Enable'}</button>
+    </div>`).join('');
+}
+
+async function addCategory(){
+  const name = document.getElementById('newCatName').value.trim();
+  const type = document.getElementById('newCatType').value;
+  if(!name){ alert('Enter a category name'); return; }
+  const res = await api('/api/expense-categories', {method:'POST', body:JSON.stringify({name,type})});
+  if(!res.ok){ alert(res.error||'Failed'); return; }
+  document.getElementById('newCatName').value='';
+  await loadCategories();
+  renderCatList();
+}
+
+async function toggleCat(id, active){
+  await api(`/api/expense-categories/${id}`, {method:'PATCH', body:JSON.stringify({is_active:!active})});
+  await loadCategories();
+  renderCatList();
+}
+
+document.querySelectorAll('.modal-overlay').forEach(el=>{
+  el.addEventListener('click', e=>{ if(e.target===el){ el.classList.remove('open'); el.classList.remove('show'); } });
+});
+
+// Init
+setThisMonth();
+loadCategories();
+</script>
+{% endblock %}
