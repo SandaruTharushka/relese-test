@@ -2,210 +2,93 @@
 {% from "sidebar.html" import sidebar with context %}
 {% block title %} — Service Jobs{% endblock %}
 {% block body %}
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   .service-job-modal .grid-2,
-  .service-job-modal .grid-3 {
-    align-items: end;
-  }
-  .service-job-modal {
-    overflow-y: auto;
-    overflow-x: visible;
-  }
-  .service-job-modal .modal-body {
-    overflow: visible;
-  }
-  .service-job-modal .field-with-action {
-    display: flex;
-    gap: 6px;
-    align-items: stretch;
-  }
+  .service-job-modal .grid-3 { align-items: end; }
+  .service-job-modal { overflow-y: auto; overflow-x: visible; }
+  .service-job-modal .modal-body { overflow: visible; }
+  .service-job-modal .field-with-action { display:flex;gap:6px;align-items:stretch; }
   .service-job-modal .field-with-action .custom-select-host,
   .service-job-modal .field-with-action select,
-  .service-job-modal .field-with-action .input {
-    flex: 1;
-    min-width: 0;
-  }
-  .service-job-modal .field-with-action .btn {
-    flex-shrink: 0;
-    white-space: nowrap;
-  }
-  .status-select-host {
-    max-width: 200px;
-  }
-  .brand-autocomplete {
-    position: relative;
-    min-width: 0;
-  }
-  .brand-autocomplete-menu,
-  .brand-suggestions {
-    position: absolute;
-    left: 0;
-    top: calc(100% + 8px);
-    width: 100%;
-    display: none;
-    background: #fff;
-    border: 1px solid #d9e2f1;
-    border-radius: 14px;
-    box-shadow: 0 12px 30px rgba(0,0,0,0.12);
-    z-index: 3000;
-    max-height: 260px;
-    overflow-y: auto;
-    padding: 6px;
-  }
-  .brand-option,
-  .brand-suggestion-item {
-    width: 100%;
-    border: 0;
-    background: transparent;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    text-align: left;
-    padding: 10px 12px;
-    cursor: pointer;
-    color: #24324a;
-    border-radius: 10px;
-    min-height: 48px;
-  }
-  .brand-option:hover,
-  .brand-option:focus-visible,
-  .brand-suggestion-item:hover,
-  .brand-suggestion-item:focus-visible,
-  .brand-suggestion-create:hover,
-  .brand-suggestion-create:focus-visible {
-    background: #eef4ff;
-    outline: none;
-  }
-  .brand-suggestion-item .left {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    flex: 1;
-  }
-  .brand-name {
-    font-size: 14px;
-    font-weight: 600;
-    color: #24324a;
-    line-height: 1.2;
-  }
-  .brand-sub {
-    font-size: 12px;
-    color: #7b8798;
-    line-height: 1.2;
-    margin-top: 2px;
-  }
-  .brand-option-label,
-  .brand-name,
-  .brand-sub {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .brand-option-meta,
-  .brand-suggestion-item .right {
-    flex: 0 0 auto;
-    font-size: 12px;
-    color: #7b8798;
-    white-space: nowrap;
-  }
-  .brand-option-mark {
-    background: color-mix(in srgb, var(--primary) 22%, transparent);
-    color: inherit;
-    font-weight: 700;
-    border-radius: 4px;
-    padding: 0 2px;
-  }
-  .brand-add-row,
-  .brand-suggestion-create {
-    width: 100%;
-    border: 0;
-    background: transparent;
-    display: block;
-    padding: 10px 12px;
-    font-size: 14px;
-    color: #3157f6;
-    font-weight: 600;
-    border-radius: 10px;
-    text-align: left;
-    cursor: pointer;
-  }
-  .brand-menu-state {
-    padding: 10px 12px;
-    color: var(--muted);
-  }
-  .brand-menu-state.error {
-    color: var(--danger);
-  }
+  .service-job-modal .field-with-action .pf-inp { flex:1;min-width:0; }
+  .service-job-modal .field-with-action .btn { flex-shrink:0;white-space:nowrap; }
+  .status-select-host { max-width:200px; }
 
-  /* Compact Matching Customers UI */
+  /* ── Brand autocomplete ─────────────────────────────────────────────── */
+  .brand-autocomplete { position:relative;min-width:0; }
+  .brand-autocomplete-menu, .brand-suggestions {
+    position:absolute;left:0;top:calc(100% + 8px);width:100%;display:none;
+    background:#181c25;border:1px solid #252d3d;border-radius:14px;
+    box-shadow:0 12px 30px rgba(0,0,0,.5);z-index:3000;
+    max-height:260px;overflow-y:auto;padding:6px;
+  }
+  .brand-option, .brand-suggestion-item {
+    width:100%;border:0;background:transparent;display:flex;align-items:center;
+    justify-content:space-between;gap:10px;text-align:left;padding:10px 12px;
+    cursor:pointer;color:#e2e8f0;border-radius:10px;min-height:48px;
+  }
+  .brand-option:hover, .brand-option:focus-visible,
+  .brand-suggestion-item:hover, .brand-suggestion-item:focus-visible,
+  .brand-suggestion-create:hover, .brand-suggestion-create:focus-visible { background:#252d3d;outline:none; }
+  .brand-suggestion-item .left { display:flex;flex-direction:column;min-width:0;flex:1; }
+  .brand-name { font-size:14px;font-weight:600;color:#e2e8f0;line-height:1.2; }
+  .brand-sub  { font-size:12px;color:#8892a4;line-height:1.2;margin-top:2px; }
+  .brand-option-label, .brand-name, .brand-sub { flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+  .brand-option-meta, .brand-suggestion-item .right { flex:0 0 auto;font-size:12px;color:#8892a4;white-space:nowrap; }
+  .brand-option-mark { background:rgba(91,106,247,.22);color:inherit;font-weight:700;border-radius:4px;padding:0 2px; }
+  .brand-add-row, .brand-suggestion-create {
+    width:100%;border:0;background:transparent;display:block;padding:10px 12px;
+    font-size:14px;color:#7b8ff7;font-weight:600;border-radius:10px;text-align:left;cursor:pointer;
+  }
+  .brand-menu-state { padding:10px 12px;color:#8892a4; }
+  .brand-menu-state.error { color:var(--danger); }
+
+  /* ── Customer suggestion box ────────────────────────────────────────── */
   .customer-suggestion-box {
-    position: absolute;
-    z-index: 1001;
-    width: 100%;
-    margin-top: 4px;
-    background: #fff;
-    border: 1px solid #d9e2f1;
-    border-radius: 12px;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.12);
-    animation: customerFadeIn 150ms ease-out;
-    overflow: hidden;
+    position:absolute;z-index:1001;width:100%;margin-top:4px;
+    background:#181c25;border:1px solid #252d3d;border-radius:12px;
+    box-shadow:0 10px 25px rgba(0,0,0,.5);animation:customerFadeIn 150ms ease-out;overflow:hidden;
   }
-  @keyframes customerFadeIn {
-    from { opacity: 0; transform: translateY(-4px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  #matchingCustomers {
-    max-height: 120px;
-    overflow-y: auto;
-  }
-  #matchingCustomers::-webkit-scrollbar {
-    width: 6px;
-  }
-  #matchingCustomers::-webkit-scrollbar-thumb {
-    background: #e2e8f0;
-    border-radius: 10px;
-  }
-  .customer-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 10px;
-    cursor: pointer;
-    border-bottom: 1px solid #f1f5f9;
-    transition: background 150ms;
-    gap: 12px;
-  }
-  .customer-item:last-child { border-bottom: none; }
-  .customer-item:hover { background: #f8faff; }
-  .customer-name {
-    font-size: 14px;
-    font-weight: 700;
-    color: #1e293b;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    line-height: 1.2;
-  }
-  .customer-meta {
-    font-size: 11px;
-    color: #64748b;
-    margin-top: 2px;
-  }
-  .customer-spent {
-    font-size: 11px;
-    font-weight: 600;
-    color: #475569;
-    text-align: right;
-    white-space: nowrap;
-  }
-  .customer-due {
-    font-size: 10px;
-    color: var(--danger);
-    margin-top: 2px;
-  }
+  @keyframes customerFadeIn { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
+  #matchingCustomers { max-height:120px;overflow-y:auto; }
+  #matchingCustomers::-webkit-scrollbar { width:6px; }
+  #matchingCustomers::-webkit-scrollbar-thumb { background:#252d3d;border-radius:10px; }
+  .customer-item { display:flex;justify-content:space-between;align-items:center;padding:8px 10px;cursor:pointer;border-bottom:1px solid #252d3d;transition:background 150ms;gap:12px; }
+  .customer-item:last-child { border-bottom:none; }
+  .customer-item:hover { background:#1e2536; }
+  .customer-name { font-size:14px;font-weight:700;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2; }
+  .customer-meta { font-size:11px;color:#8892a4;margin-top:2px; }
+  .customer-spent { font-size:11px;font-weight:600;color:#8892a4;text-align:right;white-space:nowrap; }
+  .customer-due { font-size:10px;color:var(--danger);margin-top:2px; }
+
+  /* ── Dark form modal shell ──────────────────────────────────────────── */
+  .pf-modal-shell { background:#181c25;border:1px solid #252d3d;border-radius:20px;padding:28px 32px;box-shadow:0 24px 64px rgba(0,0,0,.65); }
+
+  /* ── Section header ─────────────────────────────────────────────────── */
+  .pf-sec { display:flex;align-items:center;gap:8px;margin:20px 0 13px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase; }
+  .pf-sec:first-child { margin-top:0; }
+  .pf-sec::before { content:'';display:inline-block;width:3px;height:14px;border-radius:2px;background:currentColor;flex-shrink:0; }
+
+  /* ── Label ──────────────────────────────────────────────────────────── */
+  .pf-lbl { font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#8892a4;display:block;margin-bottom:6px; }
+
+  /* ── Input / select / textarea ──────────────────────────────────────── */
+  .pf-inp { background:#0f1117;border:1.5px solid #252d3d;color:#e2e8f0;padding:10px 14px;border-radius:10px;width:100%;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;transition:border-color .2s,box-shadow .2s;resize:vertical;appearance:none;-webkit-appearance:none;box-sizing:border-box; }
+  .pf-inp:focus { border-color:#5b6af7;box-shadow:0 0 0 3px rgba(91,106,247,.15); }
+  .pf-inp::placeholder { color:#3a4556; }
+  .pf-inp option { background:#181c25;color:#e2e8f0; }
+  .pf-inp[type="date"] { min-height:42px;color-scheme:dark; }
+  .pf-inp:disabled { opacity:.5;cursor:not-allowed; }
+
+  /* ── Fuel level button group ────────────────────────────────────────── */
+  .pf-fuel-grp { display:flex;gap:5px;width:100%; }
+  .pf-fuel-btn { flex:1;padding:9px 4px;border-radius:8px;border:1.5px solid #252d3d;background:#0f1117;color:#8892a4;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;text-align:center;white-space:nowrap; }
+  .pf-fuel-btn:hover { border-color:#5b6af7;color:#5b6af7; }
+  .pf-fuel-btn.active { background:rgba(91,106,247,.15);border-color:#5b6af7;color:#7b8ff7; }
+
+  /* ── Broker referral card ───────────────────────────────────────────── */
+  .pf-broker-card { background:#0f1117;border:1px solid #252d3d;border-radius:12px;padding:16px;margin-top:4px; }
 </style>
 <div class="app-layout">
   {{ sidebar('repairs') }}
@@ -272,29 +155,29 @@
      NEW JOB MODAL
 ══════════════════════════════════════════════════════════ -->
 <div class="modal-backdrop" id="newJobModal" onclick="closeModal('newJobModal')">
-  <div class="modal service-job-modal" onclick="event.stopPropagation()" style="max-width:680px">
+  <div class="modal service-job-modal pf-modal-shell" onclick="event.stopPropagation()" style="max-width:680px">
     <div class="modal-header">
-      <div class="modal-title">🚗 New Service Job</div>
+      <div class="modal-title" style="font-family:'DM Sans',sans-serif;font-size:18px;font-weight:800;color:#e2e8f0">New Service Job</div>
       <button class="btn btn-ghost btn-sm" onclick="closeModal('newJobModal')">✕</button>
     </div>
     <div class="modal-body">
       <div style="display:flex;flex-direction:column;gap:12px">
 
         <!-- Customer -->
-        <div style="font-weight:600;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Customer</div>
+        <div class="pf-sec" style="color:#5b6af7">Customer</div>
         <div class="grid-2">
-          <div><label class="label">Customer Name</label>
-            <input id="jCustName" type="text" class="input" placeholder="Customer name" oninput="debounceSearchCustomers('j')"></div>
-          <div><label class="label">Customer Phone</label>
-            <input id="jCustPhone" type="text" class="input" placeholder="07X XXXXXXX" oninput="debounceSearchCustomers('j')"></div>
+          <div><label class="pf-lbl">Customer Name</label>
+            <input id="jCustName" type="text" class="pf-inp" placeholder="Customer name" oninput="debounceSearchCustomers('j')"></div>
+          <div><label class="pf-lbl">Customer Phone</label>
+            <input id="jCustPhone" type="text" class="pf-inp" placeholder="07X XXXXXXX" oninput="debounceSearchCustomers('j')"></div>
         </div>
         <div id="jCustomerSuggestBox" class="customer-suggestion-box" style="display:none"></div>
 
         <!-- Vehicle -->
-        <div style="font-weight:600;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:4px">Vehicle Details</div>
+        <div class="pf-sec" style="color:#34d399">Vehicle Details</div>
         <div class="grid-3">
-          <div><label class="label">Vehicle Type</label>
-            <select id="jVehicleType" class="input" data-custom-select>
+          <div><label class="pf-lbl">Vehicle Type</label>
+            <select id="jVehicleType" class="pf-inp" data-custom-select>
               <option value="car">Car</option>
               <option value="bike">Bike / Motorcycle</option>
               <option value="three_wheeler">Three Wheeler</option>
@@ -305,50 +188,58 @@
               <option value="tractor">Tractor</option>
               <option value="other">Other</option>
             </select></div>
-          <div class="brand-autocomplete" id="jMakeWrap"><label class="label">Make / Brand</label>
-            <input id="jMake" type="text" class="input" placeholder="Toyota, Nissan, BMW..." autocomplete="off">
+          <div class="brand-autocomplete" id="jMakeWrap"><label class="pf-lbl">Make / Brand</label>
+            <input id="jMake" type="text" class="pf-inp" placeholder="Toyota, Nissan, BMW..." autocomplete="off">
             <div id="jMakeMenu" class="brand-autocomplete-menu"></div>
           </div>
-          <div><label class="label">Model</label>
-            <input id="jModel" type="text" class="input" placeholder="Corolla, Sunny, X5..."></div>
+          <div><label class="pf-lbl">Model</label>
+            <input id="jModel" type="text" class="pf-inp" placeholder="Corolla, Sunny, X5..."></div>
         </div>
         <div class="grid-3">
-          <div><label class="label">Year</label>
-            <input id="jYear" type="number" class="input" placeholder="2020" min="1950" max="2099"></div>
-          <div><label class="label">Colour</label>
-            <input id="jColor" type="text" class="input" placeholder="White, Black..."></div>
-          <div><label class="label">Fuel Level (In)</label>
-            <select id="jFuel" class="input" data-custom-select>
+          <div><label class="pf-lbl">Year</label>
+            <input id="jYear" type="number" class="pf-inp" placeholder="2020" min="1950" max="2099"></div>
+          <div><label class="pf-lbl">Colour</label>
+            <input id="jColor" type="text" class="pf-inp" placeholder="White, Black..."></div>
+          <div>
+            <label class="pf-lbl">Fuel Level (In)</label>
+            <select id="jFuel" style="display:none">
               <option value="">— Select —</option>
               <option>E</option><option>1/4</option><option>1/2</option><option>3/4</option><option>F</option>
             </select>
+            <div class="pf-fuel-grp" id="jFuelBtns">
+              <button type="button" class="pf-fuel-btn" data-val="E"   onclick="setFuelLevel('j','E')">E</button>
+              <button type="button" class="pf-fuel-btn" data-val="1/4" onclick="setFuelLevel('j','1/4')">1/4</button>
+              <button type="button" class="pf-fuel-btn" data-val="1/2" onclick="setFuelLevel('j','1/2')">1/2</button>
+              <button type="button" class="pf-fuel-btn" data-val="3/4" onclick="setFuelLevel('j','3/4')">3/4</button>
+              <button type="button" class="pf-fuel-btn" data-val="F"   onclick="setFuelLevel('j','F')">F</button>
+            </div>
           </div>
         </div>
         <div class="grid-2">
-          <div><label class="label">Licence Plate / Reg. No.</label>
+          <div><label class="pf-lbl">Licence Plate / Reg. No.</label>
             <div style="display:flex;gap:8px">
-              <input id="jRegNo" list="plateSuggestions" type="text" class="input" placeholder="WP CAB-1234" style="text-transform:uppercase" oninput="suggestPlates()">
+              <input id="jRegNo" list="plateSuggestions" type="text" class="pf-inp" placeholder="WP CAB-1234" style="text-transform:uppercase" oninput="suggestPlates()">
               <button type="button" class="btn btn-ghost btn-sm" onclick="lookupVehicleHistory()">History</button>
               <button type="button" class="btn btn-ghost btn-sm" onclick="lookupVehicleProfile()">Search</button>
             </div>
             <datalist id="plateSuggestions"></datalist>
             <small id="jRegNoMeta" style="color:var(--muted)"></small>
           </div>
-          <div><label class="label">VIN / Chassis No.</label>
-            <input id="jVin" type="text" class="input" placeholder="WDD2130461A..." style="text-transform:uppercase"></div>
+          <div><label class="pf-lbl">VIN / Chassis No.</label>
+            <input id="jVin" type="text" class="pf-inp" placeholder="WDD2130461A..." style="text-transform:uppercase"></div>
         </div>
-        <div id="vehicleLookupCard" style="display:none;background:var(--surface-2);border:1px solid var(--border);padding:10px;border-radius:10px">
-          <div id="vehicleLookupBody" style="font-size:13px;color:var(--muted)">No vehicle selected.</div>
+        <div id="vehicleLookupCard" style="display:none;background:#0f1117;border:1px solid #252d3d;padding:10px;border-radius:10px">
+          <div id="vehicleLookupBody" style="font-size:13px;color:#8892a4">No vehicle selected.</div>
           <div style="display:flex;gap:8px;margin-top:8px">
             <button type="button" class="btn btn-primary btn-sm" onclick="applyLookupToForm()">Use this vehicle for new service job</button>
             <button type="button" class="btn btn-ghost btn-sm" onclick="clearLookupCard()">Create as New Vehicle</button>
           </div>
         </div>
         <div class="grid-2">
-          <div><label class="label">Odometer In (km)</label>
-            <input id="jOdoIn" type="number" class="input" placeholder="e.g. 85400" min="0"></div>
-          <div><label class="label">Service Type</label>
-            <select id="jServiceType" class="input" data-custom-select>
+          <div><label class="pf-lbl">Odometer In (km)</label>
+            <input id="jOdoIn" type="number" class="pf-inp" placeholder="e.g. 85400" min="0"></div>
+          <div><label class="pf-lbl">Service Type</label>
+            <select id="jServiceType" class="pf-inp" data-custom-select>
               <option value="">— Select —</option>
               <option value="repair">Repair</option>
               <option value="service">Service / Maintenance</option>
@@ -364,59 +255,63 @@
           </div>
         </div>
 
-        <!-- Problem -->
-        <div style="font-weight:600;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:4px">Problem &amp; Charges</div>
-        <div><label class="label">Issue Reported *</label>
-          <textarea id="jIssue" class="input" rows="2" placeholder="Describe the problem..."></textarea></div>
+        <!-- Problem & Charges -->
+        <div class="pf-sec" style="color:#fbb040">Problem &amp; Charges</div>
+        <div><label class="pf-lbl">Issue Reported *</label>
+          <textarea id="jIssue" class="pf-inp" rows="2" placeholder="Describe the problem..."></textarea></div>
         <div class="grid-2">
-          <div><label class="label">Labour Charge (LKR) <span style="font-size:11px;color:var(--muted);font-weight:400">(editable after job completion)</span></label>
-            <input id="jLabour" type="number" class="input" placeholder="Set after completion" min="0" step="0.01" disabled style="opacity:.55;cursor:not-allowed"></div>
-          <div><label class="label">Advance Paid (LKR)</label>
-            <input id="jAdvance" type="number" class="input" placeholder="0.00" min="0" step="0.01"></div>
+          <div>
+            <label class="pf-lbl">Labour Charge (LKR) <span style="font-size:10px;color:#4a5568;font-weight:400;font-family:'DM Sans',sans-serif">(after completion)</span></label>
+            <input id="jLabour" type="number" class="pf-inp" placeholder="Set after completion" min="0" step="0.01" disabled>
+          </div>
+          <div><label class="pf-lbl">Advance Paid (LKR)</label>
+            <input id="jAdvance" type="number" class="pf-inp" placeholder="0.00" min="0" step="0.01"></div>
         </div>
         <div class="grid-2">
-          <div><label class="label">Promised Date</label>
-            <input id="jPromised" type="date" class="input"></div>
-          <div><label class="label">Technician</label>
+          <div><label class="pf-lbl">Promised Date</label>
+            <input id="jPromised" type="date" class="pf-inp"></div>
+          <div><label class="pf-lbl">Technician</label>
             <div class="field-with-action">
-              <select id="jTech" class="input" data-custom-select><option value="">— Assign —</option></select>
+              <select id="jTech" class="pf-inp" data-custom-select><option value="">— Assign —</option></select>
               <button type="button" class="btn btn-ghost btn-sm" onclick="openModal('addTechModal')">+ Add</button>
             </div>
           </div>
         </div>
-        <div><label class="label">Notes</label>
-          <textarea id="jNotes" class="input" rows="2" placeholder="Internal notes..."></textarea></div>
-        <!-- ── Broker Referral ── -->
-        <div style="background:var(--stat,#f8f9fa);border-radius:10px;padding:14px;margin-top:4px">
-          <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:10px;text-transform:uppercase">🤝 Broker Referral (Optional)</div>
+        <div><label class="pf-lbl">Notes</label>
+          <textarea id="jNotes" class="pf-inp" rows="2" placeholder="Internal notes..."></textarea></div>
+
+        <!-- Broker Referral -->
+        <div class="pf-broker-card">
+          <div class="pf-sec" style="color:#8892a4;margin-top:0">Broker Referral <span style="font-size:10px;color:#4a5568;font-family:'DM Sans',sans-serif;font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></div>
           <div class="grid-2">
             <div style="position:relative">
-              <label class="label">Broker Name</label>
-              <input id="jBrokerName" class="input" placeholder="Type to search or add new…"
+              <label class="pf-lbl">Broker Name</label>
+              <input id="jBrokerName" class="pf-inp" placeholder="Type to search or add new…"
                      autocomplete="off" oninput="brokerAutocompleteNew(this.value)">
               <input type="hidden" id="jBrokerId">
-              <div id="brokerSuggestNew" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1px solid var(--border);border-radius:8px;z-index:200;box-shadow:0 4px 16px rgba(0,0,0,.12);max-height:180px;overflow-y:auto"></div>
+              <div id="brokerSuggestNew" style="display:none;position:absolute;top:100%;left:0;right:0;background:#181c25;border:1px solid #252d3d;border-radius:8px;z-index:200;box-shadow:0 4px 16px rgba(0,0,0,.4);max-height:180px;overflow-y:auto"></div>
             </div>
             <div>
-              <label class="label">Commission Type</label>
-              <select id="jBrokerCommType" class="input" onchange="updateBrokerCommLabelNew()">
+              <label class="pf-lbl">Commission Type</label>
+              <select id="jBrokerCommType" class="pf-inp" onchange="updateBrokerCommLabelNew()">
                 <option value="percent">Percentage (%)</option>
                 <option value="fixed">Fixed Amount</option>
               </select>
             </div>
             <div>
-              <label class="label" id="jBrokerCommLabel">Commission Value (%)</label>
-              <input id="jBrokerCommValue" class="input" type="number" min="0" step="0.01" placeholder="0">
+              <label class="pf-lbl" id="jBrokerCommLabel">Commission Value (%)</label>
+              <input id="jBrokerCommValue" class="pf-inp" type="number" min="0" step="0.01" placeholder="0">
             </div>
             <div>
-              <label class="label">Cash Price</label>
-              <input id="jBrokerCashPrice" class="input" type="number" min="0" step="0.01" placeholder="0.00">
+              <label class="pf-lbl">Cash Price</label>
+              <input id="jBrokerCashPrice" class="pf-inp" type="number" min="0" step="0.01" placeholder="0.00">
             </div>
           </div>
         </div>
+
       </div>
     </div>
-    <div class="modal-footer">
+    <div class="modal-footer" style="border-top:1px solid #252d3d">
       <button class="btn btn-ghost" onclick="closeModal('newJobModal')">Cancel</button>
       <button class="btn btn-primary" onclick="createJob()">Create Job Card</button>
     </div>
@@ -443,93 +338,112 @@
      EDIT JOB MODAL
 ══════════════════════════════════════════════════════════ -->
 <div class="modal-backdrop" id="editJobModal" onclick="closeModal('editJobModal')">
-  <div class="modal service-job-modal" onclick="event.stopPropagation()" style="max-width:760px;width:95vw">
+  <div class="modal service-job-modal pf-modal-shell" onclick="event.stopPropagation()" style="max-width:760px;width:95vw">
     <div class="modal-header">
-      <div class="modal-title" id="editJobTitle">✏️ Edit Job</div>
+      <div class="modal-title" id="editJobTitle" style="font-family:'DM Sans',sans-serif;font-size:18px;font-weight:800;color:#e2e8f0">Edit Job</div>
       <button class="btn btn-ghost btn-sm" onclick="closeModal('editJobModal')">✕</button>
     </div>
     <div class="modal-body">
       <div style="display:grid;gap:12px">
+
+        <!-- Customer -->
+        <div class="pf-sec" style="color:#5b6af7">Customer</div>
         <div class="grid-2">
-          <div><label class="label">Customer Name</label><input id="eCustName" type="text" class="input" oninput="debounceSearchCustomers('e')"></div>
-          <div><label class="label">Customer Phone</label><input id="eCustPhone" type="text" class="input" oninput="debounceSearchCustomers('e')"></div>
+          <div><label class="pf-lbl">Customer Name</label><input id="eCustName" type="text" class="pf-inp" oninput="debounceSearchCustomers('e')"></div>
+          <div><label class="pf-lbl">Customer Phone</label><input id="eCustPhone" type="text" class="pf-inp" oninput="debounceSearchCustomers('e')"></div>
         </div>
         <div id="eCustomerSuggestBox" class="customer-suggestion-box" style="display:none"></div>
+
+        <!-- Vehicle -->
+        <div class="pf-sec" style="color:#34d399">Vehicle Details</div>
         <div class="grid-3">
-          <div><label class="label">Vehicle Type</label>
-            <select id="eVehicleType" class="input" data-custom-select>
+          <div><label class="pf-lbl">Vehicle Type</label>
+            <select id="eVehicleType" class="pf-inp" data-custom-select>
               <option value="car">Car</option><option value="bike">Bike / Motorcycle</option><option value="three_wheeler">Three Wheeler</option>
               <option value="van">Van</option><option value="lorry">Lorry / Truck</option><option value="bus">Bus</option>
               <option value="suv">SUV / Jeep</option><option value="tractor">Tractor</option><option value="other">Other</option>
             </select>
           </div>
-          <div><label class="label">Make</label><input id="eMake" type="text" class="input"></div>
-          <div><label class="label">Model</label><input id="eModel" type="text" class="input"></div>
+          <div><label class="pf-lbl">Make</label><input id="eMake" type="text" class="pf-inp"></div>
+          <div><label class="pf-lbl">Model</label><input id="eModel" type="text" class="pf-inp"></div>
         </div>
         <div class="grid-3">
-          <div><label class="label">Year</label><input id="eYear" type="number" class="input"></div>
-          <div><label class="label">Colour</label><input id="eColor" type="text" class="input"></div>
-          <div><label class="label">Fuel Level</label>
-            <select id="eFuel" class="input" data-custom-select><option value="">— Select —</option><option>E</option><option>1/4</option><option>1/2</option><option>3/4</option><option>F</option></select>
+          <div><label class="pf-lbl">Year</label><input id="eYear" type="number" class="pf-inp"></div>
+          <div><label class="pf-lbl">Colour</label><input id="eColor" type="text" class="pf-inp"></div>
+          <div>
+            <label class="pf-lbl">Fuel Level</label>
+            <select id="eFuel" style="display:none"><option value="">— Select —</option><option>E</option><option>1/4</option><option>1/2</option><option>3/4</option><option>F</option></select>
+            <div class="pf-fuel-grp" id="eFuelBtns">
+              <button type="button" class="pf-fuel-btn" data-val="E"   onclick="setFuelLevel('e','E')">E</button>
+              <button type="button" class="pf-fuel-btn" data-val="1/4" onclick="setFuelLevel('e','1/4')">1/4</button>
+              <button type="button" class="pf-fuel-btn" data-val="1/2" onclick="setFuelLevel('e','1/2')">1/2</button>
+              <button type="button" class="pf-fuel-btn" data-val="3/4" onclick="setFuelLevel('e','3/4')">3/4</button>
+              <button type="button" class="pf-fuel-btn" data-val="F"   onclick="setFuelLevel('e','F')">F</button>
+            </div>
           </div>
         </div>
         <div class="grid-2">
-          <div><label class="label">Reg. No.</label><input id="eRegNo" type="text" class="input" style="text-transform:uppercase"></div>
-          <div><label class="label">VIN / Chassis</label><input id="eVin" type="text" class="input" style="text-transform:uppercase"></div>
+          <div><label class="pf-lbl">Reg. No.</label><input id="eRegNo" type="text" class="pf-inp" style="text-transform:uppercase"></div>
+          <div><label class="pf-lbl">VIN / Chassis</label><input id="eVin" type="text" class="pf-inp" style="text-transform:uppercase"></div>
         </div>
         <div class="grid-3">
-          <div><label class="label">Odometer In (km)</label><input id="eOdoIn" type="number" class="input" min="0"></div>
-          <div><label class="label">Service Type</label>
-            <select id="eServiceType" class="input" data-custom-select>
+          <div><label class="pf-lbl">Odometer In (km)</label><input id="eOdoIn" type="number" class="pf-inp" min="0"></div>
+          <div><label class="pf-lbl">Service Type</label>
+            <select id="eServiceType" class="pf-inp" data-custom-select>
               <option value="">— Select —</option><option value="repair">Repair</option><option value="service">Service / Maintenance</option>
               <option value="electrical">Electrical</option><option value="bodywork">Bodywork</option><option value="ac">Air Conditioning</option>
               <option value="tyre">Tyre</option><option value="alignment">Wheel Alignment</option><option value="battery">Battery</option>
               <option value="inspection">Inspection</option><option value="other">Other</option>
             </select>
           </div>
-          <div><label class="label">Promised Date</label><input id="ePromised" type="date" class="input"></div>
+          <div><label class="pf-lbl">Promised Date</label><input id="ePromised" type="date" class="pf-inp"></div>
         </div>
         <div class="grid-2">
-          <div><label class="label">Advance Paid (LKR)</label><input id="eAdvance" type="number" class="input" min="0" step="0.01"></div>
-          <div><label class="label">Technician</label><select id="eTech" class="input" data-custom-select><option value="">— Assign —</option></select></div>
+          <div><label class="pf-lbl">Advance Paid (LKR)</label><input id="eAdvance" type="number" class="pf-inp" min="0" step="0.01"></div>
+          <div><label class="pf-lbl">Technician</label><select id="eTech" class="pf-inp" data-custom-select><option value="">— Assign —</option></select></div>
         </div>
-        <div><label class="label">Issue Reported *</label><textarea id="eIssue" class="input" rows="2"></textarea></div>
-        <div><label class="label">Diagnosis / Work Done</label><textarea id="eDiagnosis" class="input" rows="2"></textarea></div>
-        <div><label class="label">Notes</label><textarea id="eNotes" class="input" rows="2"></textarea></div>
-        <!-- ── Broker Referral ── -->
-        <div style="background:var(--stat,#f8f9fa);border-radius:10px;padding:14px;margin-top:4px">
-          <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:10px;text-transform:uppercase">🤝 Broker Referral (Optional)</div>
+
+        <!-- Problem & Charges -->
+        <div class="pf-sec" style="color:#fbb040">Problem &amp; Charges</div>
+        <div><label class="pf-lbl">Issue Reported *</label><textarea id="eIssue" class="pf-inp" rows="2"></textarea></div>
+        <div><label class="pf-lbl">Diagnosis / Work Done</label><textarea id="eDiagnosis" class="pf-inp" rows="2"></textarea></div>
+        <div><label class="pf-lbl">Notes</label><textarea id="eNotes" class="pf-inp" rows="2"></textarea></div>
+
+        <!-- Broker Referral -->
+        <div class="pf-broker-card">
+          <div class="pf-sec" style="color:#8892a4;margin-top:0">Broker Referral <span style="font-size:10px;color:#4a5568;font-family:'DM Sans',sans-serif;font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></div>
           <div class="grid-2">
             <div style="position:relative">
-              <label class="label">Broker Name</label>
-              <input id="eBrokerName" class="input" placeholder="Type to search or add new…"
+              <label class="pf-lbl">Broker Name</label>
+              <input id="eBrokerName" class="pf-inp" placeholder="Type to search or add new…"
                      autocomplete="off" oninput="brokerAutocomplete(this.value)">
               <input type="hidden" id="eBrokerId">
-              <div id="brokerSuggest" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1px solid var(--border);border-radius:8px;z-index:200;box-shadow:0 4px 16px rgba(0,0,0,.12);max-height:180px;overflow-y:auto"></div>
+              <div id="brokerSuggest" style="display:none;position:absolute;top:100%;left:0;right:0;background:#181c25;border:1px solid #252d3d;border-radius:8px;z-index:200;box-shadow:0 4px 16px rgba(0,0,0,.4);max-height:180px;overflow-y:auto"></div>
             </div>
             <div>
-              <label class="label">Commission Type</label>
-              <select id="eBrokerCommType" class="input" onchange="updateBrokerCommLabel()">
+              <label class="pf-lbl">Commission Type</label>
+              <select id="eBrokerCommType" class="pf-inp" onchange="updateBrokerCommLabel()">
                 <option value="percent">Percentage (%)</option>
                 <option value="fixed">Fixed Amount</option>
               </select>
             </div>
             <div>
-              <label class="label" id="eBrokerCommLabel">Commission Value (%)</label>
-              <input id="eBrokerCommValue" class="input" type="number" min="0" step="0.01" placeholder="0">
+              <label class="pf-lbl" id="eBrokerCommLabel">Commission Value (%)</label>
+              <input id="eBrokerCommValue" class="pf-inp" type="number" min="0" step="0.01" placeholder="0">
             </div>
             <div>
-              <label class="label">Cash Price</label>
-              <input id="eBrokerCashPrice" class="input" type="number" min="0" step="0.01" placeholder="0.00">
+              <label class="pf-lbl">Cash Price</label>
+              <input id="eBrokerCashPrice" class="pf-inp" type="number" min="0" step="0.01" placeholder="0.00">
             </div>
           </div>
-          <div style="font-size:11px;color:var(--muted);margin-top:6px">
-            Commission Amount: <strong id="brokerCommDisplay">—</strong>
+          <div style="font-size:11px;color:#8892a4;margin-top:8px;font-family:'DM Sans',sans-serif">
+            Commission Amount: <strong id="brokerCommDisplay" style="color:#e2e8f0">—</strong>
           </div>
         </div>
+
       </div>
     </div>
-    <div class="modal-footer">
+    <div class="modal-footer" style="border-top:1px solid #252d3d">
       <button class="btn btn-ghost" onclick="closeModal('editJobModal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveEditedJob()">Save</button>
       <button class="btn btn-ghost" onclick="saveEditedJob('job-card')">Save &amp; Print Job Card</button>
@@ -1971,6 +1885,34 @@ document.addEventListener('click', e => {
     if (el && !el.contains(e.target)) el.style.display = 'none';
   });
 });
+
+// ── Fuel level button group ───────────────────────────────────────────────────
+function setFuelLevel(prefix, val) {
+  const sel = document.getElementById(prefix + 'Fuel');
+  if (sel) sel.value = val;
+  syncFuelBtns(prefix);
+}
+function syncFuelBtns(prefix) {
+  const sel = document.getElementById(prefix + 'Fuel');
+  const val = sel ? sel.value : '';
+  document.querySelectorAll('#' + prefix + 'FuelBtns .pf-fuel-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.val === val);
+  });
+}
+
+// Patch clearNewJobForm so resetting the form also resets fuel buttons
+const _origClearNewJobForm = clearNewJobForm;
+clearNewJobForm = function () {
+  _origClearNewJobForm();
+  syncFuelBtns('j');
+};
+
+// Patch openEditJobModal so fuel buttons reflect the loaded value
+const _origOpenEditJobModal = openEditJobModal;
+openEditJobModal = async function (id) {
+  await _origOpenEditJobModal(id);
+  syncFuelBtns('e');
+};
 
 </script>
 {% endblock %}

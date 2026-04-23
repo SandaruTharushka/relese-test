@@ -3,23 +3,69 @@
 {% block title %} — Expenses{% endblock %}
 
 {% block extra_head %}
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
+/* ── Tab strip ───────────────────────────────────────────────────────── */
 .exp-tab { padding:9px 20px;font-size:13px;font-weight:700;color:var(--muted);border:none;background:none;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;border-radius:6px 6px 0 0;transition:all .18s; }
 .exp-tab:hover { background:var(--stat);color:var(--text); }
 .exp-tab.active { color:var(--accent);border-bottom-color:var(--accent);background:rgba(79,108,246,.07); }
 .exp-tabs { display:flex;gap:4px;border-bottom:2px solid var(--border);margin-bottom:22px; }
-.tag-type { display:inline-block;padding:2px 10px;border-radius:12px;font-size:10px;font-weight:700;text-transform:uppercase; }
-.tag-shop_expense  { background:rgba(79,108,246,.12);color:var(--accent); }
-.tag-work_expense  { background:rgba(16,185,129,.12);color:#10b981; }
-.tag-bank_loan     { background:rgba(239,68,68,.12);color:var(--danger); }
-.tag-extra_expense { background:rgba(245,158,11,.12);color:#f59e0b; }
-.tag-savings       { background:rgba(139,92,246,.12);color:#8b5cf6; }
-.tag-other         { background:var(--stat);color:var(--muted); }
-.modal-overlay { display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:900;align-items:center;justify-content:center; }
-.modal-overlay.open, .modal-overlay.show { display:flex; opacity:1; pointer-events:all; }
-.modal-box { background:var(--card);border-radius:16px;padding:28px;width:min(520px,95vw);max-height:92vh;overflow-y:auto; }
-.form-grid2 { display:grid;grid-template-columns:1fr 1fr;gap:14px; }
-@media(max-width:540px){ .form-grid2 { grid-template-columns:1fr; } }
+
+/* ── Type badges ─────────────────────────────────────────────────────── */
+.tag-type { display:inline-block;padding:2px 9px;border-radius:6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;font-family:'JetBrains Mono',monospace; }
+.tag-shop_expense  { background:rgba(91,106,247,.15); color:#7b8ff7; }
+.tag-work_expense  { background:rgba(52,211,153,.12);  color:#34d399; }
+.tag-bank_loan     { background:rgba(248,113,113,.12); color:#f87171; }
+.tag-extra_expense { background:rgba(251,176,64,.12);  color:#fbb040; }
+.tag-savings       { background:rgba(167,139,250,.12); color:#a78bfa; }
+.tag-other         { background:rgba(148,163,184,.10); color:#94a3b8; }
+
+/* ── Modal overlay ───────────────────────────────────────────────────── */
+.modal-overlay { display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:900;align-items:center;justify-content:center;backdrop-filter:blur(2px); }
+.modal-overlay.open,.modal-overlay.show { display:flex; }
+
+/* ── Dark form modal ─────────────────────────────────────────────────── */
+.pf-modal { background:#181c25;border:1px solid #252d3d;border-radius:20px;padding:32px;width:min(560px,95vw);max-height:92vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.65); }
+
+/* ── Modal head / footer ─────────────────────────────────────────────── */
+.pf-mhead { display:flex;justify-content:space-between;align-items:center;margin-bottom:26px; }
+.pf-mtitle { font-family:'DM Sans',sans-serif;font-size:18px;font-weight:800;color:#e2e8f0; }
+.pf-xbtn { width:30px;height:30px;border-radius:8px;background:#252d3d;border:none;color:#8892a4;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:background .15s,color .15s;flex-shrink:0; }
+.pf-xbtn:hover { background:#2e3648;color:#e2e8f0; }
+.pf-mfoot { display:flex;justify-content:flex-end;gap:10px;margin-top:26px;padding-top:18px;border-top:1px solid #252d3d; }
+
+/* ── Section header ──────────────────────────────────────────────────── */
+.pf-sec { display:flex;align-items:center;gap:8px;margin:22px 0 14px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase; }
+.pf-sec:first-of-type { margin-top:0; }
+.pf-sec::before { content:'';display:inline-block;width:3px;height:14px;border-radius:2px;background:currentColor;flex-shrink:0; }
+
+/* ── Label ───────────────────────────────────────────────────────────── */
+.pf-lbl { font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#8892a4;display:block;margin-bottom:6px; }
+
+/* ── Input / select / textarea ───────────────────────────────────────── */
+.pf-inp { background:#0f1117;border:1.5px solid #252d3d;color:#e2e8f0;padding:10px 14px;border-radius:10px;width:100%;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;transition:border-color .2s,box-shadow .2s;resize:vertical;appearance:none;-webkit-appearance:none; }
+.pf-inp:focus { border-color:#5b6af7;box-shadow:0 0 0 3px rgba(91,106,247,.15); }
+.pf-inp::placeholder { color:#3a4556; }
+.pf-inp option { background:#181c25;color:#e2e8f0; }
+.pf-inp[type="date"] { min-height:42px;color-scheme:dark; }
+
+/* ── Toggle switch ───────────────────────────────────────────────────── */
+.pf-tgl-wrap { display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none; }
+.pf-tgl-cb { display:none; }
+.pf-tgl { width:40px;height:22px;background:#252d3d;border-radius:99px;position:relative;transition:background .2s;flex-shrink:0; }
+.pf-tgl::after { content:'';width:16px;height:16px;background:#4a5568;border-radius:50%;position:absolute;top:3px;left:3px;transition:transform .2s,background .2s; }
+.pf-tgl-cb:checked + .pf-tgl { background:#5b6af7; }
+.pf-tgl-cb:checked + .pf-tgl::after { transform:translateX(18px);background:#fff; }
+.pf-tgl-lbl { font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;color:#c8d0e0; }
+
+/* ── 2-col grid ──────────────────────────────────────────────────────── */
+.pf-g2 { display:grid;grid-template-columns:1fr 1fr;gap:14px; }
+@media(max-width:540px){ .pf-g2 { grid-template-columns:1fr; } }
+
+/* ── Category list item ──────────────────────────────────────────────── */
+.pf-cat-row { display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:10px;background:#0f1117;border:1px solid #252d3d;margin-bottom:6px; }
+.pf-dis-btn { padding:4px 12px;border-radius:7px;font-size:10px;font-weight:600;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border:1px solid;transition:opacity .15s; }
+.pf-dis-btn:hover { opacity:.8; }
 </style>
 {% endblock %}
 
@@ -95,38 +141,44 @@
 
 <!-- ═══ ADD/EDIT EXPENSE MODAL ═══════════════════════════════════════════ -->
 <div class="modal-overlay" id="entryModal">
-  <div class="modal-box">
-    <div class="flex justify-between items-center mb-5">
-      <div style="font-size:16px;font-weight:800" id="entryModalTitle">Add Expense</div>
-      <button class="btn btn-sm" onclick="closeModal('entryModal')">✕</button>
+  <div class="pf-modal">
+    <div class="pf-mhead">
+      <div class="pf-mtitle" id="entryModalTitle">Add Expense</div>
+      <button class="pf-xbtn" onclick="closeModal('entryModal')">✕</button>
     </div>
     <input type="hidden" id="editEntryId">
-    <div class="form-grid2">
+
+    <!-- Basic Info -->
+    <div class="pf-sec" style="color:#5b6af7">Basic Info</div>
+    <div class="pf-g2">
       <div>
-        <label class="form-label">Date *</label>
-        <input id="eDate" class="form-control" type="date">
+        <label class="pf-lbl">Date *</label>
+        <input id="eDate" class="pf-inp" type="date">
       </div>
       <div>
-        <label class="form-label">Category *</label>
-        <select id="eCat" class="form-control"></select>
+        <label class="pf-lbl">Category *</label>
+        <select id="eCat" class="pf-inp"></select>
       </div>
     </div>
-    <div class="mt-3">
-      <label class="form-label">Title *</label>
-      <input id="eTitle" class="form-control" placeholder="e.g. Monthly Rent">
+    <div style="margin-top:14px">
+      <label class="pf-lbl">Title *</label>
+      <input id="eTitle" class="pf-inp" placeholder="e.g. Monthly Rent">
     </div>
-    <div class="mt-3">
-      <label class="form-label">Description</label>
-      <textarea id="eDesc" class="form-control" rows="2" placeholder="Optional details…"></textarea>
+    <div style="margin-top:14px">
+      <label class="pf-lbl">Description</label>
+      <textarea id="eDesc" class="pf-inp" rows="2" placeholder="Optional details…"></textarea>
     </div>
-    <div class="form-grid2 mt-3">
+
+    <!-- Payment Details -->
+    <div class="pf-sec" style="color:#34d399">Payment Details</div>
+    <div class="pf-g2">
       <div>
-        <label class="form-label">Amount (Rs) *</label>
-        <input id="eAmount" class="form-control" type="number" min="0.01" step="0.01" placeholder="0.00">
+        <label class="pf-lbl">Amount (Rs) *</label>
+        <input id="eAmount" class="pf-inp" type="number" min="0.01" step="0.01" placeholder="0.00">
       </div>
       <div>
-        <label class="form-label">Payment Method</label>
-        <select id="eMethod" class="form-control">
+        <label class="pf-lbl">Payment Method</label>
+        <select id="eMethod" class="pf-inp">
           <option value="cash">Cash</option>
           <option value="bank_transfer">Bank Transfer</option>
           <option value="cheque">Cheque</option>
@@ -135,20 +187,25 @@
         </select>
       </div>
       <div>
-        <label class="form-label">Reference No.</label>
-        <input id="eRef" class="form-control" placeholder="Cheque / TXN no.">
+        <label class="pf-lbl">Reference No.</label>
+        <input id="eRef" class="pf-inp" placeholder="Cheque / TXN no.">
       </div>
-      <div class="flex flex-col gap-2" style="padding-top:4px">
-        <label class="flex items-center gap-2" style="font-size:13px;font-weight:600;padding-top:22px">
-          <input type="checkbox" id="eRecurring"> Recurring expense
+      <div style="display:flex;flex-direction:column;gap:16px;padding-top:22px">
+        <label class="pf-tgl-wrap">
+          <input type="checkbox" id="eRecurring" class="pf-tgl-cb">
+          <span class="pf-tgl"></span>
+          <span class="pf-tgl-lbl">Recurring expense</span>
         </label>
-        <label class="flex items-center gap-2" style="font-size:13px;font-weight:600">
-          <input type="checkbox" id="eAffectsProfit" checked> Affects profit
+        <label class="pf-tgl-wrap">
+          <input type="checkbox" id="eAffectsProfit" class="pf-tgl-cb" checked>
+          <span class="pf-tgl"></span>
+          <span class="pf-tgl-lbl">Affects profit</span>
         </label>
       </div>
     </div>
-    <div class="flex gap-3 mt-5 justify-end">
-      <button class="btn" onclick="closeModal('entryModal')">Cancel</button>
+
+    <div class="pf-mfoot">
+      <button class="btn btn-ghost" onclick="closeModal('entryModal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveEntry()">Save Expense</button>
     </div>
   </div>
@@ -156,24 +213,36 @@
 
 <!-- ═══ MANAGE CATEGORIES MODAL ══════════════════════════════════════════ -->
 <div class="modal-overlay" id="catModal">
-  <div class="modal-box" style="max-width:460px">
-    <div class="flex justify-between items-center mb-4">
-      <div style="font-size:16px;font-weight:800">⚙ Expense Categories</div>
-      <button class="btn btn-sm" onclick="closeModal('catModal')">✕</button>
+  <div class="pf-modal" style="width:min(500px,95vw)">
+    <div class="pf-mhead">
+      <div class="pf-mtitle">Expense Categories</div>
+      <button class="pf-xbtn" onclick="closeModal('catModal')">✕</button>
     </div>
-    <div class="flex gap-2 mb-4">
-      <input id="newCatName" class="form-control" placeholder="New category name" style="flex:1">
-      <select id="newCatType" class="form-control" style="width:160px">
-        <option value="shop_expense">Shop Expense</option>
-        <option value="work_expense">Work Expense</option>
-        <option value="bank_loan">Bank / Loan</option>
-        <option value="extra_expense">Extra Expense</option>
-        <option value="savings">Savings</option>
-        <option value="other">Other</option>
-      </select>
-      <button class="btn btn-primary" onclick="addCategory()">Add</button>
+
+    <!-- Add new -->
+    <div class="pf-sec" style="color:#5b6af7;margin-top:0">New Category</div>
+    <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:6px">
+      <div style="flex:1">
+        <label class="pf-lbl">Name</label>
+        <input id="newCatName" class="pf-inp" placeholder="Category name">
+      </div>
+      <div style="width:155px">
+        <label class="pf-lbl">Type</label>
+        <select id="newCatType" class="pf-inp">
+          <option value="shop_expense">Shop Expense</option>
+          <option value="work_expense">Work Expense</option>
+          <option value="bank_loan">Bank / Loan</option>
+          <option value="extra_expense">Extra Expense</option>
+          <option value="savings">Savings</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="addCategory()" style="height:42px;padding:0 18px;white-space:nowrap">+ Add</button>
     </div>
-    <div id="catList"></div>
+
+    <!-- Existing list -->
+    <div class="pf-sec" style="color:#8892a4;margin-top:20px">Existing Categories</div>
+    <div id="catList" style="max-height:340px;overflow-y:auto"></div>
   </div>
 </div>
 
@@ -227,19 +296,19 @@ async function loadAll(){
 
 function renderSummaryCards(summary, total){
   const items = [
-    {label:'Total Expenses',  val:total,                       color:'var(--danger)',  icon:'💸'},
-    {label:'Shop Expenses',   val:summary.shop_expense||0,     color:'var(--accent)',  icon:'🏪'},
-    {label:'Work Expenses',   val:summary.work_expense||0,     color:'#10b981',        icon:'🔧'},
-    {label:'Bank / Loans',    val:summary.bank_loan||0,        color:'var(--danger)',  icon:'🏦'},
-    {label:'Extra Expenses',  val:summary.extra_expense||0,    color:'#f59e0b',        icon:'➕'},
-    {label:'Savings',         val:summary.savings||0,          color:'#8b5cf6',        icon:'💰'},
+    {label:'Total',    val:total,                    color:'#f87171', icon:'💸'},
+    {label:'Shop',     val:summary.shop_expense||0,  color:'#7b8ff7', icon:'🏪'},
+    {label:'Work',     val:summary.work_expense||0,  color:'#34d399', icon:'🔧'},
+    {label:'Loans',    val:summary.bank_loan||0,     color:'#f87171', icon:'🏦'},
+    {label:'Extra',    val:summary.extra_expense||0, color:'#fbb040', icon:'➕'},
+    {label:'Savings',  val:summary.savings||0,       color:'#a78bfa', icon:'💰'},
   ];
   document.getElementById('summaryCards').innerHTML = `
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;grid-column:1/-1">
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:10px;grid-column:1/-1">
       ${items.map(i=>`
-        <div class="stat-card">
-          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">${i.icon} ${i.label}</div>
-          <div style="font-size:18px;font-weight:800;color:${i.color}">${fmtLKR(i.val)}</div>
+        <div style="background:#181c25;border:1px solid #252d3d;border-radius:14px;padding:16px 18px">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;color:#8892a4;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">${i.icon} ${i.label}</div>
+          <div style="font-family:'DM Sans',sans-serif;font-size:18px;font-weight:800;color:${i.color}">${fmtLKR(i.val)}</div>
         </div>`).join('')}
     </div>`;
 }
@@ -368,12 +437,12 @@ async function openCategoryModal(){
 
 function renderCatList(){
   document.getElementById('catList').innerHTML = _categories.map(c=>`
-    <div class="flex justify-between items-center" style="padding:8px 10px;border-radius:8px;background:var(--stat);margin-bottom:6px">
-      <div>
-        <span style="font-weight:600;font-size:13px">${esc(c.name)}</span>
-        <span class="tag-type tag-${esc(c.type)}" style="margin-left:6px">${esc(TYPE_LABELS[c.type]||c.type)}</span>
+    <div class="pf-cat-row">
+      <div style="display:flex;align-items:center;gap:10px;min-width:0">
+        <span style="font-family:'DM Sans',sans-serif;font-weight:600;font-size:13px;color:${c.is_active?'#e2e8f0':'#4a5568'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(c.name)}</span>
+        <span class="tag-type tag-${esc(c.type)}">${esc(TYPE_LABELS[c.type]||c.type)}</span>
       </div>
-      <button class="btn btn-sm" style="color:var(--danger);background:rgba(239,68,68,.1)"
+      <button class="pf-dis-btn" style="color:${c.is_active?'#f87171':'#7b8ff7'};border-color:${c.is_active?'rgba(248,113,113,.3)':'rgba(91,106,247,.3)'};background:${c.is_active?'rgba(248,113,113,.06)':'rgba(91,106,247,.06)'};flex-shrink:0"
               onclick="toggleCat(${c.id},${c.is_active})">${c.is_active?'Disable':'Enable'}</button>
     </div>`).join('');
 }
