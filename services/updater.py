@@ -5,25 +5,32 @@ Public surface:
   UpdateChecker.check()               → UpdateInfo  (never raises)
   UpdateChecker.download_installer()  → Path        (raises on failure)
   launch_installer()                  → None        (raises on missing file)
+  backup_before_update()              → Path | None (triggers DB backup)
 
 Update flow used by the desktop runtime:
-  1. check()             — fetch latest release metadata, compare semver
-  2. download_installer() — stream installer asset to temp file
-  3. launch_installer()   — detach installer process; caller exits the app
+  1. check()              — fetch latest release metadata, compare semver
+                            (retries up to 3× with exponential backoff)
+  2. backup_before_update() — snapshot DB before any file changes
+  3. download_installer() — stream installer asset to temp file
+  4. launch_installer()   — detach installer process; caller exits the app
 """
 
 from __future__ import annotations
 
 import logging
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
 log = logging.getLogger(__name__)
+
+_RETRY_DELAYS = (2, 4, 8)  # seconds between attempts (3 retries total)
 
 try:
     import requests as _requests
@@ -191,26 +198,37 @@ class UpdateChecker:
         """
         Fetch the latest GitHub Release and compare versions.
 
-        Always returns an UpdateInfo; never raises. Non-fatal failures
-        (network error, rate limit, malformed JSON) set UpdateInfo.error
-        and return is_update_available=False so the app starts normally.
+        Always returns an UpdateInfo; never raises. Retries up to 3 times
+        with exponential backoff on transient network failures.
+        Non-fatal failures set UpdateInfo.error and return
+        is_update_available=False so the app starts normally.
         """
         if not _REQUESTS_OK:
             return self._no_update("requests library not available")
 
         url = f"{self._GITHUB_API}/repos/{self._owner}/{self._repo}/releases/latest"
+        last_error: str = ""
 
-        try:
-            resp = _requests.get(url, headers=self._headers(), timeout=self._timeout)
-        except _requests.exceptions.Timeout:
-            log.debug("Update check timed out after %ds", self._timeout)
-            return self._no_update("Connection timed out")
-        except _requests.exceptions.ConnectionError:
-            log.debug("Update check: no network connection")
-            return self._no_update("No network connection")
-        except Exception as exc:
-            log.warning("Update check failed with unexpected error: %s", exc)
-            return self._no_update(f"Unexpected error: {exc}")
+        for attempt, delay in enumerate((*_RETRY_DELAYS, None), start=1):
+            try:
+                resp = _requests.get(url, headers=self._headers(), timeout=self._timeout)
+                break  # success — exit retry loop
+            except _requests.exceptions.Timeout:
+                last_error = "Connection timed out"
+                log.debug("Update check attempt %d timed out", attempt)
+            except _requests.exceptions.ConnectionError:
+                last_error = "No network connection"
+                log.debug("Update check attempt %d: no network", attempt)
+            except Exception as exc:
+                last_error = f"Unexpected error: {exc}"
+                log.warning("Update check attempt %d failed: %s", attempt, exc)
+
+            if delay is None:
+                return self._no_update(last_error)
+            log.debug("Retrying update check in %ds…", delay)
+            time.sleep(delay)
+        else:
+            return self._no_update(last_error)
 
         if resp.status_code == 404:
             return self._no_update("No releases published yet")
@@ -341,3 +359,68 @@ def launch_installer(installer_path: Path) -> None:
         subprocess.Popen([str(installer_path)], close_fds=True)
 
     log.info("Installer process started; caller should now exit the app")
+
+
+# ── Backup-before-update ──────────────────────────────────────────────────────
+
+def backup_before_update(db_path: str | Path, backup_dir: str | Path | None = None) -> Optional[Path]:
+    """Copy the SQLite database to a timestamped backup before applying an update.
+
+    This creates a point-in-time snapshot that can be manually restored if the
+    update causes data corruption.
+
+    Args:
+        db_path:    Path to the live ``supermart.db`` file.
+        backup_dir: Directory to write the backup into.  Defaults to a
+                    ``backups/pre_update/`` sub-folder beside the database.
+
+    Returns:
+        Path of the written backup file, or None if the DB does not exist or
+        the copy fails (non-fatal — update can proceed but logs a warning).
+    """
+    src = Path(db_path)
+    if not src.exists():
+        log.warning("backup_before_update: source DB not found at %s", src)
+        return None
+
+    if backup_dir is None:
+        backup_dir = src.parent / "backups" / "pre_update"
+
+    dest_dir = Path(backup_dir)
+    try:
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        ts = time.strftime("%Y%m%d_%H%M%S")
+        dest = dest_dir / f"supermart_pre_update_{ts}.db"
+        shutil.copy2(str(src), str(dest))
+        log.info("Pre-update backup written to %s (%d bytes)", dest, dest.stat().st_size)
+        return dest
+    except Exception as exc:
+        log.warning("backup_before_update failed (non-fatal): %s", exc)
+        return None
+
+
+def verify_installer_checksum(installer_path: Path, expected_sha256: str) -> bool:
+    """Verify the SHA-256 checksum of a downloaded installer.
+
+    Returns True if the checksum matches or expected_sha256 is empty (skip).
+    """
+    if not expected_sha256:
+        return True
+    import hashlib
+    h = hashlib.sha256()
+    try:
+        with open(installer_path, "rb") as fh:
+            for chunk in iter(lambda: fh.read(65536), b""):
+                h.update(chunk)
+        actual = h.hexdigest().lower()
+        expected = expected_sha256.strip().lower()
+        match = actual == expected
+        if not match:
+            log.error(
+                "Installer checksum mismatch! expected=%s actual=%s",
+                expected, actual,
+            )
+        return match
+    except Exception as exc:
+        log.warning("Checksum verification failed: %s", exc)
+        return False

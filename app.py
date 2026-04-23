@@ -136,31 +136,9 @@ def _get_low_stock_count():
 
 
 def _is_card_terminal_connected_for_checkout() -> bool:
+    """Non-blocking check using the in-memory CardTerminalService state."""
     try:
-        path = Path(HARDWARE_SETTINGS_FILE)
-        if not path.exists():
-            return False
-        payload = json.loads(path.read_text(encoding='utf-8'))
-        card_cfg = payload.get('card_terminal', {}) if isinstance(payload, dict) else {}
-        if not bool(card_cfg.get('enabled', False)):
-            return False
-        terminal_type = str(card_cfg.get('terminal_type') or 'serial').strip().lower()
-        if terminal_type == 'network':
-            ip_address = str(card_cfg.get('ip_address') or '').strip()
-            tcp_port = int(card_cfg.get('tcp_port') or 0)
-            if not ip_address or tcp_port <= 0:
-                return False
-            import socket as _socket
-            with _socket.create_connection((ip_address, tcp_port), timeout=3):
-                return True
-        com_port = str(card_cfg.get('com_port') or '').strip()
-        baud_rate = int(card_cfg.get('baud_rate') or 9600)
-        if not com_port:
-            return False
-        import serial  # type: ignore
-        ser = serial.Serial(port=com_port, baudrate=baud_rate, timeout=2)
-        ser.close()
-        return True
+        return _card_terminal_svc.is_connected
     except Exception:
         return False
 
@@ -419,19 +397,26 @@ configure_app_logging(app)
 printer_service = PrinterService(app.logger)
 label_print_service = LabelPrintExecutionService(app.logger)
 
+from services.settings_service import get_settings_service
+from services.card_terminal_service import get_card_terminal_service, CardConfig
+_settings_svc = get_settings_service()
+_card_terminal_svc = get_card_terminal_service()
+
 def _attempt_printer_autoconnect_on_startup():
     try:
+        # Batch-load all settings once instead of 8+ individual queries
+        all_settings = _settings_svc.get_all()
         receipt_cfg = {
-            'printer_type': StoreSettings.get('printer_type', 'windows') or 'windows',
-            'printer_name': StoreSettings.get('printer_name', '') or '',
-            'printer_ip': StoreSettings.get('printer_ip', '') or '',
-            'printer_port': StoreSettings.get('printer_port', '9100') or '9100',
+            'printer_type': all_settings.get('printer_type', 'windows') or 'windows',
+            'printer_name': all_settings.get('printer_name', '') or '',
+            'printer_ip': all_settings.get('printer_ip', '') or '',
+            'printer_port': all_settings.get('printer_port', '9100') or '9100',
         }
         label_cfg = {
-            'label_printer_type': StoreSettings.get('label_printer_type', 'windows') or 'windows',
-            'label_printer_name': StoreSettings.get('label_printer_name', '') or '',
-            'label_printer_ip': StoreSettings.get('label_printer_ip', '') or '',
-            'label_printer_port': StoreSettings.get('label_printer_port', '9100') or '9100',
+            'label_printer_type': all_settings.get('label_printer_type', 'windows') or 'windows',
+            'label_printer_name': all_settings.get('label_printer_name', '') or '',
+            'label_printer_ip': all_settings.get('label_printer_ip', '') or '',
+            'label_printer_port': all_settings.get('label_printer_port', '9100') or '9100',
         }
         receipt = printer_service.resolve_receipt_printer(receipt_cfg)
         label = printer_service.resolve_label_printer(label_cfg)
@@ -444,6 +429,18 @@ def _attempt_printer_autoconnect_on_startup():
         )
     except Exception:
         app.logger.warning('Printer startup auto-connect check failed', exc_info=True)
+
+def _attempt_card_terminal_autoconnect():
+    """Auto-connect card terminal if enabled and auto_connect setting is on."""
+    try:
+        cfg_dict = _settings_svc.get_all(prefix='pref_card_')
+        card_cfg = CardConfig.from_settings(cfg_dict)
+        _card_terminal_svc.configure(card_cfg)
+        if card_cfg.enabled and card_cfg.auto_connect:
+            ok, msg = _card_terminal_svc.connect()
+            app.logger.info('card_terminal_autoconnect ok=%s msg=%s', ok, msg)
+    except Exception:
+        app.logger.warning('Card terminal auto-connect failed', exc_info=True)
 configure_sqlite_app(app)
 app.logger.info(
     'Runtime data directory initialized at %s (env=%s db=%s)',
@@ -455,6 +452,7 @@ app.logger.info(
 db.init_app(app)
 with app.app_context():
     _attempt_printer_autoconnect_on_startup()
+    _attempt_card_terminal_autoconnect()
 app.register_blueprint(backup_bp)
 app.register_blueprint(update_bp)
 start_auto_backup_scheduler(app)
@@ -690,7 +688,7 @@ def inject_globals():
         g_is_developer=is_developer_role(getattr(current_user, 'role', '')),
         g_full_factory_reset_unlocked=can_access_full_factory_reset(current_user),
         g_password_change_required=password_change_required,
-        store_name=StoreSettings.get('store_name', 'SuperMart'),
+        store_name=_settings_svc.get('store_name', 'SuperMart') or 'SuperMart',
     )
 
 def _get_store_setting_row(key):
@@ -960,7 +958,15 @@ def _recover_database_schema_if_needed():
         _database_diagnostics(),
     )
     db.create_all()
-    auto_migrate()
+    try:
+        from services.migrations import run_migrations
+        run_migrations(db.session)
+    except Exception as _mig_err:
+        app.logger.warning('[RECOVER] Migration error (falling back to auto_migrate): %s', _mig_err)
+        try:
+            auto_migrate()
+        except Exception:
+            pass
     seed_database()
     seed_default_expense_categories()
     app.logger.info('[RECOVER] Schema recovery complete.')
@@ -1076,23 +1082,9 @@ def generate_barcode_for_product(product, mode='random', prefix='SM'):
         return None
 
 def gen_invoice(retry_offset=0):
-    today = datetime.now().strftime('%Y%m%d')
-    like_pattern = f'INV-{today}-%'
-    max_invoice = db.session.query(func.max(Sale.invoice_number)).filter(
-        Sale.invoice_number.like(like_pattern)
-    ).scalar()
-
-    next_sequence = 1
-    if max_invoice:
-        try:
-            next_sequence = int(str(max_invoice).rsplit('-', 1)[-1]) + 1
-        except (ValueError, TypeError, IndexError):
-            next_sequence = 1
-
-    if retry_offset:
-        next_sequence += int(retry_offset)
-
-    return f"INV-{today}-{next_sequence:04d}"
+    """Generate a unique, race-condition-free invoice number using atomic DB sequence."""
+    from services.atomic_sequence import next_sequence as _next_seq
+    return _next_seq(db.session, 'INV')
 
 @app.before_request
 def check_db_connection():
@@ -4573,7 +4565,17 @@ try:
             print("  [STARTUP] Existing database found — verifying schema ...")
 
         db.create_all()
-        auto_migrate()
+        try:
+            from services.migrations import run_migrations
+            applied = run_migrations(db.session)
+            if applied:
+                app.logger.info('[MIGRATE] Applied migrations: %s', applied)
+        except Exception as _mig_err:
+            app.logger.warning('[MIGRATE] Migration error (falling back to auto_migrate): %s', _mig_err)
+            try:
+                auto_migrate()
+            except Exception as _auto_err:
+                app.logger.warning('[MIGRATE] auto_migrate fallback also failed: %s', _auto_err)
 
         try:
             short_pw_users = User.query.filter(func.length(User.password) < 60).all()

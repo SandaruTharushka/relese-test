@@ -82,12 +82,10 @@ class User(UserMixin, db.Model):
         if len(stored) == 64 and all(c in '0123456789abcdefABCDEF' for c in stored):
             digest = hashlib.sha256(pw.encode('utf-8')).hexdigest()
             if stored.lower() == digest.lower():
-                # Auto-upgrade to Werkzeug hash
+                # Mark for hash upgrade — the caller must commit.
+                # No db.session.commit() here to avoid hidden transaction commits.
                 self.set_password(pw)
-                try:
-                    db.session.commit()
-                except Exception:
-                    pass
+                self._legacy_hash_upgraded = True
                 return True
 
         return False
@@ -374,13 +372,19 @@ class StoreSettings(db.Model):
         }
 
     @staticmethod
-    def set(key, value):
+    def set(key, value, *, _commit=True):
+        """Upsert a single setting key.
+
+        Pass ``_commit=False`` when calling inside an outer transaction
+        to avoid premature commits.
+        """
         row = StoreSettings.query.filter_by(key=key).first()
         if row:
-            row.value = str(value)
+            row.value = str(value) if value is not None else ''
         else:
-            db.session.add(StoreSettings(key=key, value=str(value)))
-        db.session.commit()
+            db.session.add(StoreSettings(key=key, value=str(value) if value is not None else ''))
+        if _commit:
+            db.session.commit()
 
     @staticmethod
     def set_many(data: dict):

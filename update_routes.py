@@ -8,8 +8,9 @@ GET  /api/updates/check
     Never starts a download; safe to call frequently.
 
 POST /api/updates/download-install
-    Downloads the installer asset from the latest release and
-    launches it as a detached process.  Returns JSON success/error.
+    Downloads the installer asset from the latest release, creates a
+    pre-update database backup, then launches the installer as a detached
+    process.  Returns JSON success/error.
     The frontend must call close_window() via the Qt bridge after
     receiving a success response so the app exits cleanly before the
     installer's CloseApplications pass runs.
@@ -21,15 +22,16 @@ from __future__ import annotations
 
 import logging
 import os
-import subprocess
-import sys
 import threading
 from pathlib import Path
 
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, current_app
 from flask_login import login_required
 
-from services.updater import UpdateChecker, UpdateInfo, ReleaseAsset, launch_installer
+from services.updater import (
+    UpdateChecker, UpdateInfo, ReleaseAsset,
+    launch_installer, backup_before_update, verify_installer_checksum,
+)
 from update_config import (
     GITHUB_OWNER,
     GITHUB_REPO,
@@ -66,15 +68,23 @@ def _serialize(info: UpdateInfo) -> dict:
             "size": info.installer_asset.size,
         }
     return {
-        "current_version": info.current_version,
-        "latest_version":  info.latest_version,
+        "current_version":     info.current_version,
+        "latest_version":      info.latest_version,
         "is_update_available": info.is_update_available,
-        "tag_name":      info.tag_name,
-        "release_notes": info.release_notes,
-        "published_at":  info.published_at,
-        "installer_asset": asset,
-        "error": info.error,
+        "tag_name":            info.tag_name,
+        "release_notes":       info.release_notes,
+        "published_at":        info.published_at,
+        "installer_asset":     asset,
+        "error":               info.error,
     }
+
+
+def _db_path() -> str | None:
+    """Resolve the live database path from Flask app config."""
+    try:
+        return current_app.config.get("DATABASE_FILE") or None
+    except Exception:
+        return None
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -89,10 +99,10 @@ def check_for_updates():
     except Exception as exc:
         log.exception("Unhandled error in /api/updates/check")
         return jsonify({
-            "current_version": APP_VERSION,
-            "latest_version":  APP_VERSION,
+            "current_version":     APP_VERSION,
+            "latest_version":      APP_VERSION,
             "is_update_available": False,
-            "error": str(exc),
+            "error":               str(exc),
         })
 
 
@@ -100,14 +110,11 @@ def check_for_updates():
 @login_required
 def download_and_install():
     """
-    Download the installer asset from the latest GitHub Release and launch it.
-
-    The installer is started as a detached process so it continues running
-    after this Flask server (and the Qt window) exit.
+    Download the latest installer, backup the database, then launch the installer.
 
     Response contract:
-      { "success": true }   — installer launched; frontend should call close_window()
-      { "success": false, "error": "…" }  — something went wrong; app keeps running
+      { "success": true,  "backup": "<path>" }  — installer launched
+      { "success": false, "error":  "…"      }  — something went wrong
     """
     if not _download_lock.acquire(blocking=False):
         return jsonify({"success": False, "error": "A download is already in progress"}), 409
@@ -131,12 +138,28 @@ def download_and_install():
                 ),
             })
 
+        # ── Backup before touching anything ──────────────────────────────
+        db_file = _db_path()
+        backup_path: str | None = None
+        if db_file:
+            backup = backup_before_update(db_file)
+            backup_path = str(backup) if backup else None
+            if backup_path:
+                log.info("Pre-update backup created: %s", backup_path)
+            else:
+                log.warning("Pre-update backup skipped or failed — proceeding anyway")
+
+        # ── Download installer ────────────────────────────────────────────
         installer_path = checker.download_installer(info.installer_asset)
+
+        # ── Launch detached ───────────────────────────────────────────────
         launch_installer(installer_path)
 
-        # Return success BEFORE the Qt app exits so the browser receives the response.
-        # The frontend is responsible for calling close_window() after this.
-        return jsonify({"success": True})
+        return jsonify({
+            "success": True,
+            "backup":  backup_path,
+            "version": info.latest_version,
+        })
 
     except Exception as exc:
         log.exception("Update download/install failed")
