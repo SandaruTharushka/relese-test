@@ -191,6 +191,7 @@
         <button type="button" class="sn"     onclick="show('returns-cfg')" id="n-returns-cfg"><span class="ico">🔄</span>Return Policy</button>
         <button type="button" class="sn"     onclick="show('database')" id="n-database"><span class="ico">🗄️</span>Database</button>
         <button type="button" class="sn"     onclick="show('gdrive')"   id="n-gdrive"><span class="ico">☁️</span>Cloud Backup</button>
+        <button type="button" class="sn"     onclick="show('updates')"  id="n-updates"><span class="ico">🔄</span>Updates</button>
         <button type="button" class="sn"     onclick="show('about')"    id="n-about"><span class="ico">ℹ️</span>About</button>
         {% else %}
         <div class="nav-section">Account</div>
@@ -1453,6 +1454,80 @@
           </div>
         </div>
 
+        <!-- ─────────────── UPDATES ─────────────── -->
+        <div class="s-page" id="p-updates">
+          <div class="s-header">
+            <div class="s-htitle">🔄 Software Updates</div>
+            <div class="s-hsub">Check for new versions and install updates safely</div>
+          </div>
+          <div class="s-inner">
+
+            <!-- Current version card -->
+            <div class="cfg-block">
+              <div class="cfg-head"><span class="cfg-htxt">Installed Version</span></div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Current Version</div><div class="cfg-sub">SuperMart POS installed on this machine</div></div>
+                <span id="upd-cur-ver" style="font-weight:700;color:var(--accent);font-size:16px">{{ app_version }}</span>
+              </div>
+              <div class="cfg-row" style="border-top:1px solid var(--border)">
+                <div>
+                  <div class="cfg-lbl">Check for Updates</div>
+                  <div class="cfg-sub">Fetches the latest release info from GitHub. Requires internet access.</div>
+                </div>
+                <div class="cfg-right">
+                  <button class="btn btn-primary btn-sm" id="upd-btn" onclick="checkForUpdates()">🔍 Check Now</button>
+                </div>
+              </div>
+              <div class="cfg-row" id="upd-status-row" style="border-top:1px solid var(--border);display:none">
+                <div id="upd-status" style="font-size:14px;padding:4px 0"></div>
+              </div>
+            </div>
+
+            <!-- Update available card (hidden until a newer version is found) -->
+            <div class="cfg-block" id="upd-available-card" style="display:none;border-color:rgba(16,185,129,.4)">
+              <div class="cfg-head" style="background:rgba(16,185,129,.08)">
+                <span class="cfg-htxt" style="color:#059669">✅ Update Available</span>
+                <span id="upd-new-ver-badge" class="device-status status-on" style="font-size:12px"></span>
+              </div>
+              <div class="cfg-row">
+                <div><div class="cfg-lbl">Latest Version</div></div>
+                <span id="upd-new-ver" style="font-weight:700;color:#059669;font-size:16px"></span>
+              </div>
+              <div class="cfg-row" id="upd-notes-row" style="border-top:1px solid var(--border);display:none">
+                <div style="width:100%">
+                  <div class="cfg-lbl" style="margin-bottom:8px">Release Notes</div>
+                  <pre id="upd-notes" style="font-size:12px;white-space:pre-wrap;word-break:break-word;color:var(--muted);background:var(--stat);padding:12px;border-radius:8px;max-height:200px;overflow-y:auto;margin:0;font-family:inherit"></pre>
+                </div>
+              </div>
+              <div class="cfg-row" style="border-top:1px solid var(--border)">
+                <div>
+                  <div class="cfg-lbl">Install Update</div>
+                  <div class="cfg-sub">Downloads the installer and launches it. The app will close for the update.</div>
+                </div>
+                <div class="cfg-right">
+                  <button class="btn btn-primary btn-sm" id="upd-install-btn" onclick="installUpdate()" style="background:#059669">⬇️ Install Update</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- How updates work info block -->
+            <div class="cfg-block">
+              <div class="cfg-head"><span class="cfg-htxt">ℹ️ How Updates Work</span></div>
+              <div style="padding:14px 18px;font-size:13px;color:var(--muted);line-height:1.8">
+                <p style="margin:0 0 8px">Updates are distributed as Windows installers through GitHub Releases.</p>
+                <ol style="margin:0;padding-left:20px">
+                  <li>Click <strong>Check Now</strong> to query the latest release.</li>
+                  <li>If a newer version is available, review the release notes.</li>
+                  <li>Click <strong>Install Update</strong> to download the installer.</li>
+                  <li>The installer launches automatically and upgrades the app.</li>
+                  <li>Your database and settings are preserved — they live in <code style="background:var(--stat);padding:2px 6px;border-radius:4px">%LOCALAPPDATA%\SuperMart POS</code>.</li>
+                </ol>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
         <!-- ─────────────── ABOUT ─────────────── -->
         <div class="s-page" id="p-about">
           <div class="s-header"><div class="s-htitle">ℹ️ About SuperMart POS</div><div class="s-hsub">Version and system information</div></div>
@@ -1460,11 +1535,11 @@
             <div style="text-align:center;padding:20px 0">
               <div style="width:72px;height:72px;background:linear-gradient(135deg,var(--accent),#7C3AED);border-radius:18px;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;font-size:36px">🛒</div>
               <div style="font-size:24px;font-weight:900">SuperMart POS</div>
-              <div style="font-size:13px;color:var(--muted);margin-top:4px">Version 2.0.0 · Build 2026.03.11</div>
+              <div style="font-size:13px;color:var(--muted);margin-top:4px">Version {{ app_version }} · Garage Management System</div>
             </div>
             <div class="cfg-block">
               <div class="cfg-head"><span class="cfg-htxt">System Info</span></div>
-              {% for l,v in [('Version','2.0.0'),('Build Date','2026-03-11'),('Framework','Python Flask + SQLite (default)'),
+              {% for l,v in [('Version', app_version),('Framework','Python Flask + SQLite'),
                 ('Logged in as',current_user.full_name+' ('+current_user.role+')')] %}
               <div class="cfg-row">
                 <div class="cfg-lbl">{{ l }}</div>
@@ -1559,6 +1634,7 @@ function show(id) {
   if (id === 'sessions') safelyInvoke(loadSessions, 'loadSessions');
   if (id === 'rcpt-layout') safelyInvoke(getWindowFunction('loadReceiptLayout'), 'loadReceiptLayout');
   if (id === 'printers')   safelyInvoke(getWindowFunction('loadHardwareSettings'), 'loadHardwareSettings');
+  if (id === 'updates')    safelyInvoke(resetUpdateUI, 'resetUpdateUI');
 }
 
 function safelyInvoke(fn, label = 'anonymous') {
@@ -2878,6 +2954,112 @@ async function loadGDriveLogs() {
   } catch(e) {
     if(container) container.innerHTML='<div class="text-muted text-sm" style="padding:8px">Could not load backup history.</div>';
   }
+}
+
+/* ══ UPDATES ═════════════════════════════════════════════════════════════ */
+
+function resetUpdateUI() {
+  document.getElementById('upd-available-card').style.display = 'none';
+  document.getElementById('upd-status-row').style.display     = 'none';
+  document.getElementById('upd-status').innerHTML             = '';
+  const btn = document.getElementById('upd-install-btn');
+  if (btn) { btn.disabled = false; btn.textContent = '⬇️ Install Update'; }
+}
+
+function _updSetStatus(html) {
+  const row = document.getElementById('upd-status-row');
+  const el  = document.getElementById('upd-status');
+  if (el)  el.innerHTML = html;
+  if (row) row.style.display = '';
+}
+
+async function checkForUpdates() {
+  const btn = document.getElementById('upd-btn');
+  if (btn) btn.disabled = true;
+  document.getElementById('upd-available-card').style.display = 'none';
+  _updSetStatus('<span style="color:var(--muted)">⏳ Checking for updates…</span>');
+
+  try {
+    const r = await fetch('/api/updates/check');
+    if (!r.ok) throw new Error('Server returned HTTP ' + r.status);
+    const d = await r.json();
+
+    if (d.error && !d.is_update_available) {
+      _updSetStatus('<span style="color:var(--danger)">⚠️ ' + _esc(d.error) + '</span>');
+      return;
+    }
+
+    if (d.is_update_available) {
+      _updSetStatus('');
+      document.getElementById('upd-status-row').style.display = 'none';
+
+      document.getElementById('upd-available-card').style.display = '';
+      document.getElementById('upd-new-ver').textContent          = d.latest_version || '';
+      const badge = document.getElementById('upd-new-ver-badge');
+      if (badge) badge.textContent = 'v' + (d.latest_version || '');
+
+      const notesEl  = document.getElementById('upd-notes');
+      const notesRow = document.getElementById('upd-notes-row');
+      if (d.release_notes && d.release_notes.trim()) {
+        notesEl.textContent    = d.release_notes.trim();
+        notesRow.style.display = '';
+      } else {
+        notesRow.style.display = 'none';
+      }
+    } else {
+      _updSetStatus('<span style="color:#059669">✅ You are up to date — v' + _esc(d.current_version) + '</span>');
+    }
+  } catch (e) {
+    _updSetStatus('<span style="color:var(--danger)">⚠️ Check failed: ' + _esc(e.message) + '</span>');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function installUpdate() {
+  if (!confirm('Download and install the update now?\n\nThe app will close once the installer launches. Your data is preserved.')) return;
+
+  const btn = document.getElementById('upd-install-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Downloading…'; }
+  _updSetStatus('<span style="color:var(--muted)">⏳ Downloading installer — this may take a minute…</span>');
+
+  const controller = new AbortController();
+  const guard = setTimeout(() => controller.abort(), 600000); // 10-min safety
+
+  try {
+    const r = await fetch('/api/updates/download-install', {
+      method:  'POST',
+      headers: withCsrfHeaders({ 'Content-Type': 'application/json' }),
+      signal:  controller.signal,
+    });
+    clearTimeout(guard);
+
+    let d = {};
+    try { d = await r.json(); } catch (_) {}
+
+    if (d.success) {
+      _updSetStatus('<span style="color:#059669">✅ Installer launched! Closing app…</span>');
+      // Give the response time to render, then close the Qt window
+      setTimeout(function() {
+        if (window.pywebview && window.pywebview.api) {
+          window.pywebview.api.close_window();
+        }
+      }, 1200);
+    } else {
+      const msg = (d && d.error) ? d.error : ('HTTP ' + r.status);
+      _updSetStatus('<span style="color:var(--danger)">⚠️ ' + _esc(msg) + '</span>');
+      if (btn) { btn.disabled = false; btn.textContent = '⬇️ Install Update'; }
+    }
+  } catch (e) {
+    clearTimeout(guard);
+    const msg = e.name === 'AbortError' ? 'Download timed out' : e.message;
+    _updSetStatus('<span style="color:var(--danger)">⚠️ ' + _esc(msg) + '</span>');
+    if (btn) { btn.disabled = false; btn.textContent = '⬇️ Install Update'; }
+  }
+}
+
+function _esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 /* ══ LICENSE ═════════════════════════════════════════════════════════════ */

@@ -46,10 +46,11 @@ a = Analysis(
     pathex=['.'],
     binaries=[],
     datas=[
-        ('templates',    'templates'),
-        ('static',       'static'),
-        ('version.py',   '.'),
-        ('supermart.db', '.'),       # bundled seed DB — copied to writable dir on first run
+        ('templates',       'templates'),
+        ('static',          'static'),
+        ('version.py',      '.'),
+        ('update_config.py', '.'),   # GitHub update configuration constants
+        ('supermart.db',    '.'),    # bundled seed DB — copied to writable dir on first run
     ],
     hiddenimports=[
         # ── Core application modules ────────────────────────────────────────────
@@ -86,6 +87,13 @@ a = Analysis(
         'routes.label_print_routes',
         'routes.barcode_routes',
         'routes.diagnostics_routes',
+
+        # ── GitHub Releases auto-updater ─────────────────────────────────────────
+        # update_config and update_routes are loaded via importlib/blueprint
+        # registration at runtime; PyInstaller cannot detect them statically.
+        'update_config',
+        'update_routes',
+        'services.updater',
 
         # ── Shared helpers ────────────────────────────────────────────────────────
         'shared_helpers',

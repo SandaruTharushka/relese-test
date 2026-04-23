@@ -3,6 +3,7 @@ from __future__ import annotations
 import ctypes
 import importlib
 import importlib.util
+import json
 import logging
 import os
 import subprocess
@@ -473,6 +474,93 @@ class DesktopLauncher:
         finally:
             self.server.stop()
 
+    # ── Startup update check ──────────────────────────────────────────────────
+
+    def _background_update_check(self, view: Any) -> None:
+        """
+        Background-thread worker: check GitHub for a newer release and, if one
+        is found, inject a dismissible update banner into the running web page.
+
+        Respects UPDATE_CHECK_INTERVAL_HOURS so it does not ping GitHub on every
+        single launch. Never raises — any failure is logged at DEBUG level only.
+        """
+        try:
+            from services.updater import UpdateChecker
+            from update_config import (
+                GITHUB_OWNER,
+                GITHUB_REPO,
+                UPDATE_CHECK_TIMEOUT_SECONDS,
+                UPDATE_CHECK_INTERVAL_HOURS,
+            )
+
+            data_dir        = persistent_app_dir()
+            last_check_file = data_dir / "last_update_check.txt"
+
+            # Skip if we already checked recently
+            if last_check_file.exists():
+                try:
+                    elapsed = time.time() - float(last_check_file.read_text().strip())
+                    if elapsed < UPDATE_CHECK_INTERVAL_HOURS * 3600:
+                        return
+                except Exception:
+                    pass  # corrupted file — proceed with check
+
+            checker = UpdateChecker(
+                GITHUB_OWNER, GITHUB_REPO, APP_VERSION,
+                timeout=UPDATE_CHECK_TIMEOUT_SECONDS,
+            )
+            info = checker.check()
+
+            # Persist timestamp regardless of check outcome
+            try:
+                last_check_file.write_text(str(time.time()))
+            except Exception:
+                pass
+
+            if not info.is_update_available or not info.installer_asset:
+                return
+
+            ver        = info.latest_version
+            # Sanitise for safe JS string embedding
+            ver_safe   = ver.replace("'", "").replace('"', "").replace("\\", "")
+
+            QtCore = importlib.import_module("PySide6.QtCore")
+
+            def inject_banner() -> None:
+                js = f"""
+(function() {{
+  if (document.getElementById('sm-update-banner')) return;
+  var b = document.createElement('div');
+  b.id = 'sm-update-banner';
+  b.style.cssText = [
+    'position:fixed','top:0','left:0','right:0','z-index:9999',
+    'background:#059669','color:#fff','padding:10px 20px',
+    'display:flex','align-items:center','justify-content:space-between',
+    'font-size:14px','font-family:var(--font-sans,sans-serif)',
+    'box-shadow:0 2px 8px rgba(0,0,0,.3)'
+  ].join(';');
+  b.innerHTML =
+    '<span style="font-weight:600">&#x1F4E6; Update Available — v{ver_safe}</span>' +
+    '<a href="/settings" ' +
+       'onclick="setTimeout(function(){{if(window.show)window.show(\\'updates\\');}},250)"' +
+       'style="background:rgba(255,255,255,.2);color:#fff;padding:5px 14px;' +
+              'border-radius:6px;text-decoration:none;font-size:13px;margin:0 12px"' +
+    '>View Update</a>' +
+    '<button onclick="document.getElementById(\\'sm-update-banner\\').remove()" ' +
+       'style="background:none;border:1px solid rgba(255,255,255,.5);color:#fff;' +
+              'padding:5px 10px;border-radius:6px;cursor:pointer;font-size:12px"' +
+    '>✕</button>';
+  document.body.prepend(b);
+}})();
+"""
+                view.page().runJavaScript(js)
+
+            # Schedule banner injection on the Qt main thread
+            QtCore.QTimer.singleShot(0, inject_banner)
+
+        except Exception as exc:
+            logger.debug("Startup update check failed (non-critical): %s", exc)
+
     def run_qt_fallback(self, start_url: str) -> None:
         if not module_available('PySide6.QtWebEngineWidgets'):
             raise RuntimeError(
@@ -759,6 +847,22 @@ class DesktopLauncher:
             view.loadFinished.disconnect(on_first_page_ready)
 
         view.loadFinished.connect(on_first_page_ready)
+
+        # Schedule startup update check 8 s after the event loop begins.
+        # Fires once; runs in a daemon thread so it never blocks the UI.
+        _upd_timer = QtCore.QTimer()
+        _upd_timer.setSingleShot(True)
+        _upd_timer.setInterval(8000)
+        _upd_timer.timeout.connect(
+            lambda: threading.Thread(
+                target=self._background_update_check,
+                args=(view,),
+                daemon=True,
+                name="supermart-update-check",
+            ).start()
+        )
+        _upd_timer.start()
+
         qt_app.exec()
 
     def _build_qt_webchannel_bridge(self, QtCore: Any, bridge: JsBridge) -> Any:
