@@ -3,26 +3,61 @@
 {% block title %} — Brokers{% endblock %}
 
 {% block extra_head %}
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-.broker-card {
-  background: var(--card); border: 1px solid var(--border); border-radius: 14px;
-  padding: 20px; transition: box-shadow .18s;
-}
-.broker-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,.12); }
+/* ── Broker list cards & stats (unchanged visual roles) ──────────────── */
+.broker-card { background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;transition:box-shadow .18s; }
+.broker-card:hover { box-shadow:0 4px 20px rgba(0,0,0,.14); }
 .broker-stat { text-align:center; }
-.broker-stat .val { font-size:18px; font-weight:800; }
-.broker-stat .lbl { font-size:10px; font-weight:600; color:var(--muted); text-transform:uppercase; margin-top:2px; }
-.badge-active   { background:rgba(16,185,129,.12); color:#10b981; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:700; }
-.badge-inactive { background:rgba(239,68,68,.12); color:var(--danger); padding:2px 10px; border-radius:20px; font-size:11px; font-weight:700; }
-.modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:900; align-items:center; justify-content:center; }
-.modal-overlay.open, .modal-overlay.show { display:flex; opacity:1; pointer-events:all; }
-.modal-box { background:var(--card); border-radius:16px; padding:28px; width:min(580px,95vw); max-height:90vh; overflow-y:auto; }
-.form-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
-@media(max-width:540px){ .form-grid2 { grid-template-columns:1fr; } }
-.section-divider { border:none; border-top:1px solid var(--border); margin:18px 0; }
+.broker-stat .val { font-size:18px;font-weight:800; }
+.broker-stat .lbl { font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;margin-top:2px; }
+.badge-active   { background:rgba(16,185,129,.12);color:#10b981;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700; }
+.badge-inactive { background:rgba(239,68,68,.12);color:var(--danger);padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700; }
 .profile-pane { display:none; }
 .profile-pane.open { display:block; }
-.payment-row { display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:var(--stat); border-radius:10px; margin-bottom:8px; }
+.payment-row { display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--stat);border-radius:10px;margin-bottom:8px; }
+.section-divider { border:none;border-top:1px solid var(--border);margin:18px 0; }
+
+/* ── Modal overlay ───────────────────────────────────────────────────── */
+.modal-overlay { display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:900;align-items:center;justify-content:center;backdrop-filter:blur(2px); }
+.modal-overlay.open,.modal-overlay.show { display:flex; }
+
+/* ── Dark form modal ─────────────────────────────────────────────────── */
+.pf-modal { background:#181c25;border:1px solid #252d3d;border-radius:20px;padding:32px;width:min(600px,95vw);max-height:92vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.65); }
+
+/* ── Modal head / footer ─────────────────────────────────────────────── */
+.pf-mhead { display:flex;justify-content:space-between;align-items:center;margin-bottom:26px; }
+.pf-mtitle { font-family:'DM Sans',sans-serif;font-size:18px;font-weight:800;color:#e2e8f0; }
+.pf-xbtn { width:30px;height:30px;border-radius:8px;background:#252d3d;border:none;color:#8892a4;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:background .15s,color .15s;flex-shrink:0; }
+.pf-xbtn:hover { background:#2e3648;color:#e2e8f0; }
+.pf-mfoot { display:flex;justify-content:flex-end;gap:10px;margin-top:26px;padding-top:18px;border-top:1px solid #252d3d; }
+
+/* ── Section header ──────────────────────────────────────────────────── */
+.pf-sec { display:flex;align-items:center;gap:8px;margin:22px 0 14px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase; }
+.pf-sec:first-of-type { margin-top:0; }
+.pf-sec::before { content:'';display:inline-block;width:3px;height:14px;border-radius:2px;background:currentColor;flex-shrink:0; }
+
+/* ── Label ───────────────────────────────────────────────────────────── */
+.pf-lbl { font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#8892a4;display:block;margin-bottom:6px; }
+
+/* ── Input / select / textarea ───────────────────────────────────────── */
+.pf-inp { background:#0f1117;border:1.5px solid #252d3d;color:#e2e8f0;padding:10px 14px;border-radius:10px;width:100%;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;transition:border-color .2s,box-shadow .2s;resize:vertical;appearance:none;-webkit-appearance:none; }
+.pf-inp:focus { border-color:#5b6af7;box-shadow:0 0 0 3px rgba(91,106,247,.15); }
+.pf-inp::placeholder { color:#3a4556; }
+.pf-inp option { background:#181c25;color:#e2e8f0; }
+
+/* ── Toggle switch ───────────────────────────────────────────────────── */
+.pf-tgl-wrap { display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none; }
+.pf-tgl-cb { display:none; }
+.pf-tgl { width:40px;height:22px;background:#252d3d;border-radius:99px;position:relative;transition:background .2s;flex-shrink:0; }
+.pf-tgl::after { content:'';width:16px;height:16px;background:#4a5568;border-radius:50%;position:absolute;top:3px;left:3px;transition:transform .2s,background .2s; }
+.pf-tgl-cb:checked + .pf-tgl { background:#5b6af7; }
+.pf-tgl-cb:checked + .pf-tgl::after { transform:translateX(18px);background:#fff; }
+.pf-tgl-lbl { font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;color:#c8d0e0; }
+
+/* ── 2-col grid ──────────────────────────────────────────────────────── */
+.pf-g2 { display:grid;grid-template-columns:1fr 1fr;gap:14px; }
+@media(max-width:540px){ .pf-g2 { grid-template-columns:1fr; } }
 </style>
 {% endblock %}
 
@@ -86,63 +121,74 @@
 
 <!-- ═══ ADD / EDIT BROKER MODAL ═══════════════════════════════════════════ -->
 <div class="modal-overlay" id="brokerModal">
-  <div class="modal-box">
-    <div class="flex justify-between items-center mb-5">
-      <div style="font-size:16px;font-weight:800" id="modalTitle">Add Broker</div>
-      <button class="btn btn-sm" onclick="closeModal('brokerModal')">✕</button>
+  <div class="pf-modal">
+    <div class="pf-mhead">
+      <div class="pf-mtitle" id="modalTitle">Add Broker</div>
+      <button class="pf-xbtn" onclick="closeModal('brokerModal')">✕</button>
     </div>
     <input type="hidden" id="editBrokerId">
-    <div class="form-grid2">
+
+    <!-- Contact Info -->
+    <div class="pf-sec" style="color:#5b6af7;margin-top:0">Contact Info</div>
+    <div class="pf-g2">
       <div>
-        <label class="form-label">Full Name *</label>
-        <input id="bkName" class="form-control" placeholder="John Silva">
+        <label class="pf-lbl">Full Name *</label>
+        <input id="bkName" class="pf-inp" placeholder="John Silva">
       </div>
       <div>
-        <label class="form-label">Company</label>
-        <input id="bkCompany" class="form-control" placeholder="ABC Motors">
+        <label class="pf-lbl">Company</label>
+        <input id="bkCompany" class="pf-inp" placeholder="ABC Motors">
       </div>
       <div>
-        <label class="form-label">Phone</label>
-        <input id="bkPhone" class="form-control" placeholder="+94 77 000 0000">
+        <label class="pf-lbl">Phone</label>
+        <input id="bkPhone" class="pf-inp" placeholder="+94 77 000 0000">
       </div>
       <div>
-        <label class="form-label">WhatsApp</label>
-        <input id="bkWhatsapp" class="form-control" placeholder="+94 77 000 0000">
+        <label class="pf-lbl">WhatsApp</label>
+        <input id="bkWhatsapp" class="pf-inp" placeholder="+94 77 000 0000">
       </div>
     </div>
-    <div class="mt-3">
-      <label class="form-label">Address</label>
-      <textarea id="bkAddress" class="form-control" rows="2" placeholder="Street, City"></textarea>
+    <div style="margin-top:14px">
+      <label class="pf-lbl">Address</label>
+      <textarea id="bkAddress" class="pf-inp" rows="2" placeholder="Street, City"></textarea>
     </div>
-    <hr class="section-divider">
-    <div style="font-size:13px;font-weight:700;margin-bottom:10px">Default Commission Settings</div>
-    <div class="form-grid2">
+
+    <!-- Commission Settings -->
+    <div class="pf-sec" style="color:#fbb040">Commission Settings</div>
+    <div class="pf-g2">
       <div>
-        <label class="form-label">Commission Type</label>
-        <select id="bkCommType" class="form-control" onchange="toggleCommLabel()">
+        <label class="pf-lbl">Commission Type</label>
+        <select id="bkCommType" class="pf-inp" onchange="toggleCommLabel()">
           <option value="percent">Percentage (%)</option>
           <option value="fixed">Fixed Amount</option>
         </select>
       </div>
       <div>
-        <label class="form-label" id="commValueLabel">Commission Value (%)</label>
-        <input id="bkCommValue" class="form-control" type="number" min="0" step="0.01" placeholder="10">
+        <label class="pf-lbl" id="commValueLabel">Commission Value (%)</label>
+        <input id="bkCommValue" class="pf-inp" type="number" min="0" step="0.01" placeholder="10">
       </div>
       <div>
-        <label class="form-label">Default Cash Price</label>
-        <input id="bkCashPrice" class="form-control" type="number" min="0" step="0.01" placeholder="0.00">
+        <label class="pf-lbl">Default Cash Price</label>
+        <input id="bkCashPrice" class="pf-inp" type="number" min="0" step="0.01" placeholder="0.00">
       </div>
-      <div class="flex items-center gap-2" style="padding-top:22px">
-        <input type="checkbox" id="bkActive" checked>
-        <label for="bkActive" style="font-size:13px;font-weight:600">Active</label>
+      <div style="padding-top:22px">
+        <label class="pf-tgl-wrap">
+          <input type="checkbox" id="bkActive" class="pf-tgl-cb" checked>
+          <span class="pf-tgl"></span>
+          <span class="pf-tgl-lbl">Active broker</span>
+        </label>
       </div>
     </div>
-    <div class="mt-3">
-      <label class="form-label">Notes</label>
-      <textarea id="bkNotes" class="form-control" rows="2" placeholder="Internal notes…"></textarea>
+
+    <!-- Notes -->
+    <div class="pf-sec" style="color:#8892a4">Notes</div>
+    <div>
+      <label class="pf-lbl">Internal Notes</label>
+      <textarea id="bkNotes" class="pf-inp" rows="2" placeholder="Internal notes…"></textarea>
     </div>
-    <div class="flex gap-3 mt-5 justify-end">
-      <button class="btn" onclick="closeModal('brokerModal')">Cancel</button>
+
+    <div class="pf-mfoot">
+      <button class="btn btn-ghost" onclick="closeModal('brokerModal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveBroker()">Save Broker</button>
     </div>
   </div>
