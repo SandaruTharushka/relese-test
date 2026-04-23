@@ -758,9 +758,11 @@
                 </div>
                 <div class="cfg-row">
                   <div></div>
-                  <div class="flex gap-2">
-                    <button class="btn btn-ghost btn-sm" onclick="testCardTerminal()">🧪 Test Connection</button>
-                    <button class="btn btn-primary btn-sm" onclick="saveCardConfig()">💾 Save Terminal Config</button>
+                  <div class="flex gap-2" style="flex-wrap:wrap">
+                    <button class="btn btn-ghost btn-sm" id="btnCardConnect" onclick="cardTerminalConnect()">🔌 Connect</button>
+                    <button class="btn btn-ghost btn-sm" id="btnCardDisconnect" onclick="cardTerminalDisconnect()" style="display:none">⏏ Disconnect</button>
+                    <button class="btn btn-ghost btn-sm" onclick="testCardTerminal()">🧪 Test</button>
+                    <button class="btn btn-primary btn-sm" onclick="saveCardConfig()">💾 Save Config</button>
                   </div>
                 </div>
               </div>
@@ -1834,6 +1836,8 @@ async function saveAllSettings() {
     pref_backupTime:   val('s_backupTime',   'backupTime'),
     pref_keepBackups:  ctr('v_keepBackups',  'keepBackups'),
     pref_card_enable_card_payments: tog('t_cardEnabled'),
+    pref_card_enabled: tog('t_cardEnabled'),
+    pref_card_auto_connect: tog('t_cardAutoConnect'),
     pref_card_terminal_type: val('s_termType', 'termType'),
     pref_card_provider_name: val('s_cardProvider', 'cardProvider'),
     pref_card_merchant_id: val('s_mid', 'mid'),
@@ -3456,39 +3460,123 @@ document.addEventListener('DOMContentLoaded', () => {
     safelyInvoke(getWindowFunction('loadHardwareSettings'), 'loadHardwareSettings');
     safelyInvoke(getWindowFunction('loadReceiptLayout'), 'loadReceiptLayout');
     safelyInvoke(() => fetch('/api/hardware/auto-connect', { method: 'POST', headers: withCsrfHeaders({}) }).catch(() => {}), 'hardwareAutoConnect');
+    /* ── Card terminal real-time status ─────────────────────────────── */
     function refreshCardTerminalStatus() {
-      var el = document.getElementById('cardTerminalStatus');
-      if (!el) return;
-      var termType = (window.sp_cache && window.sp_cache['termType']) || '';
-      var cardEnabled = (window.sp_cache && window.sp_cache['cardEnabled']) !== false;
-      if (!cardEnabled || !termType || termType === 'manual_record_only') {
-        el.className = 'device-status status-off';
-        el.textContent = '○ Manual Mode';
-        return;
-      }
-      fetch('/api/card/test-connection', {
-        method: 'POST',
-        headers: withCsrfHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ terminal_type: termType })
-      })
+      var statusEl = document.getElementById('cardTerminalStatus');
+      var connectBtn = document.getElementById('btnCardConnect');
+      var disconnectBtn = document.getElementById('btnCardDisconnect');
+      if (!statusEl) return;
+
+      fetch('/api/card/status', { headers: withCsrfHeaders({}) })
         .then(function(r) { return r.json(); })
         .then(function(d) {
-          if (d.ok && d.status === 'connected') {
-            el.className = 'device-status status-ok';
-            el.textContent = '✓ Connected';
+          var st = d.status || 'disconnected';
+          var enabled = d.enabled;
+          var termType = d.terminal_type || '';
+
+          if (!enabled) {
+            statusEl.className = 'device-status status-off';
+            statusEl.textContent = '○ Disabled';
+            if (connectBtn)    connectBtn.style.display = '';
+            if (disconnectBtn) disconnectBtn.style.display = 'none';
+            return;
+          }
+          if (termType === 'manual_record_only') {
+            statusEl.className = 'device-status status-ok';
+            statusEl.textContent = '✓ Manual Mode';
+            if (connectBtn)    connectBtn.style.display = 'none';
+            if (disconnectBtn) disconnectBtn.style.display = 'none';
+            return;
+          }
+          if (st === 'connected') {
+            statusEl.className = 'device-status status-ok';
+            statusEl.textContent = '✓ Connected';
+            if (connectBtn)    connectBtn.style.display = 'none';
+            if (disconnectBtn) disconnectBtn.style.display = '';
+          } else if (st === 'connecting') {
+            statusEl.className = 'device-status status-warn';
+            statusEl.textContent = '⟳ Connecting…';
+            if (connectBtn)    connectBtn.style.display = 'none';
+            if (disconnectBtn) disconnectBtn.style.display = 'none';
+          } else if (st === 'error') {
+            statusEl.className = 'device-status status-err';
+            statusEl.textContent = '✖ Error' + (d.last_error ? ': ' + d.last_error.substring(0,40) : '');
+            if (connectBtn)    connectBtn.style.display = '';
+            if (disconnectBtn) disconnectBtn.style.display = 'none';
           } else {
-            el.className = 'device-status status-err';
-            el.textContent = '✖ ' + (d.msg || 'Disconnected');
+            statusEl.className = 'device-status status-err';
+            statusEl.textContent = '✖ Disconnected';
+            if (connectBtn)    connectBtn.style.display = '';
+            if (disconnectBtn) disconnectBtn.style.display = 'none';
           }
         })
         .catch(function() {
-          el.className = 'device-status status-err';
-          el.textContent = '✖ Disconnected';
+          if (statusEl) { statusEl.className = 'device-status status-err'; statusEl.textContent = '✖ Disconnected'; }
         });
     }
 
-    safelyInvoke(() => window.setTimeout(() => safelyInvoke(refreshCardTerminalStatus, 'refreshCardTerminalStatus'), 800), 'cardStatusTimeout');
-    safelyInvoke(() => window.setInterval(() => safelyInvoke(refreshCardTerminalStatus, 'refreshCardTerminalStatus'), 3000), 'cardStatusInterval');
+    function testCardTerminal() {
+      var statusEl = document.getElementById('cardTerminalStatus');
+      if (statusEl) { statusEl.className = 'device-status status-warn'; statusEl.textContent = '⟳ Testing…'; }
+      fetch('/api/card/test-connection', {
+        method: 'POST',
+        headers: withCsrfHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({})
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          if (statusEl) {
+            if (d.ok) {
+              statusEl.className = 'device-status status-ok';
+              statusEl.textContent = '✓ ' + (d.msg || 'OK');
+            } else {
+              statusEl.className = 'device-status status-err';
+              statusEl.textContent = '✖ ' + (d.msg || 'Failed');
+            }
+          }
+          showToast(d.ok ? (d.msg || 'Connection test passed') : (d.msg || 'Connection test failed'), d.ok ? 'success' : 'error');
+        })
+        .catch(function(e) {
+          if (statusEl) { statusEl.className = 'device-status status-err'; statusEl.textContent = '✖ Error'; }
+          showToast('Test failed: ' + e, 'error');
+        });
+    }
+
+    function cardTerminalConnect() {
+      var statusEl = document.getElementById('cardTerminalStatus');
+      if (statusEl) { statusEl.className = 'device-status status-warn'; statusEl.textContent = '⟳ Connecting…'; }
+      fetch('/api/card/connect', {
+        method: 'POST',
+        headers: withCsrfHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({})
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          showToast(d.ok ? (d.msg || 'Connected') : (d.msg || 'Connection failed'), d.ok ? 'success' : 'error');
+          refreshCardTerminalStatus();
+        })
+        .catch(function(e) {
+          showToast('Connect error: ' + e, 'error');
+          refreshCardTerminalStatus();
+        });
+    }
+
+    function cardTerminalDisconnect() {
+      fetch('/api/card/disconnect', {
+        method: 'POST',
+        headers: withCsrfHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({})
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          showToast(d.msg || 'Disconnected', 'info');
+          refreshCardTerminalStatus();
+        })
+        .catch(function() { refreshCardTerminalStatus(); });
+    }
+
+    safelyInvoke(() => window.setTimeout(() => safelyInvoke(refreshCardTerminalStatus, 'refreshCardTerminalStatus'), 600), 'cardStatusTimeout');
+    safelyInvoke(() => window.setInterval(() => safelyInvoke(refreshCardTerminalStatus, 'refreshCardTerminalStatus'), 8000), 'cardStatusInterval');
     {% endif %}
   } catch (error) {
     console.error('Settings page bootstrap failed:', error);

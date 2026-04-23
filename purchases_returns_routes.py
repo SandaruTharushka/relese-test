@@ -6,6 +6,7 @@ from flask_login import current_user, login_required
 from sqlalchemy.exc import IntegrityError
 from validators import parse_positive_float
 from shared_helpers import user_has_any_role
+from services.atomic_sequence import next_sequence as _next_seq
 
 
 def register_purchases_returns_routes(
@@ -54,9 +55,7 @@ def register_purchases_returns_routes(
 
     # ── API: PURCHASES / GRN ─────────────────────────────────────────────────
     def gen_grn():
-        today = datetime.now().strftime('%Y%m%d')
-        count = Purchase.query.filter(Purchase.grn_number.like(f'GRN-{today}-%')).count()
-        return f"GRN-{today}-{str(count + 1).zfill(4)}"
+        return _next_seq(db.session, 'GRN')
 
     @app.route('/api/purchases', methods=['GET'])
     @login_required
@@ -290,9 +289,7 @@ def register_purchases_returns_routes(
 
     # ── API: PRODUCT RETURNS ──────────────────────────────────────────────────
     def gen_return_number():
-        today = datetime.now().strftime('%Y%m%d')
-        count = ProductReturn.query.filter(ProductReturn.return_number.like(f'RET-{today}-%')).count()
-        return f"RET-{today}-{str(count + 1).zfill(4)}"
+        return _next_seq(db.session, 'RET')
 
     @app.route('/api/returns', methods=['GET'])
     @login_required

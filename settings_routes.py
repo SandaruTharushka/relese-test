@@ -1,4 +1,3 @@
-import random
 from datetime import datetime, timezone
 
 from flask import abort, jsonify, render_template, request
@@ -7,6 +6,7 @@ from flask_login import current_user, login_required
 from payhere import is_sandbox_mode
 from shared_helpers import role_from_user, user_has_any_role
 from version import APP_VERSION
+
 
 def register_settings_routes(
     app,
@@ -22,6 +22,26 @@ def register_settings_routes(
     update_env_file,
     requires_password_change,
 ):
+    from services.settings_service import get_settings_service
+    from services.card_terminal_service import get_card_terminal_service, CardConfig
+    from decimal import Decimal, InvalidOperation
+
+    _settings_svc = get_settings_service()
+    _card_svc = get_card_terminal_service()
+
+    def _safe_amount(raw, label='Amount') -> Decimal:
+        if raw in (None, ''):
+            raise ValueError(f'{label} is required.')
+        try:
+            v = Decimal(str(raw))
+        except (InvalidOperation, TypeError, ValueError):
+            raise ValueError(f'{label} must be a valid number.')
+        if v <= 0:
+            raise ValueError(f'{label} must be greater than zero.')
+        return v
+
+    # ── Pages ─────────────────────────────────────────────────────────────────
+
     @app.route('/settings')
     @login_required
     def settings():
@@ -41,14 +61,15 @@ def register_settings_routes(
         try:
             return render_template(
                 'settings.html',
-                users=User.query.all(),
-                categories=Category.query.all(),
-                suppliers=Supplier.query.filter_by(status='active').all(),
-                products=Product.query.filter_by(status='active').order_by(Product.name.asc()).all(),
+                users=User.query.order_by(User.username.asc()).all(),
+                categories=Category.query.order_by(Category.name.asc()).all(),
+                suppliers=Supplier.query.filter_by(status='active').order_by(Supplier.name.asc()).limit(500).all(),
+                products=Product.query.filter_by(status='active').order_by(Product.name.asc()).limit(500).all(),
                 is_admin=is_admin,
                 user_role=user_role,
                 password_change_required=requires_password_change(current_user),
                 app_version=APP_VERSION,
+                card_terminal_status=_card_svc.status_dict(),
             )
         except Exception:
             app.logger.exception('Settings page render failed user=%s', current_user.username)
@@ -62,31 +83,28 @@ def register_settings_routes(
             abort(403)
         return render_template(
             'barcode_scanner_management.html',
-            products=Product.query.filter_by(status='active').order_by(Product.name.asc()).all(),
+            products=Product.query.filter_by(status='active').order_by(Product.name.asc()).limit(500).all(),
         )
+
+    # ── Store settings API ────────────────────────────────────────────────────
 
     @app.route('/api/store-settings', methods=['GET'])
     @login_required
     def api_store_settings_get():
         try:
+            all_settings = _settings_svc.get_all()
             core_keys = [
-                'store_name',
-                'store_phone',
-                'store_branch',
-                'store_address',
-                'receipt_footer',
-                'store_email',
-                'store_reg',
+                'store_name', 'store_phone', 'store_branch', 'store_address',
+                'receipt_footer', 'store_email', 'store_reg',
             ]
-            result = {key: StoreSettings.get(key, '') for key in core_keys}
+            result = {k: all_settings.get(k, '') for k in core_keys}
             if not result['store_name']:
                 result['store_name'] = 'SuperMart'
-            if not result['receipt_footer']:
-                result['receipt_footer'] = ''
-            pref_rows = StoreSettings.query.filter(StoreSettings.key.like('pref_%')).all()
-            for row in pref_rows:
-                result[row.key] = row.value
-            tax_settings = StoreSettings.get_tax_settings()
+            # Include all pref_ keys
+            for k, v in all_settings.items():
+                if k.startswith('pref_'):
+                    result[k] = v
+            tax_settings = _settings_svc.get_tax_settings()
             result['tax_enabled'] = tax_settings['tax_enabled']
             result['tax_rate'] = tax_settings['tax_rate']
             result['tax_name'] = tax_settings['tax_name']
@@ -105,7 +123,12 @@ def register_settings_routes(
     @login_required
     def api_store_settings_save():
         allowed = user_has_any_role(current_user, 'Admin', 'Operator')
-        app.logger.info('[RBAC] user=%s role=%s allowed=%s allowed_roles=%s path=%s', getattr(current_user, 'username', 'anonymous'), role_from_user(current_user, default=''), allowed, 'Admin,Operator', request.path)
+        app.logger.info(
+            '[RBAC] user=%s role=%s allowed=%s allowed_roles=%s path=%s',
+            getattr(current_user, 'username', 'anonymous'),
+            role_from_user(current_user, default=''),
+            allowed, 'Admin,Operator', request.path,
+        )
         if not allowed:
             abort(403)
         data = request.get_json(silent=True) or {}
@@ -120,6 +143,7 @@ def register_settings_routes(
                 data['tax_name'] = data['pref_taxName']
             StoreSettings.set_many(data)
             db.session.commit()
+            _settings_svc.invalidate()
             app.logger.info(
                 'Settings saved count=%s keys=%s',
                 len(data),
@@ -139,30 +163,34 @@ def register_settings_routes(
     @app.route('/api/settings', methods=['GET'])
     @login_required
     def api_settings_get():
-        """Canonical settings endpoint used by frontend."""
         return api_store_settings_get()
 
     @app.route('/api/settings', methods=['POST'])
     @login_required
     def api_settings_save():
-        """Canonical settings endpoint used by frontend."""
         return api_store_settings_save()
 
     @app.route('/api/settings/all', methods=['GET'])
     @login_required
     def api_settings_all_get():
         allowed = user_has_any_role(current_user, 'Admin', 'Operator')
-        app.logger.info('[RBAC] user=%s role=%s allowed=%s allowed_roles=%s path=%s', getattr(current_user, 'username', 'anonymous'), role_from_user(current_user, default=''), allowed, 'Admin,Operator', request.path)
+        app.logger.info(
+            '[RBAC] user=%s role=%s allowed=%s allowed_roles=%s path=%s',
+            getattr(current_user, 'username', 'anonymous'),
+            role_from_user(current_user, default=''),
+            allowed, 'Admin,Operator', request.path,
+        )
         if not allowed:
             abort(403)
         try:
-            rows = StoreSettings.query.all()
-            result = {row.key: row.value for row in rows}
+            result = _settings_svc.get_all()
             app.logger.info('Settings/all loaded user=%s count=%s', current_user.username, len(result))
             return jsonify(result)
         except Exception:
             app.logger.exception('Settings/all load failed user=%s', current_user.username)
             raise
+
+    # ── Card terminal API ─────────────────────────────────────────────────────
 
     @app.route('/api/card/config', methods=['GET', 'POST'])
     @login_required
@@ -171,19 +199,20 @@ def register_settings_routes(
         if not allowed:
             abort(403)
         if request.method == 'GET':
-            rows = StoreSettings.query.filter(StoreSettings.key.like('pref_card_%')).all()
-            return jsonify({'ok': True, 'config': {row.key: row.value for row in rows}})
+            card_settings = _settings_svc.get_all(prefix='pref_card_')
+            return jsonify({'ok': True, 'config': card_settings})
         data = request.get_json(silent=True) or {}
         if not isinstance(data, dict):
             return jsonify({'ok': False, 'msg': 'Invalid JSON payload'}), 400
-        card_payload = {}
-        for key, value in data.items():
-            if key.startswith('pref_card_'):
-                card_payload[key] = value
+        card_payload = {k: v for k, v in data.items() if k.startswith('pref_card_')}
         if not card_payload:
             return jsonify({'ok': False, 'msg': 'No card config keys provided.'}), 400
         StoreSettings.set_many(card_payload)
         db.session.commit()
+        _settings_svc.invalidate()
+        # Reconfigure card terminal with updated settings
+        fresh_cfg = _settings_svc.get_all(prefix='pref_card_')
+        _card_svc.configure(CardConfig.from_settings(fresh_cfg))
         log_action(
             'Card payment settings updated',
             target_type='card_settings',
@@ -191,64 +220,154 @@ def register_settings_routes(
         )
         return jsonify({'ok': True, 'saved': len(card_payload)})
 
+    @app.route('/api/card/status', methods=['GET'])
+    @login_required
+    def api_card_status():
+        """Real-time card terminal connection status."""
+        return jsonify({'ok': True, **_card_svc.status_dict()})
+
+    @app.route('/api/card/connect', methods=['POST'])
+    @login_required
+    def api_card_connect():
+        """Manually trigger card terminal connection."""
+        allowed = user_has_any_role(current_user, 'Admin', 'Operator')
+        if not allowed:
+            abort(403)
+        fresh_cfg = _settings_svc.get_all(prefix='pref_card_')
+        _card_svc.configure(CardConfig.from_settings(fresh_cfg))
+        ok, msg = _card_svc.connect()
+        return jsonify({'ok': ok, 'status': _card_svc.status.value, 'msg': msg})
+
+    @app.route('/api/card/disconnect', methods=['POST'])
+    @login_required
+    def api_card_disconnect():
+        """Disconnect the card terminal."""
+        allowed = user_has_any_role(current_user, 'Admin', 'Operator')
+        if not allowed:
+            abort(403)
+        _card_svc.disconnect()
+        return jsonify({'ok': True, 'status': 'disconnected', 'msg': 'Terminal disconnected.'})
+
     @app.route('/api/card/test-connection', methods=['POST'])
     @login_required
     def api_card_test_connection():
         data = request.get_json(silent=True) or {}
-        mode = str(data.get('terminal_type') or StoreSettings.get('pref_card_terminal_type', 'manual_record_only')).strip()
-        timeout = int(float(StoreSettings.get('pref_card_transaction_timeout', 60) or 60))
-        if mode == 'manual_record_only':
-            return jsonify({'ok': True, 'status': 'ready', 'msg': 'Manual mode: no network handshake required.'})
-        if mode == 'lan_ip_terminal':
-            ip = str(data.get('ip_address') or StoreSettings.get('pref_card_ip_address', '')).strip()
-            port = str(data.get('port') or StoreSettings.get('pref_card_port', '')).strip()
-            if not ip or not port:
-                return jsonify({'ok': False, 'status': 'invalid', 'msg': 'IP address and port are required.'}), 400
-        if mode == 'usb_serial_terminal':
-            com = str(data.get('com_port') or StoreSettings.get('pref_card_com_port', '')).strip()
-            if not com:
-                return jsonify({'ok': False, 'status': 'invalid', 'msg': 'COM port is required for serial terminals.'}), 400
-        return jsonify({'ok': True, 'status': 'connected', 'msg': f'Terminal link test passed (timeout {timeout}s).'})
+        # Build a temporary config from request overrides + stored settings
+        stored = _settings_svc.get_all(prefix='pref_card_')
+        merged = {**stored}
+        # Allow request to override individual fields for test
+        for field in ('terminal_type', 'ip_address', 'port', 'com_port'):
+            req_val = data.get(field)
+            if req_val:
+                merged[f'pref_card_{field}'] = req_val
+        test_cfg = CardConfig.from_settings(merged)
+        ok, msg = test_cfg and _build_test_connection(test_cfg)
+        return jsonify({'ok': ok, 'status': 'connected' if ok else 'error', 'msg': msg})
+
+    def _build_test_connection(cfg: 'CardConfig'):
+        from services.card_terminal_service import TerminalType
+        import socket
+        if cfg.terminal_type == TerminalType.MANUAL:
+            return True, 'Manual mode: no physical connection test needed.'
+        if cfg.terminal_type == TerminalType.LAN:
+            if not cfg.ip_address:
+                return False, 'IP address is required for LAN terminal.'
+            if cfg.tcp_port <= 0:
+                return False, 'Valid TCP port is required.'
+            try:
+                with socket.create_connection((cfg.ip_address, cfg.tcp_port), timeout=5):
+                    pass
+                return True, f'Successfully connected to {cfg.ip_address}:{cfg.tcp_port}'
+            except socket.timeout:
+                return False, f'Connection timed out to {cfg.ip_address}:{cfg.tcp_port}'
+            except ConnectionRefusedError:
+                return False, f'Connection refused by {cfg.ip_address}:{cfg.tcp_port}'
+            except OSError as exc:
+                return False, f'Network error: {exc}'
+        if cfg.terminal_type == TerminalType.SERIAL:
+            if not cfg.com_port:
+                return False, 'COM port is required for serial terminal.'
+            try:
+                import serial  # type: ignore
+                s = serial.Serial(port=cfg.com_port, baudrate=cfg.baud_rate, timeout=2)
+                s.close()
+                return True, f'Successfully opened {cfg.com_port}'
+            except ImportError:
+                return False, 'pyserial not installed. Run: pip install pyserial'
+            except Exception as exc:
+                return False, f'Serial error: {exc}'
+        return False, 'Unknown terminal type.'
 
     @app.route('/api/card/charge', methods=['POST'])
     @login_required
     def api_card_charge():
         data = request.get_json(silent=True) or {}
-        amount = float(data.get('amount') or 0)
-        if amount <= 0:
-            return jsonify({'ok': False, 'status': 'invalid', 'msg': 'Amount must be greater than zero.'}), 400
-        timeout = int(float(StoreSettings.get('pref_card_transaction_timeout', 60) or 60))
-        force_status = str(data.get('simulate_status') or '').strip().lower()
-        if force_status not in {'success', 'declined', 'timeout'}:
-            force_status = 'success'
-        status = force_status
-        if status == 'timeout':
+        try:
+            amount = _safe_amount(data.get('amount'), 'Amount')
+        except ValueError as exc:
+            return jsonify({'ok': False, 'status': 'invalid', 'msg': str(exc)}), 400
+
+        # Ensure terminal is configured with latest settings
+        fresh_cfg = _settings_svc.get_all(prefix='pref_card_')
+        _card_svc.configure(CardConfig.from_settings(fresh_cfg))
+
+        result = _card_svc.send_payment(amount)
+
+        if result.status == 'timeout':
             log_action(
-                f'Card terminal timeout for LKR {amount:.2f}',
+                f'Card terminal timeout for LKR {float(amount):.2f}',
                 target_type='card_payment_failed',
-                metadata={'amount': amount, 'status': status, 'timeout': timeout},
+                metadata={'amount': float(amount), 'status': result.status},
             )
-            return jsonify({'ok': False, 'status': 'timeout', 'msg': f'Terminal timed out after {timeout}s.'}), 408
-        if status == 'declined':
+            return jsonify({'ok': False, 'status': 'timeout', 'msg': result.message}), 408
+
+        if result.status == 'declined':
             log_action(
-                f'Card transaction declined for LKR {amount:.2f}',
+                f'Card transaction declined for LKR {float(amount):.2f}',
                 target_type='card_payment_failed',
-                metadata={'amount': amount, 'status': status},
+                metadata={'amount': float(amount), 'status': result.status},
             )
-            return jsonify({'ok': False, 'status': 'declined', 'msg': 'Transaction declined by issuer.'}), 402
-        approval = f'APR{random.randint(100000, 999999)}'
-        rrn = f'RRN{random.randint(1000000000, 9999999999)}'
-        response = {
-            'ok': True,
-            'status': 'success',
-            'approval_code': approval,
-            'rrn_reference': rrn,
-            'transaction_timestamp': datetime.now(timezone.utc).replace(tzinfo=None).strftime('%Y-%m-%d %H:%M:%S'),
-            'msg': 'Approved by terminal.',
-        }
+            return jsonify({'ok': False, 'status': 'declined', 'msg': result.message}), 402
+
+        if not result.ok:
+            log_action(
+                f'Card terminal error for LKR {float(amount):.2f}',
+                target_type='card_payment_failed',
+                metadata={'amount': float(amount), 'status': result.status, 'msg': result.message},
+            )
+            return jsonify({'ok': False, 'status': result.status, 'msg': result.message}), 500
+
         log_action(
-            f'Card terminal approved LKR {amount:.2f}',
+            f'Card terminal approved LKR {float(amount):.2f}',
             target_type='card_payment_attempt',
-            metadata={'amount': amount, 'status': 'success', 'approval_code': approval, 'rrn_reference': rrn},
+            metadata={
+                'amount': float(amount), 'status': result.status,
+                'approval_code': result.approval_code,
+                'rrn_reference': result.rrn_reference,
+            },
         )
-        return jsonify(response)
+        return jsonify({
+            'ok': True,
+            'status': result.status,
+            'approval_code': result.approval_code,
+            'rrn_reference': result.rrn_reference,
+            'card_type': result.card_type,
+            'card_last4': result.card_last4,
+            'terminal_id': result.terminal_id,
+            'transaction_timestamp': result.transaction_timestamp,
+            'msg': result.message,
+        })
+
+    @app.route('/api/migrations/status', methods=['GET'])
+    @login_required
+    def api_migration_status():
+        """Return database migration status (Admin only)."""
+        if not user_has_any_role(current_user, 'Admin', 'Developer'):
+            abort(403)
+        try:
+            from services.migrations import migration_status
+            status = migration_status(db.session)
+            return jsonify({'ok': True, 'migrations': status})
+        except Exception as exc:
+            app.logger.exception('Migration status check failed')
+            return jsonify({'ok': False, 'msg': str(exc)}), 500

@@ -533,7 +533,11 @@ def register_sales_routes(
             # Wholesale customer pre-checks (read-only)
             wc = None
             if ws_id:
-                wc = db.session.get(WholesaleCustomer, int(ws_id))
+                try:
+                    ws_id_int = int(ws_id)
+                except (TypeError, ValueError):
+                    raise ValueError('Wholesale customer ID must be a valid number.')
+                wc = db.session.get(WholesaleCustomer, ws_id_int)
                 if wc:
                     if wc.on_hold:
                         raise ValueError(f'Customer "{wc.name}" account is on hold. Contact manager.')

@@ -30,6 +30,7 @@ from services.printing.domain.constants import SERVICE_RECEIPT_LAYOUT_DEFAULTS, 
 
 from validators import parse_positive_float, parse_positive_int
 from customer_linking import ensure_customer_profile, normalize_phone
+from services.atomic_sequence import next_sequence
 
 VALID_VEHICLE_TYPES = {
     'car', 'bike', 'motorcycle', 'three_wheeler', 'van', 'lorry', 'truck', 'bus', 'suv', 'jeep', 'tractor', 'other',
@@ -56,9 +57,8 @@ def normalize_brand_name(value):
 
 
 def gen_job_number():
-    today = datetime.now().strftime('%Y%m%d')
-    count = RepairJob.query.filter(RepairJob.job_number.like(f'JOB-{today}-%')).count()
-    return f"JOB-{today}-{str(count + 1).zfill(4)}"
+    """Generate a unique, race-condition-free job number using atomic DB sequence."""
+    return next_sequence(db.session, 'JOB')
 
 
 def register_repair_routes(app, log_action=None, print_domain=None):
@@ -70,6 +70,19 @@ def register_repair_routes(app, log_action=None, print_domain=None):
 
     def _repair_error(message, status=400, *, code='repair_validation_error'):
         return jsonify({'ok': False, 'success': False, 'error': message, 'code': code}), status
+
+    def _safe_int(value, label: str, *, min_val=None, max_val=None):
+        if value in (None, ''):
+            return None
+        try:
+            result = int(value)
+        except (TypeError, ValueError):
+            raise ValueError(f'{label} must be a valid integer.')
+        if min_val is not None and result < min_val:
+            raise ValueError(f'{label} must be at least {min_val}.')
+        if max_val is not None and result > max_val:
+            raise ValueError(f'{label} must be at most {max_val}.')
+        return result
 
     def _attach_broker_to_job(job, data, allow_create=True):
         """Resolve broker by id or name, auto-create if needed, set snapshot + commission fields."""
@@ -420,7 +433,10 @@ def register_repair_routes(app, log_action=None, print_domain=None):
 
         try:
             receipt_payload = _build_repair_receipt_text_payload(job)
-            copies = max(1, min(int(data.get('copies') or 1), 5))
+            try:
+                copies = max(1, min(int(data.get('copies') or 1), 5))
+            except (TypeError, ValueError):
+                copies = 1
             ok, payload, status = print_domain.print_receipt(
                 receipt_text=str(receipt_payload['receipt_text'] or ''),
                 title=str(receipt_payload['title'] or f'Service Job {receipt_payload["job_number"]}'),
@@ -588,7 +604,13 @@ def register_repair_routes(app, log_action=None, print_domain=None):
             odo_raw  = data.get('odometer_in')
 
             normalized_reg_no, canonical_reg_no = _normalize_plate(data.get('vehicle_reg_no'))
-            parsed_odometer = int(odo_raw) if odo_raw else None
+            if odo_raw not in (None, ''):
+                try:
+                    parsed_odometer = int(odo_raw)
+                except (TypeError, ValueError):
+                    raise ValueError('Odometer reading must be a valid integer.')
+            else:
+                parsed_odometer = None
             last_recorded_mileage = _latest_recorded_mileage(canonical_reg_no)
             if (
                 parsed_odometer is not None
@@ -637,7 +659,7 @@ def register_repair_routes(app, log_action=None, print_domain=None):
                 vehicle_model = (data.get('vehicle_model') or '').strip() or None,
                 vehicle_reg_no= normalized_reg_no or None,
                 vehicle_color = (data.get('vehicle_color') or '').strip() or None,
-                vehicle_year  = int(year_raw) if year_raw else None,
+                vehicle_year  = _safe_int(year_raw, 'Vehicle year', min_val=1886, max_val=2100),
                 vehicle_vin   = ((data.get('vehicle_vin') or '').strip().upper()) or None,
                 odometer_in   = parsed_odometer,
                 fuel_level_in = (data.get('fuel_level_in') or '').strip() or None,
@@ -658,7 +680,7 @@ def register_repair_routes(app, log_action=None, print_domain=None):
             _assign_brand_to_job(job, data.get('vehicle_make'), data.get('vehicle_type'), allow_create=True)
             _refresh_payment_status(job)
             db.session.add(job)
-            db.session.commit()
+            db.session.flush()  # assign job.id before recording history
             _record_vehicle_history(job)
             db.session.commit()
             if log_action:
@@ -756,16 +778,24 @@ def register_repair_routes(app, log_action=None, print_domain=None):
                 job.vehicle_reg_no = normalized_reg_no
             if job.vehicle_vin:
                 job.vehicle_vin = job.vehicle_vin.upper()
+            int_field_limits = {
+                'vehicle_year': (1886, 2100),
+                'odometer_in': (0, 9_999_999),
+                'odometer_out': (0, 9_999_999),
+            }
             for f in ('vehicle_year', 'odometer_in', 'odometer_out'):
                 if f in data and data[f] not in (None, ''):
-                    setattr(job, f, int(data[f]))
+                    min_v, max_v = int_field_limits[f]
+                    setattr(job, f, _safe_int(data[f], f.replace('_', ' ').title(), min_val=min_v, max_val=max_v))
+            new_odo = job.odometer_in
             if 'odometer_in' in data and job.vehicle_reg_no and data.get('odometer_in') not in (None, ''):
                 _, canonical_reg_no = _normalize_plate(job.vehicle_reg_no)
                 last_recorded_mileage = _latest_recorded_mileage(canonical_reg_no)
                 if (
                     last_recorded_mileage is not None
-                    and int(data['odometer_in']) < last_recorded_mileage
-                    and (previous_odometer_in is None or int(data['odometer_in']) != int(previous_odometer_in))
+                    and new_odo is not None
+                    and new_odo < last_recorded_mileage
+                    and (previous_odometer_in is None or new_odo != previous_odometer_in)
                 ):
                     return _repair_error(
                         f'Entered mileage is less than previous recorded mileage ({last_recorded_mileage}).',
@@ -860,13 +890,16 @@ def register_repair_routes(app, log_action=None, print_domain=None):
 
             for part in list(job.parts or []):
                 if part.product_id:
-                    product = db.session.get(Product, part.product_id)
-                    if product:
-                        product.stock_qty += int(part.quantity or 0)
+                    qty_restore = float(part.quantity or 0)
+                    if qty_restore > 0:
+                        db.session.execute(
+                            text("UPDATE products SET stock_qty = stock_qty + :qty WHERE id = :pid"),
+                            {'qty': qty_restore, 'pid': part.product_id},
+                        )
                         db.session.add(StockMovement(
                             product_id=part.product_id,
                             movement_type='repair_delete_restore',
-                            quantity=int(part.quantity or 0),
+                            quantity=qty_restore,
                             reference=job.job_number,
                             note=f'Restored from deleted job {job.job_number}',
                         ))
@@ -943,12 +976,15 @@ def register_repair_routes(app, log_action=None, print_domain=None):
             total      = money_to_decimal(float(sell_price) * qty)
             product_id = data.get('product_id') or None
             if product_id:
-                product = db.session.get(Product, product_id)
-                if product:
-                    product.stock_qty = max(0, product.stock_qty - int(qty))
+                qty_int = float(qty)
+                result = db.session.execute(
+                    text("UPDATE products SET stock_qty = MAX(0, stock_qty - :qty) WHERE id = :pid"),
+                    {'qty': qty_int, 'pid': product_id},
+                )
+                if result.rowcount > 0:
                     db.session.add(StockMovement(
                         product_id=product_id, movement_type='repair_use',
-                        quantity=-int(qty), reference=job.job_number,
+                        quantity=-qty_int, reference=job.job_number,
                         note=f'Used in job {job.job_number}',
                     ))
             part = RepairJobPart(
@@ -977,12 +1013,15 @@ def register_repair_routes(app, log_action=None, print_domain=None):
         part = RepairJobPart.query.filter_by(id=part_id, job_id=jid).first_or_404()
         try:
             if part.product_id:
-                product = db.session.get(Product, part.product_id)
-                if product:
-                    product.stock_qty += int(part.quantity)
+                qty_restore = float(part.quantity or 0)
+                if qty_restore > 0:
+                    db.session.execute(
+                        text("UPDATE products SET stock_qty = stock_qty + :qty WHERE id = :pid"),
+                        {'qty': qty_restore, 'pid': part.product_id},
+                    )
                     db.session.add(StockMovement(
                         product_id=part.product_id, movement_type='repair_return',
-                        quantity=int(part.quantity), reference=job.job_number,
+                        quantity=qty_restore, reference=job.job_number,
                         note=f'Returned from job {job.job_number}',
                     ))
             db.session.delete(part)
