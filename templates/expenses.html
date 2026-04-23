@@ -13,26 +13,26 @@
 
 /* ── Type badges ─────────────────────────────────────────────────────── */
 .tag-type { display:inline-block;padding:2px 9px;border-radius:6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;font-family:'JetBrains Mono',monospace; }
-.tag-shop_expense  { background:rgba(91,106,247,.15); color:#7b8ff7; }
-.tag-work_expense  { background:rgba(52,211,153,.12);  color:#34d399; }
-.tag-bank_loan     { background:rgba(248,113,113,.12); color:#f87171; }
-.tag-extra_expense { background:rgba(251,176,64,.12);  color:#fbb040; }
-.tag-savings       { background:rgba(167,139,250,.12); color:#a78bfa; }
-.tag-other         { background:rgba(148,163,184,.10); color:#94a3b8; }
+.tag-shop_expense  { background:rgba(79,108,246,.14);  color:var(--accent); }
+.tag-work_expense  { background:rgba(16,185,129,.12);  color:var(--accent2); }
+.tag-bank_loan     { background:rgba(239,68,68,.12);   color:var(--danger); }
+.tag-extra_expense { background:rgba(245,158,11,.12);  color:var(--warning); }
+.tag-savings       { background:rgba(139,92,246,.12);  color:#8b5cf6; }
+.tag-other         { background:rgba(148,163,184,.10); color:var(--muted); }
 
 /* ── Modal overlay ───────────────────────────────────────────────────── */
-.modal-overlay { display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:900;align-items:center;justify-content:center;backdrop-filter:blur(2px); }
+.modal-overlay { display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:900;align-items:center;justify-content:center;backdrop-filter:blur(2px); }
 .modal-overlay.open,.modal-overlay.show { display:flex; }
 
-/* ── Dark form modal ─────────────────────────────────────────────────── */
-.pf-modal { background:#181c25;border:1px solid #252d3d;border-radius:20px;padding:32px;width:min(560px,95vw);max-height:92vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.65); }
+/* ── Form modal ──────────────────────────────────────────────────────── */
+.pf-modal { background:var(--card);border:1px solid var(--border);border-radius:20px;padding:32px;width:min(560px,95vw);max-height:92vh;overflow-y:auto;box-shadow:var(--shadowL); }
 
 /* ── Modal head / footer ─────────────────────────────────────────────── */
 .pf-mhead { display:flex;justify-content:space-between;align-items:center;margin-bottom:26px; }
-.pf-mtitle { font-family:'DM Sans',sans-serif;font-size:18px;font-weight:800;color:#e2e8f0; }
-.pf-xbtn { width:30px;height:30px;border-radius:8px;background:#252d3d;border:none;color:#8892a4;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:background .15s,color .15s;flex-shrink:0; }
-.pf-xbtn:hover { background:#2e3648;color:#e2e8f0; }
-.pf-mfoot { display:flex;justify-content:flex-end;gap:10px;margin-top:26px;padding-top:18px;border-top:1px solid #252d3d; }
+.pf-mtitle { font-family:'DM Sans',sans-serif;font-size:18px;font-weight:800;color:var(--text); }
+.pf-xbtn { width:30px;height:30px;border-radius:8px;background:var(--stat);border:none;color:var(--muted);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:background .15s,color .15s;flex-shrink:0; }
+.pf-xbtn:hover { background:var(--hover);color:var(--text); }
+.pf-mfoot { display:flex;justify-content:flex-end;gap:10px;margin-top:26px;padding-top:18px;border-top:1px solid var(--border); }
 
 /* ── Section header ──────────────────────────────────────────────────── */
 .pf-sec { display:flex;align-items:center;gap:8px;margin:22px 0 14px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase; }
@@ -40,30 +40,32 @@
 .pf-sec::before { content:'';display:inline-block;width:3px;height:14px;border-radius:2px;background:currentColor;flex-shrink:0; }
 
 /* ── Label ───────────────────────────────────────────────────────────── */
-.pf-lbl { font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#8892a4;display:block;margin-bottom:6px; }
+.pf-lbl { font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px; }
 
 /* ── Input / select / textarea ───────────────────────────────────────── */
-.pf-inp { background:#0f1117;border:1.5px solid #252d3d;color:#e2e8f0;padding:10px 14px;border-radius:10px;width:100%;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;transition:border-color .2s,box-shadow .2s;resize:vertical;appearance:none;-webkit-appearance:none; }
-.pf-inp:focus { border-color:#5b6af7;box-shadow:0 0 0 3px rgba(91,106,247,.15); }
-.pf-inp::placeholder { color:#3a4556; }
-.pf-inp option { background:#181c25;color:#e2e8f0; }
-.pf-inp[type="date"] { min-height:42px;color-scheme:dark; }
+.pf-inp { background:var(--input);border:1.5px solid var(--border);color:var(--text);padding:10px 14px;border-radius:10px;width:100%;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;transition:border-color .2s,box-shadow .2s;resize:vertical;appearance:none;-webkit-appearance:none; }
+.pf-inp:focus { border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,108,246,.15); }
+.pf-inp::placeholder { color:var(--placeholder); }
+.pf-inp option { background:var(--card);color:var(--text); }
+.pf-inp[type="date"] { min-height:42px; }
+[data-theme="dark"] .pf-inp[type="date"] { color-scheme:dark; }
+[data-theme="dark"] .pf-inp[type="date"]::-webkit-calendar-picker-indicator { filter:invert(.95); }
 
 /* ── Toggle switch ───────────────────────────────────────────────────── */
 .pf-tgl-wrap { display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none; }
 .pf-tgl-cb { display:none; }
-.pf-tgl { width:40px;height:22px;background:#252d3d;border-radius:99px;position:relative;transition:background .2s;flex-shrink:0; }
-.pf-tgl::after { content:'';width:16px;height:16px;background:#4a5568;border-radius:50%;position:absolute;top:3px;left:3px;transition:transform .2s,background .2s; }
-.pf-tgl-cb:checked + .pf-tgl { background:#5b6af7; }
+.pf-tgl { width:40px;height:22px;background:var(--border);border-radius:99px;position:relative;transition:background .2s;flex-shrink:0; }
+.pf-tgl::after { content:'';width:16px;height:16px;background:var(--muted);border-radius:50%;position:absolute;top:3px;left:3px;transition:transform .2s,background .2s; }
+.pf-tgl-cb:checked + .pf-tgl { background:var(--accent); }
 .pf-tgl-cb:checked + .pf-tgl::after { transform:translateX(18px);background:#fff; }
-.pf-tgl-lbl { font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;color:#c8d0e0; }
+.pf-tgl-lbl { font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;color:var(--text); }
 
 /* ── 2-col grid ──────────────────────────────────────────────────────── */
 .pf-g2 { display:grid;grid-template-columns:1fr 1fr;gap:14px; }
 @media(max-width:540px){ .pf-g2 { grid-template-columns:1fr; } }
 
 /* ── Category list item ──────────────────────────────────────────────── */
-.pf-cat-row { display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:10px;background:#0f1117;border:1px solid #252d3d;margin-bottom:6px; }
+.pf-cat-row { display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:10px;background:var(--stat);border:1px solid var(--border);margin-bottom:6px; }
 .pf-dis-btn { padding:4px 12px;border-radius:7px;font-size:10px;font-weight:600;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;border:1px solid;transition:opacity .15s; }
 .pf-dis-btn:hover { opacity:.8; }
 </style>
@@ -149,7 +151,7 @@
     <input type="hidden" id="editEntryId">
 
     <!-- Basic Info -->
-    <div class="pf-sec" style="color:#5b6af7">Basic Info</div>
+    <div class="pf-sec" style="color:var(--accent)">Basic Info</div>
     <div class="pf-g2">
       <div>
         <label class="pf-lbl">Date *</label>
@@ -170,7 +172,7 @@
     </div>
 
     <!-- Payment Details -->
-    <div class="pf-sec" style="color:#34d399">Payment Details</div>
+    <div class="pf-sec" style="color:var(--accent2)">Payment Details</div>
     <div class="pf-g2">
       <div>
         <label class="pf-lbl">Amount (Rs) *</label>
@@ -220,7 +222,7 @@
     </div>
 
     <!-- Add new -->
-    <div class="pf-sec" style="color:#5b6af7;margin-top:0">New Category</div>
+    <div class="pf-sec" style="color:var(--accent);margin-top:0">New Category</div>
     <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:6px">
       <div style="flex:1">
         <label class="pf-lbl">Name</label>
@@ -241,7 +243,7 @@
     </div>
 
     <!-- Existing list -->
-    <div class="pf-sec" style="color:#8892a4;margin-top:20px">Existing Categories</div>
+    <div class="pf-sec" style="color:var(--muted);margin-top:20px">Existing Categories</div>
     <div id="catList" style="max-height:340px;overflow-y:auto"></div>
   </div>
 </div>
@@ -296,18 +298,18 @@ async function loadAll(){
 
 function renderSummaryCards(summary, total){
   const items = [
-    {label:'Total',    val:total,                    color:'#f87171', icon:'💸'},
-    {label:'Shop',     val:summary.shop_expense||0,  color:'#7b8ff7', icon:'🏪'},
-    {label:'Work',     val:summary.work_expense||0,  color:'#34d399', icon:'🔧'},
-    {label:'Loans',    val:summary.bank_loan||0,     color:'#f87171', icon:'🏦'},
-    {label:'Extra',    val:summary.extra_expense||0, color:'#fbb040', icon:'➕'},
-    {label:'Savings',  val:summary.savings||0,       color:'#a78bfa', icon:'💰'},
+    {label:'Total',   val:total,                    color:'var(--danger)',  icon:'💸'},
+    {label:'Shop',    val:summary.shop_expense||0,  color:'var(--accent)',  icon:'🏪'},
+    {label:'Work',    val:summary.work_expense||0,  color:'var(--accent2)', icon:'🔧'},
+    {label:'Loans',   val:summary.bank_loan||0,     color:'var(--danger)',  icon:'🏦'},
+    {label:'Extra',   val:summary.extra_expense||0, color:'var(--warning)', icon:'➕'},
+    {label:'Savings', val:summary.savings||0,       color:'#8b5cf6',        icon:'💰'},
   ];
   document.getElementById('summaryCards').innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:10px;grid-column:1/-1">
       ${items.map(i=>`
-        <div style="background:#181c25;border:1px solid #252d3d;border-radius:14px;padding:16px 18px">
-          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;color:#8892a4;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">${i.icon} ${i.label}</div>
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 18px">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">${i.icon} ${i.label}</div>
           <div style="font-family:'DM Sans',sans-serif;font-size:18px;font-weight:800;color:${i.color}">${fmtLKR(i.val)}</div>
         </div>`).join('')}
     </div>`;
@@ -439,10 +441,10 @@ function renderCatList(){
   document.getElementById('catList').innerHTML = _categories.map(c=>`
     <div class="pf-cat-row">
       <div style="display:flex;align-items:center;gap:10px;min-width:0">
-        <span style="font-family:'DM Sans',sans-serif;font-weight:600;font-size:13px;color:${c.is_active?'#e2e8f0':'#4a5568'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(c.name)}</span>
+        <span style="font-family:'DM Sans',sans-serif;font-weight:600;font-size:13px;color:${c.is_active?'var(--text)':'var(--muted)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(c.name)}</span>
         <span class="tag-type tag-${esc(c.type)}">${esc(TYPE_LABELS[c.type]||c.type)}</span>
       </div>
-      <button class="pf-dis-btn" style="color:${c.is_active?'#f87171':'#7b8ff7'};border-color:${c.is_active?'rgba(248,113,113,.3)':'rgba(91,106,247,.3)'};background:${c.is_active?'rgba(248,113,113,.06)':'rgba(91,106,247,.06)'};flex-shrink:0"
+      <button class="pf-dis-btn" style="color:${c.is_active?'var(--danger)':'var(--accent)'};border-color:${c.is_active?'rgba(239,68,68,.3)':'rgba(79,108,246,.3)'};background:${c.is_active?'rgba(239,68,68,.06)':'rgba(79,108,246,.06)'};flex-shrink:0"
               onclick="toggleCat(${c.id},${c.is_active})">${c.is_active?'Disable':'Enable'}</button>
     </div>`).join('');
 }

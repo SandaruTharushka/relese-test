@@ -19,51 +19,51 @@
   .brand-autocomplete { position:relative;min-width:0; }
   .brand-autocomplete-menu, .brand-suggestions {
     position:absolute;left:0;top:calc(100% + 8px);width:100%;display:none;
-    background:#181c25;border:1px solid #252d3d;border-radius:14px;
-    box-shadow:0 12px 30px rgba(0,0,0,.5);z-index:3000;
+    background:var(--card);border:1px solid var(--border);border-radius:14px;
+    box-shadow:var(--shadowL);z-index:3000;
     max-height:260px;overflow-y:auto;padding:6px;
   }
   .brand-option, .brand-suggestion-item {
     width:100%;border:0;background:transparent;display:flex;align-items:center;
     justify-content:space-between;gap:10px;text-align:left;padding:10px 12px;
-    cursor:pointer;color:#e2e8f0;border-radius:10px;min-height:48px;
+    cursor:pointer;color:var(--text);border-radius:10px;min-height:48px;
   }
   .brand-option:hover, .brand-option:focus-visible,
   .brand-suggestion-item:hover, .brand-suggestion-item:focus-visible,
-  .brand-suggestion-create:hover, .brand-suggestion-create:focus-visible { background:#252d3d;outline:none; }
+  .brand-suggestion-create:hover, .brand-suggestion-create:focus-visible { background:var(--hover);outline:none; }
   .brand-suggestion-item .left { display:flex;flex-direction:column;min-width:0;flex:1; }
-  .brand-name { font-size:14px;font-weight:600;color:#e2e8f0;line-height:1.2; }
-  .brand-sub  { font-size:12px;color:#8892a4;line-height:1.2;margin-top:2px; }
+  .brand-name { font-size:14px;font-weight:600;color:var(--text);line-height:1.2; }
+  .brand-sub  { font-size:12px;color:var(--muted);line-height:1.2;margin-top:2px; }
   .brand-option-label, .brand-name, .brand-sub { flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
-  .brand-option-meta, .brand-suggestion-item .right { flex:0 0 auto;font-size:12px;color:#8892a4;white-space:nowrap; }
-  .brand-option-mark { background:rgba(91,106,247,.22);color:inherit;font-weight:700;border-radius:4px;padding:0 2px; }
+  .brand-option-meta, .brand-suggestion-item .right { flex:0 0 auto;font-size:12px;color:var(--muted);white-space:nowrap; }
+  .brand-option-mark { background:rgba(79,108,246,.22);color:inherit;font-weight:700;border-radius:4px;padding:0 2px; }
   .brand-add-row, .brand-suggestion-create {
     width:100%;border:0;background:transparent;display:block;padding:10px 12px;
-    font-size:14px;color:#7b8ff7;font-weight:600;border-radius:10px;text-align:left;cursor:pointer;
+    font-size:14px;color:var(--accent);font-weight:600;border-radius:10px;text-align:left;cursor:pointer;
   }
-  .brand-menu-state { padding:10px 12px;color:#8892a4; }
+  .brand-menu-state { padding:10px 12px;color:var(--muted); }
   .brand-menu-state.error { color:var(--danger); }
 
   /* ── Customer suggestion box ────────────────────────────────────────── */
   .customer-suggestion-box {
     position:absolute;z-index:1001;width:100%;margin-top:4px;
-    background:#181c25;border:1px solid #252d3d;border-radius:12px;
-    box-shadow:0 10px 25px rgba(0,0,0,.5);animation:customerFadeIn 150ms ease-out;overflow:hidden;
+    background:var(--card);border:1px solid var(--border);border-radius:12px;
+    box-shadow:var(--shadowL);animation:customerFadeIn 150ms ease-out;overflow:hidden;
   }
   @keyframes customerFadeIn { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
   #matchingCustomers { max-height:120px;overflow-y:auto; }
   #matchingCustomers::-webkit-scrollbar { width:6px; }
-  #matchingCustomers::-webkit-scrollbar-thumb { background:#252d3d;border-radius:10px; }
-  .customer-item { display:flex;justify-content:space-between;align-items:center;padding:8px 10px;cursor:pointer;border-bottom:1px solid #252d3d;transition:background 150ms;gap:12px; }
+  #matchingCustomers::-webkit-scrollbar-thumb { background:var(--border);border-radius:10px; }
+  .customer-item { display:flex;justify-content:space-between;align-items:center;padding:8px 10px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 150ms;gap:12px; }
   .customer-item:last-child { border-bottom:none; }
-  .customer-item:hover { background:#1e2536; }
-  .customer-name { font-size:14px;font-weight:700;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2; }
-  .customer-meta { font-size:11px;color:#8892a4;margin-top:2px; }
-  .customer-spent { font-size:11px;font-weight:600;color:#8892a4;text-align:right;white-space:nowrap; }
+  .customer-item:hover { background:var(--hover); }
+  .customer-name { font-size:14px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2; }
+  .customer-meta { font-size:11px;color:var(--muted);margin-top:2px; }
+  .customer-spent { font-size:11px;font-weight:600;color:var(--muted);text-align:right;white-space:nowrap; }
   .customer-due { font-size:10px;color:var(--danger);margin-top:2px; }
 
-  /* ── Dark form modal shell ──────────────────────────────────────────── */
-  .pf-modal-shell { background:#181c25;border:1px solid #252d3d;border-radius:20px;padding:28px 32px;box-shadow:0 24px 64px rgba(0,0,0,.65); }
+  /* ── Form modal shell ───────────────────────────────────────────────── */
+  .pf-modal-shell { background:var(--card);border:1px solid var(--border);border-radius:20px;padding:28px 32px;box-shadow:var(--shadowL); }
 
   /* ── Section header ─────────────────────────────────────────────────── */
   .pf-sec { display:flex;align-items:center;gap:8px;margin:20px 0 13px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase; }
@@ -71,24 +71,26 @@
   .pf-sec::before { content:'';display:inline-block;width:3px;height:14px;border-radius:2px;background:currentColor;flex-shrink:0; }
 
   /* ── Label ──────────────────────────────────────────────────────────── */
-  .pf-lbl { font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#8892a4;display:block;margin-bottom:6px; }
+  .pf-lbl { font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px; }
 
   /* ── Input / select / textarea ──────────────────────────────────────── */
-  .pf-inp { background:#0f1117;border:1.5px solid #252d3d;color:#e2e8f0;padding:10px 14px;border-radius:10px;width:100%;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;transition:border-color .2s,box-shadow .2s;resize:vertical;appearance:none;-webkit-appearance:none;box-sizing:border-box; }
-  .pf-inp:focus { border-color:#5b6af7;box-shadow:0 0 0 3px rgba(91,106,247,.15); }
-  .pf-inp::placeholder { color:#3a4556; }
-  .pf-inp option { background:#181c25;color:#e2e8f0; }
-  .pf-inp[type="date"] { min-height:42px;color-scheme:dark; }
+  .pf-inp { background:var(--input);border:1.5px solid var(--border);color:var(--text);padding:10px 14px;border-radius:10px;width:100%;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;transition:border-color .2s,box-shadow .2s;resize:vertical;appearance:none;-webkit-appearance:none;box-sizing:border-box; }
+  .pf-inp:focus { border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,108,246,.15); }
+  .pf-inp::placeholder { color:var(--placeholder); }
+  .pf-inp option { background:var(--card);color:var(--text); }
+  .pf-inp[type="date"] { min-height:42px; }
+  [data-theme="dark"] .pf-inp[type="date"] { color-scheme:dark; }
+  [data-theme="dark"] .pf-inp[type="date"]::-webkit-calendar-picker-indicator { filter:invert(.95); }
   .pf-inp:disabled { opacity:.5;cursor:not-allowed; }
 
   /* ── Fuel level button group ────────────────────────────────────────── */
   .pf-fuel-grp { display:flex;gap:5px;width:100%; }
-  .pf-fuel-btn { flex:1;padding:9px 4px;border-radius:8px;border:1.5px solid #252d3d;background:#0f1117;color:#8892a4;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;text-align:center;white-space:nowrap; }
-  .pf-fuel-btn:hover { border-color:#5b6af7;color:#5b6af7; }
-  .pf-fuel-btn.active { background:rgba(91,106,247,.15);border-color:#5b6af7;color:#7b8ff7; }
+  .pf-fuel-btn { flex:1;padding:9px 4px;border-radius:8px;border:1.5px solid var(--border);background:var(--input);color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;text-align:center;white-space:nowrap; }
+  .pf-fuel-btn:hover { border-color:var(--accent);color:var(--accent); }
+  .pf-fuel-btn.active { background:rgba(79,108,246,.15);border-color:var(--accent);color:var(--accent); }
 
   /* ── Broker referral card ───────────────────────────────────────────── */
-  .pf-broker-card { background:#0f1117;border:1px solid #252d3d;border-radius:12px;padding:16px;margin-top:4px; }
+  .pf-broker-card { background:var(--stat);border:1px solid var(--border);border-radius:12px;padding:16px;margin-top:4px; }
 </style>
 <div class="app-layout">
   {{ sidebar('repairs') }}
@@ -157,14 +159,14 @@
 <div class="modal-backdrop" id="newJobModal" onclick="closeModal('newJobModal')">
   <div class="modal service-job-modal pf-modal-shell" onclick="event.stopPropagation()" style="max-width:680px">
     <div class="modal-header">
-      <div class="modal-title" style="font-family:'DM Sans',sans-serif;font-size:18px;font-weight:800;color:#e2e8f0">New Service Job</div>
+      <div class="modal-title" style="font-family:'DM Sans',sans-serif;font-size:18px;font-weight:800;color:var(--text)">New Service Job</div>
       <button class="btn btn-ghost btn-sm" onclick="closeModal('newJobModal')">✕</button>
     </div>
     <div class="modal-body">
       <div style="display:flex;flex-direction:column;gap:12px">
 
         <!-- Customer -->
-        <div class="pf-sec" style="color:#5b6af7">Customer</div>
+        <div class="pf-sec" style="color:var(--accent)">Customer</div>
         <div class="grid-2">
           <div><label class="pf-lbl">Customer Name</label>
             <input id="jCustName" type="text" class="pf-inp" placeholder="Customer name" oninput="debounceSearchCustomers('j')"></div>
@@ -174,7 +176,7 @@
         <div id="jCustomerSuggestBox" class="customer-suggestion-box" style="display:none"></div>
 
         <!-- Vehicle -->
-        <div class="pf-sec" style="color:#34d399">Vehicle Details</div>
+        <div class="pf-sec" style="color:var(--accent2)">Vehicle Details</div>
         <div class="grid-3">
           <div><label class="pf-lbl">Vehicle Type</label>
             <select id="jVehicleType" class="pf-inp" data-custom-select>
@@ -228,8 +230,8 @@
           <div><label class="pf-lbl">VIN / Chassis No.</label>
             <input id="jVin" type="text" class="pf-inp" placeholder="WDD2130461A..." style="text-transform:uppercase"></div>
         </div>
-        <div id="vehicleLookupCard" style="display:none;background:#0f1117;border:1px solid #252d3d;padding:10px;border-radius:10px">
-          <div id="vehicleLookupBody" style="font-size:13px;color:#8892a4">No vehicle selected.</div>
+        <div id="vehicleLookupCard" style="display:none;background:var(--stat);border:1px solid var(--border);padding:10px;border-radius:10px">
+          <div id="vehicleLookupBody" style="font-size:13px;color:var(--muted)">No vehicle selected.</div>
           <div style="display:flex;gap:8px;margin-top:8px">
             <button type="button" class="btn btn-primary btn-sm" onclick="applyLookupToForm()">Use this vehicle for new service job</button>
             <button type="button" class="btn btn-ghost btn-sm" onclick="clearLookupCard()">Create as New Vehicle</button>
@@ -256,12 +258,12 @@
         </div>
 
         <!-- Problem & Charges -->
-        <div class="pf-sec" style="color:#fbb040">Problem &amp; Charges</div>
+        <div class="pf-sec" style="color:var(--warning)">Problem &amp; Charges</div>
         <div><label class="pf-lbl">Issue Reported *</label>
           <textarea id="jIssue" class="pf-inp" rows="2" placeholder="Describe the problem..."></textarea></div>
         <div class="grid-2">
           <div>
-            <label class="pf-lbl">Labour Charge (LKR) <span style="font-size:10px;color:#4a5568;font-weight:400;font-family:'DM Sans',sans-serif">(after completion)</span></label>
+            <label class="pf-lbl">Labour Charge (LKR) <span style="font-size:10px;color:var(--muted);font-weight:400;font-family:'DM Sans',sans-serif">(after completion)</span></label>
             <input id="jLabour" type="number" class="pf-inp" placeholder="Set after completion" min="0" step="0.01" disabled>
           </div>
           <div><label class="pf-lbl">Advance Paid (LKR)</label>
@@ -282,14 +284,14 @@
 
         <!-- Broker Referral -->
         <div class="pf-broker-card">
-          <div class="pf-sec" style="color:#8892a4;margin-top:0">Broker Referral <span style="font-size:10px;color:#4a5568;font-family:'DM Sans',sans-serif;font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></div>
+          <div class="pf-sec" style="color:var(--muted);margin-top:0">Broker Referral <span style="font-size:10px;color:var(--muted);font-family:'DM Sans',sans-serif;font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></div>
           <div class="grid-2">
             <div style="position:relative">
               <label class="pf-lbl">Broker Name</label>
               <input id="jBrokerName" class="pf-inp" placeholder="Type to search or add new…"
                      autocomplete="off" oninput="brokerAutocompleteNew(this.value)">
               <input type="hidden" id="jBrokerId">
-              <div id="brokerSuggestNew" style="display:none;position:absolute;top:100%;left:0;right:0;background:#181c25;border:1px solid #252d3d;border-radius:8px;z-index:200;box-shadow:0 4px 16px rgba(0,0,0,.4);max-height:180px;overflow-y:auto"></div>
+              <div id="brokerSuggestNew" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1px solid var(--border);border-radius:8px;z-index:200;box-shadow:var(--shadowL);max-height:180px;overflow-y:auto"></div>
             </div>
             <div>
               <label class="pf-lbl">Commission Type</label>
@@ -311,7 +313,7 @@
 
       </div>
     </div>
-    <div class="modal-footer" style="border-top:1px solid #252d3d">
+    <div class="modal-footer" style="border-top:1px solid var(--border)">
       <button class="btn btn-ghost" onclick="closeModal('newJobModal')">Cancel</button>
       <button class="btn btn-primary" onclick="createJob()">Create Job Card</button>
     </div>
@@ -340,14 +342,14 @@
 <div class="modal-backdrop" id="editJobModal" onclick="closeModal('editJobModal')">
   <div class="modal service-job-modal pf-modal-shell" onclick="event.stopPropagation()" style="max-width:760px;width:95vw">
     <div class="modal-header">
-      <div class="modal-title" id="editJobTitle" style="font-family:'DM Sans',sans-serif;font-size:18px;font-weight:800;color:#e2e8f0">Edit Job</div>
+      <div class="modal-title" id="editJobTitle" style="font-family:'DM Sans',sans-serif;font-size:18px;font-weight:800;color:var(--text)">Edit Job</div>
       <button class="btn btn-ghost btn-sm" onclick="closeModal('editJobModal')">✕</button>
     </div>
     <div class="modal-body">
       <div style="display:grid;gap:12px">
 
         <!-- Customer -->
-        <div class="pf-sec" style="color:#5b6af7">Customer</div>
+        <div class="pf-sec" style="color:var(--accent)">Customer</div>
         <div class="grid-2">
           <div><label class="pf-lbl">Customer Name</label><input id="eCustName" type="text" class="pf-inp" oninput="debounceSearchCustomers('e')"></div>
           <div><label class="pf-lbl">Customer Phone</label><input id="eCustPhone" type="text" class="pf-inp" oninput="debounceSearchCustomers('e')"></div>
@@ -355,7 +357,7 @@
         <div id="eCustomerSuggestBox" class="customer-suggestion-box" style="display:none"></div>
 
         <!-- Vehicle -->
-        <div class="pf-sec" style="color:#34d399">Vehicle Details</div>
+        <div class="pf-sec" style="color:var(--accent2)">Vehicle Details</div>
         <div class="grid-3">
           <div><label class="pf-lbl">Vehicle Type</label>
             <select id="eVehicleType" class="pf-inp" data-custom-select>
@@ -404,21 +406,21 @@
         </div>
 
         <!-- Problem & Charges -->
-        <div class="pf-sec" style="color:#fbb040">Problem &amp; Charges</div>
+        <div class="pf-sec" style="color:var(--warning)">Problem &amp; Charges</div>
         <div><label class="pf-lbl">Issue Reported *</label><textarea id="eIssue" class="pf-inp" rows="2"></textarea></div>
         <div><label class="pf-lbl">Diagnosis / Work Done</label><textarea id="eDiagnosis" class="pf-inp" rows="2"></textarea></div>
         <div><label class="pf-lbl">Notes</label><textarea id="eNotes" class="pf-inp" rows="2"></textarea></div>
 
         <!-- Broker Referral -->
         <div class="pf-broker-card">
-          <div class="pf-sec" style="color:#8892a4;margin-top:0">Broker Referral <span style="font-size:10px;color:#4a5568;font-family:'DM Sans',sans-serif;font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></div>
+          <div class="pf-sec" style="color:var(--muted);margin-top:0">Broker Referral <span style="font-size:10px;color:var(--muted);font-family:'DM Sans',sans-serif;font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></div>
           <div class="grid-2">
             <div style="position:relative">
               <label class="pf-lbl">Broker Name</label>
               <input id="eBrokerName" class="pf-inp" placeholder="Type to search or add new…"
                      autocomplete="off" oninput="brokerAutocomplete(this.value)">
               <input type="hidden" id="eBrokerId">
-              <div id="brokerSuggest" style="display:none;position:absolute;top:100%;left:0;right:0;background:#181c25;border:1px solid #252d3d;border-radius:8px;z-index:200;box-shadow:0 4px 16px rgba(0,0,0,.4);max-height:180px;overflow-y:auto"></div>
+              <div id="brokerSuggest" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1px solid var(--border);border-radius:8px;z-index:200;box-shadow:var(--shadowL);max-height:180px;overflow-y:auto"></div>
             </div>
             <div>
               <label class="pf-lbl">Commission Type</label>
@@ -436,14 +438,14 @@
               <input id="eBrokerCashPrice" class="pf-inp" type="number" min="0" step="0.01" placeholder="0.00">
             </div>
           </div>
-          <div style="font-size:11px;color:#8892a4;margin-top:8px;font-family:'DM Sans',sans-serif">
-            Commission Amount: <strong id="brokerCommDisplay" style="color:#e2e8f0">—</strong>
+          <div style="font-size:11px;color:var(--muted);margin-top:8px;font-family:'DM Sans',sans-serif">
+            Commission Amount: <strong id="brokerCommDisplay" style="color:var(--text)">—</strong>
           </div>
         </div>
 
       </div>
     </div>
-    <div class="modal-footer" style="border-top:1px solid #252d3d">
+    <div class="modal-footer" style="border-top:1px solid var(--border)">
       <button class="btn btn-ghost" onclick="closeModal('editJobModal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveEditedJob()">Save</button>
       <button class="btn btn-ghost" onclick="saveEditedJob('job-card')">Save &amp; Print Job Card</button>
