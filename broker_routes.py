@@ -162,7 +162,7 @@ def register_broker_routes(app, log_action=None):
             return jsonify({'ok': False, 'error': 'Duplicate broker name'}), 409
         if log_action:
             log_action('broker_create', target_type='Broker', target_id=b.id,
-                       metadata_summary=f'Created broker: {b.name}')
+                       metadata=f'Created broker: {b.name}')
         return jsonify({'ok': True, 'broker': b.to_dict()})
 
     # ── UPDATE ──────────────────────────────────────────────────────────────
@@ -201,7 +201,7 @@ def register_broker_routes(app, log_action=None):
         db.session.commit()
         if log_action:
             log_action('broker_update', target_type='Broker', target_id=b.id,
-                       metadata_summary=f'Updated broker: {b.name}')
+                       metadata=f'Updated broker: {b.name}')
         return jsonify({'ok': True, 'broker': b.to_dict()})
 
     # ── DELETE / DEACTIVATE ─────────────────────────────────────────────────
@@ -219,11 +219,12 @@ def register_broker_routes(app, log_action=None):
             b.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
             db.session.commit()
             return jsonify({'ok': True, 'msg': f'Broker deactivated (has {job_count} linked jobs)'})
+        broker_name = b.name
         db.session.delete(b)
         db.session.commit()
         if log_action:
             log_action('broker_delete', target_type='Broker', target_id=bid,
-                       metadata_summary=f'Deleted broker: {b.name}')
+                       metadata=f'Deleted broker: {broker_name}')
         return jsonify({'ok': True, 'msg': 'Broker deleted'})
 
     # ── COMMISSION PAYMENT ──────────────────────────────────────────────────
@@ -274,7 +275,7 @@ def register_broker_routes(app, log_action=None):
         db.session.commit()
         if log_action:
             log_action('broker_commission_paid', target_type='Broker', target_id=bid,
-                       metadata_summary=f'Commission payment {float(amount):.2f} to {b.name}')
+                       metadata=f'Commission payment {float(amount):.2f} to {b.name}')
         return jsonify({'ok': True, 'payment': pmt.to_dict()})
 
     # ── DELETE COMMISSION PAYMENT ───────────────────────────────────────────

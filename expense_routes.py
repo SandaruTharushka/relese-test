@@ -193,7 +193,7 @@ def register_expense_routes(app, log_action=None):
         db.session.commit()
         if log_action:
             log_action('expense_create', target_type='ExpenseEntry', target_id=entry.id,
-                       metadata_summary=f'New expense: {title} {float(amount):.2f}')
+                       metadata=f'New expense: {title} {float(amount):.2f}')
         return jsonify({'ok': True, 'entry': entry.to_dict()})
 
     # ── ENTRY UPDATE ─────────────────────────────────────────────────────────
@@ -248,11 +248,12 @@ def register_expense_routes(app, log_action=None):
         entry = db.session.get(ExpenseEntry, eid)
         if not entry:
             return jsonify({'ok': False, 'error': 'Expense not found'}), 404
+        entry_title = entry.title
         db.session.delete(entry)
         db.session.commit()
         if log_action:
             log_action('expense_delete', target_type='ExpenseEntry', target_id=eid,
-                       metadata_summary=f'Deleted expense: {entry.title}')
+                       metadata=f'Deleted expense: {entry_title}')
         return jsonify({'ok': True})
 
     # ── SUMMARY FOR PROFIT REPORT ────────────────────────────────────────────
