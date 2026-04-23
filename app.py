@@ -51,6 +51,7 @@ from routes.receipt_print_routes import register_receipt_print_routes
 from routes.label_print_routes import register_label_print_routes
 from routes.barcode_routes import register_barcode_routes
 from routes.diagnostics_routes import register_diagnostics_routes
+from update_routes import update_bp
 from version import __version__
 import license as lic_module
 from services.printer_service import PrinterService
@@ -455,6 +456,7 @@ db.init_app(app)
 with app.app_context():
     _attempt_printer_autoconnect_on_startup()
 app.register_blueprint(backup_bp)
+app.register_blueprint(update_bp)
 start_auto_backup_scheduler(app)
 _warn_placeholder_configs(app)
 run_startup_checks(app)

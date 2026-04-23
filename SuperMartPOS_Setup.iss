@@ -1,5 +1,5 @@
 #define MyAppName "SuperMart POS"
-#define MyAppVersion "3.1"
+#define MyAppVersion "3.1.0"
 #define MyAppPublisher "Cloud Crafters"
 #define MyAppExeName "SuperMartPOS.exe"
 #define MyPrinterManagerExeName "SuperMartPrinterManager.exe"
@@ -7,7 +7,7 @@
 #define MyAppSupportEmail "support@cloudcrafters.example"
 #define MyAppDistRoot "dist"
 #define MyAppOneDirFolder "SuperMartPOS"
-#define MyInstallerBaseName "SuperMartPOS_Setup_v3.1"
+#define MyInstallerBaseName "SuperMartPOS_Setup_v3.1.0"
 #define MyAppId "{{A8AB1C36-4C3F-4E7A-8A5E-4EEA0D4D1B33}}"
 
 #if FileExists(MyAppDistRoot + "\\" + MyAppExeName)

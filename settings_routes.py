@@ -6,6 +6,7 @@ from flask_login import current_user, login_required
 
 from payhere import is_sandbox_mode
 from shared_helpers import role_from_user, user_has_any_role
+from version import APP_VERSION
 
 def register_settings_routes(
     app,
@@ -47,6 +48,7 @@ def register_settings_routes(
                 is_admin=is_admin,
                 user_role=user_role,
                 password_change_required=requires_password_change(current_user),
+                app_version=APP_VERSION,
             )
         except Exception:
             app.logger.exception('Settings page render failed user=%s', current_user.username)
