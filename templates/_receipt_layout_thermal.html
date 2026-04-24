@@ -1,3 +1,6 @@
+{# Safe defaults — guards against invalid CSS when the context omits alignment values. #}
+{% set header_align = header_align or 'center' %}
+{% set footer_align = footer_align or 'center' %}
 <div class="receipt{% if compact_mode %} compact-58{% endif %}">
   <!-- Header -->
   <div style="text-align:{{ header_align }};font-size:14px;font-weight:800">{% if show.store_name %}{{ store.name }}{% endif %}</div>

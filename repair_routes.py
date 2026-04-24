@@ -17,7 +17,7 @@ from models import (
     Broker,
     money_to_decimal,
 )
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, case
 from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy.exc import IntegrityError, OperationalError
@@ -1139,3 +1139,75 @@ def register_repair_routes(app, log_action=None, print_domain=None):
         ready    = RepairJob.query.filter_by(status='ready').count()
         received = RepairJob.query.filter_by(status='received').count()
         return jsonify({'total': total, 'active': active, 'ready': ready, 'received': received})
+
+    def _parse_analysis_date(raw, label):
+        if not raw:
+            return None
+        try:
+            return datetime.strptime(raw.strip(), '%Y-%m-%d')
+        except (TypeError, ValueError):
+            raise ValueError(f'{label} must be in YYYY-MM-DD format.')
+
+    @app.route('/api/repairs/analysis', methods=['GET'])
+    @login_required
+    def api_repairs_analysis():
+        try:
+            start = _parse_analysis_date(request.args.get('start'), 'Start date')
+            end = _parse_analysis_date(request.args.get('end'), 'End date')
+        except ValueError as exc:
+            return jsonify({'ok': False, 'error': str(exc)}), 400
+
+        query = RepairJob.query
+        if start:
+            query = query.filter(RepairJob.received_date >= start)
+        if end:
+            # Inclusive end-of-day
+            query = query.filter(RepairJob.received_date < end + timedelta(days=1))
+
+        jobs = query.options(selectinload(RepairJob.payments)).all()
+        total_jobs     = len(jobs)
+        delivered_jobs = [j for j in jobs if j.status == 'delivered']
+        ready_jobs     = [j for j in jobs if j.status == 'ready']
+        delivered_cnt  = len(delivered_jobs)
+        ready_cnt      = len(ready_jobs)
+
+        delivered_revenue = sum(
+            (money_to_decimal(j.total_amount) for j in delivered_jobs),
+            money_to_decimal(0),
+        )
+
+        outstanding_balance = money_to_decimal(0)
+        for j in jobs:
+            if j.status in ('cancelled',):
+                continue
+            total_amt = money_to_decimal(j.total_amount)
+            advance = money_to_decimal(j.advance_paid)
+            additional = sum(
+                (money_to_decimal(p.amount) for p in j.payments),
+                money_to_decimal(0),
+            )
+            balance = total_amt - advance - additional
+            if balance > 0:
+                outstanding_balance += balance
+
+        avg_ticket = (
+            float(delivered_revenue) / delivered_cnt if delivered_cnt else 0.0
+        )
+
+        return jsonify({
+            'ok': True,
+            'jobs': {
+                'total': total_jobs,
+                'delivered': delivered_cnt,
+                'ready': ready_cnt,
+            },
+            'receipts': {
+                'printable': delivered_cnt,
+                'not_ready': total_jobs - delivered_cnt,
+            },
+            'finance': {
+                'delivered_revenue': float(delivered_revenue),
+                'outstanding_balance': float(outstanding_balance),
+                'avg_ticket': float(avg_ticket),
+            },
+        })

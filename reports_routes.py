@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from flask import Response, abort, jsonify, render_template, request
 from flask_login import current_user, login_required
 from sqlalchemy import extract, func, or_
+from sqlalchemy.orm import joinedload
 
 from input_helpers import safe_int_arg
 from shared_helpers import user_has_any_role
@@ -251,7 +252,18 @@ def register_reports_routes(
 
         if report_type == 'sales':
             writer.writerow(['Invoice', 'Date', 'Cashier', 'Customer', 'Subtotal', 'Discount', 'Tax', 'Total', 'Status'])
-            sales = Sale.query.filter(func.date(Sale.sale_date).between(start, end)).order_by(Sale.sale_date.desc()).all()
+            # Eager-load cashier + wholesale_customer relationships so the serializer
+            # below doesn't trigger one lazy-load per sale (N+1 on large exports).
+            sales = (
+                Sale.query
+                .options(
+                    joinedload(Sale.cashier_user),
+                    joinedload(Sale.wholesale_customer),
+                )
+                .filter(func.date(Sale.sale_date).between(start, end))
+                .order_by(Sale.sale_date.desc())
+                .all()
+            )
             for s in sales:
                 writer.writerow([
                     s.invoice_number,
@@ -318,10 +330,17 @@ def register_reports_routes(
     @login_required
     def api_report_low_stock():
         _ensure_reports_access()
-        prods = Product.query.filter(
-            Product.stock_qty <= Product.low_stock_lvl,
-            Product.status == 'active',
-        ).order_by(Product.stock_qty.asc()).all()
+        # Eager-load cat/supplier to avoid N+1 during serialization below.
+        prods = (
+            Product.query
+            .options(joinedload(Product.cat), joinedload(Product.supplier_obj))
+            .filter(
+                Product.stock_qty <= Product.low_stock_lvl,
+                Product.status == 'active',
+            )
+            .order_by(Product.stock_qty.asc())
+            .all()
+        )
         return jsonify(
             [
                 {
