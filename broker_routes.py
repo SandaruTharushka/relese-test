@@ -40,6 +40,15 @@ def register_broker_routes(app, log_action=None):
         _ensure_access()
         return render_template('brokers.html')
 
+    @app.route('/brokers/<int:bid>')
+    @login_required
+    def broker_profile_page(bid):
+        _ensure_access()
+        b = db.session.get(Broker, bid)
+        if not b:
+            abort(404)
+        return render_template('broker_profile.html', broker=b)
+
     # ── AUTOCOMPLETE ────────────────────────────────────────────────────────
     @app.route('/api/brokers/autocomplete')
     @login_required
