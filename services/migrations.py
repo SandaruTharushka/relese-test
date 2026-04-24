@@ -242,7 +242,7 @@ MIGRATIONS: list[Migration] = [
     Migration(17, 'v6.6 retail customer indexes', [
         "CREATE INDEX IF NOT EXISTS idx_retail_customers_phone ON retail_customers(phone_normalized)",
         "CREATE INDEX IF NOT EXISTS idx_retail_customers_customer_code ON retail_customers(customer_code)",
-        "CREATE INDEX IF NOT EXISTS idx_vehicle_history_reg_no ON vehicle_history(vehicle_reg_no)",
+        "CREATE INDEX IF NOT EXISTS idx_vehicle_history_reg_no ON vehicle_history(reg_no)",
         "CREATE INDEX IF NOT EXISTS idx_vehicle_history_job_id ON vehicle_history(job_id)",
     ]),
 ]

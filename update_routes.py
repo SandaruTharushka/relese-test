@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import threading
 from pathlib import Path
 
@@ -32,6 +33,17 @@ from services.updater import (
     UpdateChecker, UpdateInfo, ReleaseAsset,
     launch_installer, backup_before_update, verify_installer_checksum,
 )
+
+
+# Releases can publish an installer checksum in the release notes as:
+#   SHA256: 3af0f4…
+# We parse this (if present) and enforce it before launching the installer.
+_SHA256_RE = re.compile(r'SHA[- ]?256[:\s]+([0-9a-fA-F]{64})')
+
+
+def _extract_expected_sha256(release_notes: str) -> str:
+    match = _SHA256_RE.search(release_notes or '')
+    return match.group(1).lower() if match else ''
 from update_config import (
     GITHUB_OWNER,
     GITHUB_REPO,
@@ -151,6 +163,27 @@ def download_and_install():
 
         # ── Download installer ────────────────────────────────────────────
         installer_path = checker.download_installer(info.installer_asset)
+
+        # ── Verify checksum (if published in release notes) ──────────────
+        expected_sha256 = _extract_expected_sha256(info.release_notes)
+        if expected_sha256:
+            if not verify_installer_checksum(installer_path, expected_sha256):
+                try:
+                    installer_path.unlink(missing_ok=True)
+                except Exception:
+                    pass
+                return jsonify({
+                    "success": False,
+                    "error": "Installer checksum verification failed — refusing to run untrusted binary.",
+                }), 400
+            log.info("Installer SHA-256 verified against release notes")
+        else:
+            log.warning(
+                "No SHA-256 checksum found in release notes for %s — "
+                "relying on HTTPS + size check only. Publish 'SHA256: <hash>' in "
+                "release notes to enable cryptographic verification.",
+                info.tag_name,
+            )
 
         # ── Launch detached ───────────────────────────────────────────────
         launch_installer(installer_path)

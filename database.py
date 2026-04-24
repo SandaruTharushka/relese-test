@@ -29,13 +29,28 @@ def _seed_bundled_database(writable_db_path: Path) -> None:
     shutil.copy2(str(bundled), str(writable_db_path))
 
 
+_VALID_SYNC_MODES = {'OFF', 'NORMAL', 'FULL', 'EXTRA'}
+
+
+def _resolve_synchronous_mode() -> str:
+    """Resolve PRAGMA synchronous mode from env, defaulting to NORMAL.
+
+    For production POS deployments that need maximum durability (no risk of
+    losing a completed sale on power loss), set SQLITE_SYNCHRONOUS=FULL.
+    """
+    raw = (os.getenv('SQLITE_SYNCHRONOUS') or 'NORMAL').strip().upper()
+    return raw if raw in _VALID_SYNC_MODES else 'NORMAL'
+
+
 @event.listens_for(Engine, 'connect')
 def _enable_sqlite_pragmas(dbapi_connection, _connection_record):
     if isinstance(dbapi_connection, sqlite3.Connection):
         cursor = dbapi_connection.cursor()
         cursor.execute('PRAGMA foreign_keys=ON')
         cursor.execute('PRAGMA journal_mode=WAL')
-        cursor.execute('PRAGMA synchronous=NORMAL')
+        cursor.execute(f'PRAGMA synchronous={_resolve_synchronous_mode()}')
+        # Guard against runaway queries — report queries on large tables cap at 30s.
+        cursor.execute('PRAGMA busy_timeout=5000')
         cursor.close()
 
 

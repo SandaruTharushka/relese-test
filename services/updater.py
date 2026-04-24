@@ -316,6 +316,12 @@ class UpdateChecker:
             size = tmp.stat().st_size
             if size == 0:
                 raise RuntimeError("Downloaded installer is empty (0 bytes)")
+            # Size sanity: the GitHub release advertises asset.size. If Content-Length
+            # agreed with it during streaming, the actual bytes on disk must match too.
+            if asset.size and size != asset.size:
+                raise RuntimeError(
+                    f"Downloaded installer size mismatch: expected {asset.size} bytes, got {size} bytes"
+                )
 
             log.info("Installer downloaded: %s (%d bytes)", tmp, size)
             return tmp

@@ -230,17 +230,29 @@
   }
 
   // ── Thermal print ─────────────────────────────
+  const __csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+  let __thermalInFlight = false;
+
   async function printThermal() {
+    if (__thermalInFlight) { return; }  // idempotency: prevent double-submit
+    __thermalInFlight = true;
     const btn = document.getElementById('btnThermal');
     const copies = Math.max(1, Math.min(5, parseInt(document.getElementById('copiesInput').value) || 1));
     btn.disabled = true;
     btn.textContent = '⏳ Sending…';
     showStatus('Sending to thermal printer…', 'info');
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
     try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (__csrfToken) { headers['X-CSRFToken'] = __csrfToken; }
       const res = await fetch('/api/printing/receipt/print-job', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ job_id: {{ job.id }}, copies }),
+        signal: controller.signal,
       });
       const d = await res.json();
       if (d.ok) {
@@ -250,12 +262,20 @@
           ? ' — No thermal printer configured in Settings.'
           : d.code === 'PRINTER_OFFLINE'
           ? ' — Printer appears offline. Check connection.'
+          : d.code === 'PRINTER_NOT_INSTALLED'
+          ? ' — Printer driver is not installed.'
           : '';
         showStatus(`❌ ${d.msg || d.error || 'Print failed'}${hint}`, 'err');
       }
     } catch (e) {
-      showStatus('❌ Network error: ' + e.message, 'err');
+      if (e.name === 'AbortError') {
+        showStatus('❌ Printer did not respond within 8s. Check connection.', 'err');
+      } else {
+        showStatus('❌ Network error: ' + e.message, 'err');
+      }
     } finally {
+      clearTimeout(timeoutId);
+      __thermalInFlight = false;
       btn.disabled = false;
       btn.innerHTML = '🖨 Print on Thermal Printer';
     }

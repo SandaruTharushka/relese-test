@@ -41,6 +41,10 @@
           <td class="txt-r">{{ '%.2f'|format(item.discount or 0) }}</td>
           <td class="txt-r">{{ '%.2f'|format(item.total or 0) }}</td>
         </tr>
+        {% else %}
+        <tr>
+          <td colspan="5" style="text-align:center;color:#888;padding:16px">No items on this invoice.</td>
+        </tr>
         {% endfor %}
       </tbody>
     </table>

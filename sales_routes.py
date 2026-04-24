@@ -825,31 +825,62 @@ def register_sales_routes(
     def payment_notify():
         data = request.form.to_dict()
         if not verify_notify(data):
+            app.logger.warning('PayHere notify rejected: invalid signature order_id=%s', data.get('order_id'))
             return 'Invalid signature', 400
-        sale = Sale.query.filter_by(invoice_number=data.get('order_id')).first()
-        if sale:
-            pay = Payment.query.filter_by(sale_id=sale.id, method='PayHere').first()
-            
-            # FIX: Amount eka verify kirima
-            payhere_amount = float(data.get('payhere_amount', 0))
-            expected_amount = float(sale.total_amount or 0)
-            is_valid_amount = payhere_amount >= (expected_amount - 0.01) # Small tolerance
-            
-            if pay:
-                pay.gateway_status = 'success' if (data.get('status_code') == '2' and is_valid_amount) else 'failed'
-                pay.gateway_ref = data.get('payment_no', '')
-                
-            if data.get('status_code') == '2' and is_valid_amount:
-                sale.status = 'completed'
-                
-            db.session.commit()
-            
-            if sale.status == 'completed':
-                try:
-                    invoice_url = url_for('invoice_details_page', invoice_no=sale.invoice_number, _external=True)
-                    generate_invoice_code_images(app, invoice_no=sale.invoice_number, invoice_url=invoice_url)
-                except Exception:
-                    app.logger.exception('Failed generating invoice code images after PayHere notify')
+
+        order_id = (data.get('order_id') or '').strip()
+        if not order_id:
+            return 'Bad Request', 400
+
+        # Success status is "2" per PayHere spec; accept common variants.
+        raw_status = str(data.get('status_code', '')).strip()
+        is_success_status = raw_status in ('2', '02')
+
+        # Require an explicit payhere_amount field — never trust a default.
+        raw_amount = data.get('payhere_amount')
+        if raw_amount is None or str(raw_amount).strip() == '':
+            app.logger.warning('PayHere notify missing payhere_amount order_id=%s', order_id)
+            return 'Bad Request', 400
+        try:
+            paid_amount = Decimal(str(raw_amount)).quantize(Decimal('0.01'))
+        except (InvalidOperation, ValueError):
+            app.logger.warning('PayHere notify bad amount order_id=%s value=%r', order_id, raw_amount)
+            return 'Bad Request', 400
+
+        sale = Sale.query.filter_by(invoice_number=order_id).first()
+        if not sale:
+            # Acknowledge so PayHere stops retrying, but do not signal success to the gateway.
+            app.logger.warning('PayHere notify for unknown order_id=%s', order_id)
+            return 'OK', 200
+
+        expected_amount = Decimal(str(sale.total_amount or 0)).quantize(Decimal('0.01'))
+        # Exact match or overpay is OK. Underpay — even by one cent — is a reject.
+        amount_ok = paid_amount >= expected_amount
+
+        # Idempotency guard — if we already marked this sale completed, don't reprocess.
+        already_completed = (sale.status == 'completed')
+
+        pay = Payment.query.filter_by(sale_id=sale.id, method='PayHere').first()
+        if pay:
+            pay.gateway_status = 'success' if (is_success_status and amount_ok) else 'failed'
+            pay.gateway_ref = (data.get('payment_no') or '')
+
+        if is_success_status and amount_ok and not already_completed:
+            sale.status = 'completed'
+        elif not amount_ok:
+            app.logger.warning(
+                'PayHere notify amount mismatch order_id=%s expected=%s received=%s',
+                order_id, expected_amount, paid_amount,
+            )
+
+        db.session.commit()
+
+        if sale.status == 'completed' and not already_completed:
+            try:
+                invoice_url = url_for('invoice_details_page', invoice_no=sale.invoice_number, _external=True)
+                generate_invoice_code_images(app, invoice_no=sale.invoice_number, invoice_url=invoice_url)
+            except Exception:
+                app.logger.exception('Failed generating invoice code images after PayHere notify')
         return 'OK', 200
 
     @app.route('/payment/return')

@@ -249,6 +249,10 @@ function switchDashTab(tab, btn) {
   if(tab==='combined') initCombinedTab();
 }
 
+// ── Theme-aware tick color ────────────────────────────────────────────────────
+const __chartTickColor = () =>
+  document.documentElement.getAttribute('data-theme') === 'dark' ? '#CBD5E1' : '#64748B';
+
 // ── Weekly Chart ──────────────────────────────────────────────────────────────
 const weekly = {{ weekly|safe }};
 new Chart(document.getElementById('weeklyChart'),{
@@ -259,8 +263,8 @@ new Chart(document.getElementById('weeklyChart'),{
   options:{responsive:true,maintainAspectRatio:false,
     plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'  LKR '+Number(c.raw||0).toLocaleString()}}},
     scales:{
-      x:{grid:{display:false},ticks:{color:'#64748B',font:{size:12}}},
-      y:{grid:{color:'rgba(128,128,128,.08)'},ticks:{color:'#64748B',callback:v=>v===0?'0':'LKR '+(v>=1000?(v/1000).toFixed(0)+'k':v)}}
+      x:{grid:{display:false},ticks:{color:__chartTickColor(),font:{size:12}}},
+      y:{grid:{color:'rgba(128,128,128,.08)'},ticks:{color:__chartTickColor(),callback:v=>v===0?'0':'LKR '+(v>=1000?(v/1000).toFixed(0)+'k':v)}}
     }}
 });
 
@@ -366,8 +370,8 @@ async function loadTrendChart(days, btn){
         plugins:{legend:{position:'top',labels:{font:{size:11},boxWidth:10,padding:8}},
           tooltip:{callbacks:{label:c=>' '+c.dataset.label+': LKR '+Number(c.raw||0).toLocaleString()}}},
         scales:{
-          x:{grid:{display:false},ticks:{maxTicksLimit:10,color:'#64748B',font:{size:10}}},
-          y:{grid:{color:'rgba(128,128,128,.08)'},ticks:{color:'#64748B',callback:v=>v>=1000?(v/1000).toFixed(0)+'k':v}}
+          x:{grid:{display:false},ticks:{maxTicksLimit:10,color:__chartTickColor(),font:{size:10}}},
+          y:{grid:{color:'rgba(128,128,128,.08)'},ticks:{color:__chartTickColor(),callback:v=>v>=1000?(v/1000).toFixed(0)+'k':v}}
         }}
     });
   } catch(e){}

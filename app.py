@@ -540,6 +540,30 @@ def _upgrade_legacy_password_hash_if_needed(user: User, plain_password: str) -> 
     return True
 
 
+def _safe_redirect_target(target: str | None, fallback_endpoint: str) -> str:
+    """Return a same-origin redirect target or the fallback URL.
+
+    Defends against open-redirect attacks when we rely on Referer: external
+    hosts are rejected and fall back to the supplied endpoint.
+    """
+    if not target:
+        return url_for(fallback_endpoint)
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(target)
+    except Exception:
+        return url_for(fallback_endpoint)
+    if parsed.scheme and parsed.netloc:
+        host_url = (request.host_url or '').rstrip('/')
+        try:
+            host = urlparse(host_url).netloc
+        except Exception:
+            host = ''
+        if parsed.netloc != host:
+            return url_for(fallback_endpoint)
+    return target
+
+
 @app.errorhandler(CSRFError)
 def handle_csrf_error(e):
     message = getattr(e, 'description', 'CSRF validation failed.')
@@ -555,7 +579,7 @@ def handle_csrf_error(e):
             'csrf_expired': session_token_missing,
         }), 400
     flash(message, 'error')
-    return redirect(request.referrer or url_for('login'))
+    return redirect(_safe_redirect_target(request.referrer, 'login'))
 
 
 @app.errorhandler(400)
@@ -565,7 +589,7 @@ def handle_bad_request(e):
     if _wants_json_response():
         return jsonify({'ok': False, 'error': message}), 400
     flash(str(message), 'error')
-    return redirect(request.referrer or url_for('dashboard'))
+    return redirect(_safe_redirect_target(request.referrer, 'dashboard'))
 
 
 @app.errorhandler(403)
@@ -605,7 +629,7 @@ def handle_database_error(e):
     if _wants_json_response():
         return jsonify({'ok': False, 'error': 'Database operation failed. Please try again.'}), 500
     flash('Database operation failed. Please try again.', 'error')
-    return redirect(request.referrer or url_for('dashboard'))
+    return redirect(_safe_redirect_target(request.referrer, 'dashboard'))
 
 
 @app.errorhandler(Exception)
@@ -618,7 +642,7 @@ def handle_unexpected_error(e):
     if _wants_json_response():
         return jsonify({'ok': False, 'error': 'Unexpected server error. Please try again.'}), 500
     flash('Unexpected error occurred. Please try again.', 'error')
-    return redirect(request.referrer or url_for('dashboard'))
+    return redirect(_safe_redirect_target(request.referrer, 'dashboard'))
 
 
 DB_ERROR_HTML = """<!DOCTYPE html>
@@ -2553,7 +2577,8 @@ def _sniff_uploaded_backup_file(filepath: str, filename: str, declared_mimetype:
 @app.route('/api/backup/upload-restore', methods=['POST'])
 @login_required
 def api_backup_upload_restore():
-    require_roles('Admin', 'Operator')
+    # Full-database restore is destructive and must be Admin-only.
+    require_roles('Admin')
     if 'file' not in request.files:
         return jsonify({'ok': False, 'msg': 'No file uploaded'}), 400
     uploaded = request.files['file']
