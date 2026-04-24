@@ -1,0 +1,527 @@
+{% extends "base.html" %}
+{% from "sidebar.html" import sidebar with context %}
+{% block title %} — {{ broker.name }} Profile{% endblock %}
+
+{% block extra_head %}
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ── Profile header ───────────────────────────────────────────────────── */
+.bp-avatar { width:64px;height:64px;border-radius:18px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;color:#fff;flex-shrink:0;font-family:'DM Sans',sans-serif; }
+.bp-badge-active   { background:rgba(16,185,129,.12);color:#10b981;padding:3px 12px;border-radius:20px;font-size:12px;font-weight:700; }
+.bp-badge-inactive { background:rgba(239,68,68,.12);color:var(--danger);padding:3px 12px;border-radius:20px;font-size:12px;font-weight:700; }
+
+/* ── Stat cards row ───────────────────────────────────────────────────── */
+.bp-stat { background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px 20px;flex:1;min-width:140px; }
+.bp-stat .lbl { font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:6px; }
+.bp-stat .val { font-size:22px;font-weight:800;font-family:'DM Sans',sans-serif; }
+
+/* ── Section card ─────────────────────────────────────────────────────── */
+.bp-section { background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:20px; }
+.bp-sec-title { font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:16px;display:flex;align-items:center;gap:8px; }
+.bp-sec-title::before { content:'';display:inline-block;width:3px;height:12px;border-radius:2px;background:var(--accent);flex-shrink:0; }
+
+/* ── Jobs table ───────────────────────────────────────────────────────── */
+.bp-table { width:100%;border-collapse:collapse; }
+.bp-table th { font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:8px 12px;border-bottom:1px solid var(--border);text-align:left; }
+.bp-table td { padding:11px 12px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text); }
+.bp-table tr:last-child td { border-bottom:none; }
+.bp-table tr:hover td { background:var(--hover); }
+.bp-job-num { font-family:'JetBrains Mono',monospace;font-weight:600;font-size:12px;color:var(--accent); }
+.bp-status { padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase; }
+
+/* ── Payment rows ─────────────────────────────────────────────────────── */
+.bp-pay-row { display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:var(--stat);border-radius:10px;margin-bottom:8px; }
+.bp-pay-row:last-child { margin-bottom:0; }
+
+/* ── Progress bar ─────────────────────────────────────────────────────── */
+.bp-progress-track { background:var(--border);border-radius:6px;height:8px;margin-top:6px; }
+.bp-progress-fill  { height:8px;border-radius:6px;background:linear-gradient(90deg,var(--accent2),#34d399);transition:width .4s ease; }
+
+/* ── Info grid ────────────────────────────────────────────────────────── */
+.bp-info-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px; }
+.bp-info-item .ilbl { font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:4px; }
+.bp-info-item .ival { font-size:14px;font-weight:600;color:var(--text); }
+
+/* ── Modal overlay ───────────────────────────────────────────────────── */
+.modal-overlay { display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:900;align-items:center;justify-content:center;backdrop-filter:blur(2px); }
+.modal-overlay.show { display:flex; }
+
+/* ── Form modal ──────────────────────────────────────────────────────── */
+.pf-modal { background:var(--card);border:1px solid var(--border);border-radius:20px;padding:32px;width:min(600px,95vw);max-height:92vh;overflow-y:auto;box-shadow:var(--shadowL); }
+.pf-mhead { display:flex;justify-content:space-between;align-items:center;margin-bottom:26px; }
+.pf-mtitle { font-family:'DM Sans',sans-serif;font-size:18px;font-weight:800;color:var(--text); }
+.pf-xbtn { width:30px;height:30px;border-radius:8px;background:var(--stat);border:none;color:var(--muted);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:background .15s,color .15s;flex-shrink:0; }
+.pf-xbtn:hover { background:var(--hover);color:var(--text); }
+.pf-mfoot { display:flex;justify-content:flex-end;gap:10px;margin-top:26px;padding-top:18px;border-top:1px solid var(--border); }
+.pf-sec { display:flex;align-items:center;gap:8px;margin:22px 0 14px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase; }
+.pf-sec:first-of-type { margin-top:0; }
+.pf-sec::before { content:'';display:inline-block;width:3px;height:14px;border-radius:2px;background:currentColor;flex-shrink:0; }
+.pf-lbl { font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px; }
+.pf-inp { background:var(--input);border:1.5px solid var(--border);color:var(--text);padding:10px 14px;border-radius:10px;width:100%;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;transition:border-color .2s,box-shadow .2s;resize:vertical;appearance:none;-webkit-appearance:none; }
+.pf-inp:focus { border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,108,246,.15); }
+.pf-inp::placeholder { color:var(--placeholder); }
+.pf-inp option { background:var(--card);color:var(--text); }
+.pf-tgl-wrap { display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none; }
+.pf-tgl-cb { display:none; }
+.pf-tgl { width:40px;height:22px;background:var(--border);border-radius:99px;position:relative;transition:background .2s;flex-shrink:0; }
+.pf-tgl::after { content:'';width:16px;height:16px;background:var(--muted);border-radius:50%;position:absolute;top:3px;left:3px;transition:transform .2s,background .2s; }
+.pf-tgl-cb:checked + .pf-tgl { background:var(--accent); }
+.pf-tgl-cb:checked + .pf-tgl::after { transform:translateX(18px);background:#fff; }
+.pf-tgl-lbl { font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;color:var(--text); }
+.pf-g2 { display:grid;grid-template-columns:1fr 1fr;gap:14px; }
+@media(max-width:540px){ .pf-g2 { grid-template-columns:1fr; } }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="app-layout">
+  {{ sidebar('brokers') }}
+  <div class="main-area">
+
+    <!-- Top bar -->
+    <div class="topbar">
+      <div class="flex items-center gap-3">
+        <a href="/brokers" class="btn btn-ghost" style="padding:8px 12px;font-size:13px">← Back</a>
+        <div>
+          <div style="font-size:18px;font-weight:800">Broker Profile</div>
+          <div style="font-size:12px;color:var(--muted)">Referral details, jobs &amp; commission history</div>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <button class="btn btn-ghost" onclick="openEditModal()">✏️ Edit Profile</button>
+        <button class="btn btn-primary" id="payBtn" onclick="openPayModal()">💰 Pay Commission</button>
+      </div>
+    </div>
+
+    <div class="page-content fade-in">
+
+      <!-- ── Profile header card ─────────────────────────────────────── -->
+      <div class="bp-section" style="margin-bottom:20px">
+        <div class="flex gap-4 items-start">
+          <div class="bp-avatar" id="avatarEl">{{ broker.name[:2].upper() }}</div>
+          <div style="flex:1;min-width:0">
+            <div class="flex items-center gap-3 flex-wrap">
+              <div style="font-size:22px;font-weight:800" id="headerName">{{ broker.name }}</div>
+              <span class="{{ 'bp-badge-active' if broker.is_active else 'bp-badge-inactive' }}" id="headerBadge">
+                {{ 'Active' if broker.is_active else 'Inactive' }}
+              </span>
+            </div>
+            {% if broker.company %}<div style="font-size:14px;color:var(--muted);margin-top:2px" id="headerCompany">{{ broker.company }}</div>{% endif %}
+            <div class="flex gap-4 flex-wrap mt-2" style="font-size:13px;color:var(--muted)">
+              {% if broker.phone %}<span>📞 {{ broker.phone }}</span>{% endif %}
+              {% if broker.whatsapp %}<span>💬 {{ broker.whatsapp }}</span>{% endif %}
+              {% if broker.address %}<span>📍 {{ broker.address }}</span>{% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Stats strip ─────────────────────────────────────────────── -->
+      <div class="flex gap-3 flex-wrap mb-5">
+        <div class="bp-stat">
+          <div class="lbl">Referred Jobs</div>
+          <div class="val" id="statJobs">—</div>
+        </div>
+        <div class="bp-stat">
+          <div class="lbl">Total Revenue</div>
+          <div class="val" style="color:var(--accent2)" id="statRev">—</div>
+        </div>
+        <div class="bp-stat">
+          <div class="lbl">Commission Due</div>
+          <div class="val" style="color:var(--warning)" id="statComm">—</div>
+        </div>
+        <div class="bp-stat">
+          <div class="lbl">Paid So Far</div>
+          <div class="val" style="color:var(--accent2)" id="statPaid">—</div>
+        </div>
+        <div class="bp-stat">
+          <div class="lbl">Balance Remaining</div>
+          <div class="val" style="color:var(--danger)" id="statBal">—</div>
+        </div>
+      </div>
+
+      <!-- ── Commission progress ─────────────────────────────────────── -->
+      <div class="bp-section" id="commProgressSection">
+        <div class="bp-sec-title">Commission Progress</div>
+        <div class="flex justify-between" style="font-size:12px;font-weight:700;margin-bottom:6px">
+          <span id="progressLabel">—</span>
+          <span id="progressPct">—</span>
+        </div>
+        <div class="bp-progress-track">
+          <div class="bp-progress-fill" id="progressFill" style="width:0%"></div>
+        </div>
+        <div id="balanceAlert" style="margin-top:14px;display:none"></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start" class="bp-two-col">
+
+        <!-- ── Left column: jobs ─────────────────────────────────────── -->
+        <div>
+          <div class="bp-section" style="margin-bottom:0;padding:0;overflow:hidden">
+            <div style="padding:20px 24px 14px" class="bp-sec-title" style="margin-bottom:0">Referred Jobs</div>
+            <div id="jobsContainer">
+              <div style="text-align:center;padding:40px;color:var(--muted)">Loading jobs…</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Right column: commission info + payments ──────────────── -->
+        <div>
+          <!-- Commission config card -->
+          <div class="bp-section">
+            <div class="bp-sec-title" style="color:var(--warning)">Commission Settings</div>
+            <div class="bp-info-grid">
+              <div class="bp-info-item">
+                <div class="ilbl">Type</div>
+                <div class="ival" id="infoCommType">{{ 'Percentage (%)' if broker.default_commission_type == 'percent' else 'Fixed Amount' }}</div>
+              </div>
+              <div class="bp-info-item">
+                <div class="ilbl">Value</div>
+                <div class="ival" id="infoCommValue">
+                  {% if broker.default_commission_type == 'percent' %}
+                    {{ broker.default_commission_value | float }}%
+                  {% else %}
+                    Rs {{ '%.2f' | format(broker.default_commission_value | float) }}
+                  {% endif %}
+                </div>
+              </div>
+              {% if broker.default_cash_price and broker.default_cash_price | float > 0 %}
+              <div class="bp-info-item">
+                <div class="ilbl">Default Cash Price</div>
+                <div class="ival" id="infoCashPrice">Rs {{ '%.2f' | format(broker.default_cash_price | float) }}</div>
+              </div>
+              {% endif %}
+              <div class="bp-info-item">
+                <div class="ilbl">Member Since</div>
+                <div class="ival">{{ broker.created_at.strftime('%d %b %Y') if broker.created_at else '—' }}</div>
+              </div>
+            </div>
+            {% if broker.notes %}
+            <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+              <div class="ilbl" style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Notes</div>
+              <div style="font-size:13px;color:var(--muted);line-height:1.5" id="infoNotes">{{ broker.notes }}</div>
+            </div>
+            {% endif %}
+          </div>
+
+          <!-- Payment history card -->
+          <div class="bp-section">
+            <div class="bp-sec-title" style="color:var(--accent2)">Payment History</div>
+            <div id="paymentsContainer">
+              <div style="text-align:center;padding:20px;color:var(--muted)">Loading…</div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- end two-col -->
+    </div>
+  </div>
+</div>
+
+<!-- ═══ EDIT BROKER MODAL ═══════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="editModal">
+  <div class="pf-modal">
+    <div class="pf-mhead">
+      <div class="pf-mtitle">Edit Broker Profile</div>
+      <button class="pf-xbtn" onclick="closeModal('editModal')">✕</button>
+    </div>
+
+    <div class="pf-sec" style="color:var(--accent);margin-top:0">Contact Info</div>
+    <div class="pf-g2">
+      <div>
+        <label class="pf-lbl">Full Name *</label>
+        <input id="bkName" class="pf-inp" placeholder="John Silva" value="{{ broker.name }}">
+      </div>
+      <div>
+        <label class="pf-lbl">Company</label>
+        <input id="bkCompany" class="pf-inp" placeholder="ABC Motors" value="{{ broker.company or '' }}">
+      </div>
+      <div>
+        <label class="pf-lbl">Phone</label>
+        <input id="bkPhone" class="pf-inp" placeholder="+94 77 000 0000" value="{{ broker.phone or '' }}">
+      </div>
+      <div>
+        <label class="pf-lbl">WhatsApp</label>
+        <input id="bkWhatsapp" class="pf-inp" placeholder="+94 77 000 0000" value="{{ broker.whatsapp or '' }}">
+      </div>
+    </div>
+    <div style="margin-top:14px">
+      <label class="pf-lbl">Address</label>
+      <textarea id="bkAddress" class="pf-inp" rows="2" placeholder="Street, City">{{ broker.address or '' }}</textarea>
+    </div>
+
+    <div class="pf-sec" style="color:var(--warning)">Commission Settings</div>
+    <div class="pf-g2">
+      <div>
+        <label class="pf-lbl">Commission Type</label>
+        <select id="bkCommType" class="pf-inp" onchange="toggleCommLabel()">
+          <option value="percent" {{ 'selected' if broker.default_commission_type == 'percent' else '' }}>Percentage (%)</option>
+          <option value="fixed" {{ 'selected' if broker.default_commission_type == 'fixed' else '' }}>Fixed Amount</option>
+        </select>
+      </div>
+      <div>
+        <label class="pf-lbl" id="commValueLabel">Commission Value</label>
+        <input id="bkCommValue" class="pf-inp" type="number" min="0" step="0.01"
+               value="{{ broker.default_commission_value | float }}">
+      </div>
+      <div>
+        <label class="pf-lbl">Default Cash Price</label>
+        <input id="bkCashPrice" class="pf-inp" type="number" min="0" step="0.01"
+               value="{{ broker.default_cash_price | float if broker.default_cash_price else '' }}">
+      </div>
+      <div style="padding-top:22px">
+        <label class="pf-tgl-wrap">
+          <input type="checkbox" id="bkActive" class="pf-tgl-cb" {{ 'checked' if broker.is_active else '' }}>
+          <span class="pf-tgl"></span>
+          <span class="pf-tgl-lbl">Active broker</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="pf-sec" style="color:var(--muted)">Notes</div>
+    <div>
+      <label class="pf-lbl">Internal Notes</label>
+      <textarea id="bkNotes" class="pf-inp" rows="2" placeholder="Internal notes…">{{ broker.notes or '' }}</textarea>
+    </div>
+
+    <div class="pf-mfoot">
+      <button class="btn btn-ghost" onclick="closeModal('editModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEdit()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ RECORD COMMISSION PAYMENT MODAL ═════════════════════════════════════ -->
+<div class="modal-overlay" id="payModal">
+  <div class="pf-modal" style="max-width:440px">
+    <div class="pf-mhead">
+      <div class="pf-mtitle">💰 Record Commission Payment</div>
+      <button class="pf-xbtn" onclick="closeModal('payModal')">✕</button>
+    </div>
+    <div>
+      <label class="pf-lbl">Amount</label>
+      <input id="payAmount" class="pf-inp" type="number" min="0.01" step="0.01" placeholder="0.00">
+    </div>
+    <div style="margin-top:14px">
+      <label class="pf-lbl">Payment Date</label>
+      <input id="payDate" class="pf-inp" type="date">
+    </div>
+    <div style="margin-top:14px">
+      <label class="pf-lbl">Method</label>
+      <select id="payMethod" class="pf-inp">
+        <option value="cash">Cash</option>
+        <option value="bank_transfer">Bank Transfer</option>
+        <option value="cheque">Cheque</option>
+        <option value="online">Online</option>
+      </select>
+    </div>
+    <div style="margin-top:14px">
+      <label class="pf-lbl">Reference No.</label>
+      <input id="payRef" class="pf-inp" placeholder="Transaction / cheque no.">
+    </div>
+    <div style="margin-top:14px">
+      <label class="pf-lbl">Notes</label>
+      <input id="payNotes" class="pf-inp" placeholder="Optional notes">
+    </div>
+    <div class="pf-mfoot">
+      <button class="btn btn-ghost" onclick="closeModal('payModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitPayment()">Record Payment</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const BROKER_ID = {{ broker.id }};
+const fmtLKR = v => 'Rs ' + (v||0).toLocaleString('en-LK',{minimumFractionDigits:2,maximumFractionDigits:2});
+let _balance = 0;
+
+async function api(url, opts={}){
+  const res = await fetch(url, {
+    headers:{'Content-Type':'application/json','X-CSRFToken':document.querySelector('meta[name="csrf-token"]')?.content||''},
+    ...opts
+  });
+  return res.json();
+}
+
+function closeModal(id){ document.getElementById(id)?.classList.remove('show'); }
+function openModal(id){ document.getElementById(id)?.classList.add('show'); }
+
+document.querySelectorAll('.modal-overlay').forEach(el=>{
+  el.addEventListener('click', e=>{ if(e.target===el) el.classList.remove('show'); });
+});
+
+// ── Status color helper ────────────────────────────────────────────────────
+function statusStyle(s){
+  const map = {
+    'Completed':'background:rgba(16,185,129,.12);color:#10b981',
+    'In Progress':'background:rgba(79,108,246,.12);color:var(--accent)',
+    'Pending':'background:rgba(245,158,11,.12);color:var(--warning)',
+    'Cancelled':'background:rgba(239,68,68,.12);color:var(--danger)',
+  };
+  return map[s] || 'background:var(--stat);color:var(--muted)';
+}
+
+function esc(s){ const d=document.createElement('div');d.textContent=s||'';return d.innerHTML; }
+
+// ── Load broker data ───────────────────────────────────────────────────────
+async function loadProfile(){
+  const data = await api(`/api/brokers/${BROKER_ID}`);
+  if(data.error){ return; }
+
+  // Stats
+  document.getElementById('statJobs').textContent = data.job_count;
+  document.getElementById('statRev').textContent  = fmtLKR(data.total_revenue);
+  document.getElementById('statComm').textContent = fmtLKR(data.total_commission);
+  document.getElementById('statPaid').textContent = fmtLKR(data.total_paid);
+  document.getElementById('statBal').textContent  = fmtLKR(data.balance_due);
+  _balance = data.balance_due;
+
+  // Progress bar
+  const pct = data.total_commission > 0
+    ? Math.min(100, Math.round(data.total_paid / data.total_commission * 100))
+    : 0;
+  document.getElementById('progressLabel').textContent =
+    `${fmtLKR(data.total_paid)} paid of ${fmtLKR(data.total_commission)}`;
+  document.getElementById('progressPct').textContent = `${pct}%`;
+  document.getElementById('progressFill').style.width = `${pct}%`;
+
+  const alert = document.getElementById('balanceAlert');
+  if(data.balance_due > 0){
+    alert.style.display = 'block';
+    alert.innerHTML = `<div style="background:rgba(239,68,68,.08);border-radius:10px;padding:12px;text-align:center">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:2px">Balance Remaining</div>
+      <div style="font-size:20px;font-weight:800;color:var(--danger)">${fmtLKR(data.balance_due)}</div>
+    </div>`;
+  } else if(data.total_commission > 0){
+    alert.style.display = 'block';
+    alert.innerHTML = `<div style="background:rgba(16,185,129,.08);border-radius:10px;padding:10px;text-align:center;font-size:13px;font-weight:700;color:var(--accent2)">✅ Fully Paid</div>`;
+  }
+
+  // Pay button state
+  document.getElementById('payBtn').disabled = data.balance_due <= 0;
+
+  // Jobs table
+  const jobsEl = document.getElementById('jobsContainer');
+  if(!data.jobs.length){
+    jobsEl.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">No jobs referred yet.</div>';
+  } else {
+    jobsEl.innerHTML = `<table class="bp-table">
+      <thead><tr>
+        <th>Job #</th><th>Customer</th><th>Vehicle</th><th>Amount</th><th>Commission</th><th>Status</th>
+      </tr></thead>
+      <tbody>${data.jobs.map(j=>`
+        <tr>
+          <td><span class="bp-job-num">${esc(j.job_number)}</span></td>
+          <td>${esc(j.customer_name)}</td>
+          <td>${esc(j.vehicle_reg_no)}</td>
+          <td style="font-weight:700">${fmtLKR(j.total_amount)}</td>
+          <td style="color:var(--warning);font-weight:700">${fmtLKR(j.broker_commission_amount)}</td>
+          <td><span class="bp-status" style="${statusStyle(j.status)}">${esc(j.status)}</span></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+  }
+
+  // Payment history
+  const payEl = document.getElementById('paymentsContainer');
+  if(!data.commission_payments.length){
+    payEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted)">No payments recorded yet.</div>';
+  } else {
+    payEl.innerHTML = data.commission_payments.map(p=>`
+      <div class="bp-pay-row">
+        <div>
+          <div style="font-size:14px;font-weight:700">${fmtLKR(p.amount)}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${esc(p.payment_date)} &bull; ${esc(p.method)}</div>
+          ${p.reference_no?`<div style="font-size:11px;color:var(--muted)">Ref: ${esc(p.reference_no)}</div>`:''}
+          ${p.notes?`<div style="font-size:11px;color:var(--muted)">${esc(p.notes)}</div>`:''}
+        </div>
+        <button class="btn btn-sm" style="color:var(--danger);background:rgba(239,68,68,.1);flex-shrink:0"
+                onclick="deletePayment(${p.id})">✕</button>
+      </div>`).join('');
+  }
+}
+
+// ── Edit modal ─────────────────────────────────────────────────────────────
+function openEditModal(){
+  toggleCommLabel();
+  openModal('editModal');
+}
+
+function toggleCommLabel(){
+  const t = document.getElementById('bkCommType').value;
+  document.getElementById('commValueLabel').textContent =
+    t === 'percent' ? 'Commission Value (%)' : 'Fixed Commission Amount';
+}
+
+async function saveEdit(){
+  const payload = {
+    name:    document.getElementById('bkName').value.trim(),
+    company: document.getElementById('bkCompany').value.trim(),
+    phone:   document.getElementById('bkPhone').value.trim(),
+    whatsapp:document.getElementById('bkWhatsapp').value.trim(),
+    address: document.getElementById('bkAddress').value.trim(),
+    notes:   document.getElementById('bkNotes').value.trim(),
+    default_commission_type:  document.getElementById('bkCommType').value,
+    default_commission_value: parseFloat(document.getElementById('bkCommValue').value)||0,
+    default_cash_price:       parseFloat(document.getElementById('bkCashPrice').value)||0,
+    is_active: document.getElementById('bkActive').checked,
+  };
+  if(!payload.name){ alert('Name is required'); return; }
+  const res = await api(`/api/brokers/${BROKER_ID}`, {method:'PUT', body:JSON.stringify(payload)});
+  if(!res.ok){ alert(res.error||'Save failed'); return; }
+  closeModal('editModal');
+  // Update header elements without full reload
+  document.getElementById('headerName').textContent = payload.name;
+  document.getElementById('avatarEl').textContent   = payload.name.slice(0,2).toUpperCase();
+  const badge = document.getElementById('headerBadge');
+  badge.textContent = payload.is_active ? 'Active' : 'Inactive';
+  badge.className   = payload.is_active ? 'bp-badge-active' : 'bp-badge-inactive';
+  const hc = document.getElementById('headerCompany');
+  if(hc) hc.textContent = payload.company;
+  // Refresh stats / jobs / payments
+  loadProfile();
+}
+
+// ── Pay commission modal ───────────────────────────────────────────────────
+function openPayModal(){
+  document.getElementById('payAmount').value  = _balance > 0 ? _balance.toFixed(2) : '';
+  document.getElementById('payDate').value    = new Date().toISOString().split('T')[0];
+  document.getElementById('payMethod').value  = 'cash';
+  document.getElementById('payRef').value     = '';
+  document.getElementById('payNotes').value   = '';
+  openModal('payModal');
+}
+
+async function submitPayment(){
+  const payload = {
+    amount:       parseFloat(document.getElementById('payAmount').value)||0,
+    payment_date: document.getElementById('payDate').value,
+    method:       document.getElementById('payMethod').value,
+    reference_no: document.getElementById('payRef').value.trim(),
+    notes:        document.getElementById('payNotes').value.trim(),
+  };
+  if(payload.amount <= 0){ alert('Enter a valid amount'); return; }
+  const res = await api(`/api/brokers/${BROKER_ID}/payments`, {method:'POST', body:JSON.stringify(payload)});
+  if(!res.ok){ alert(res.error||'Payment failed'); return; }
+  closeModal('payModal');
+  loadProfile();
+}
+
+async function deletePayment(pid){
+  if(!confirm('Delete this payment record?')) return;
+  const res = await api(`/api/brokers/${BROKER_ID}/payments/${pid}`, {method:'DELETE'});
+  if(!res.ok){ alert(res.error||'Failed'); return; }
+  loadProfile();
+}
+
+// Init
+toggleCommLabel();
+loadProfile();
+</script>
+
+<style>
+@media(max-width:900px){
+  .bp-two-col { grid-template-columns:1fr !important; }
+}
+</style>
+{% endblock %}

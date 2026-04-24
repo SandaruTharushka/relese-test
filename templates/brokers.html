@@ -292,6 +292,7 @@ async function loadBrokers(){
         <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();openPayModal(${b.id})"
                 ${b.balance_due<=0?'disabled':''}>💰 Pay Commission</button>
         <button class="btn btn-sm" onclick="event.stopPropagation();editBroker(${b.id})">✏️ Edit</button>
+        <a class="btn btn-sm" href="/brokers/${b.id}" onclick="event.stopPropagation()" style="text-decoration:none">👤 Profile</a>
         <button class="btn btn-sm" style="background:rgba(239,68,68,.1);color:var(--danger)"
                 onclick="event.stopPropagation();deleteBroker(${b.id},'${esc(b.name)}')">🗑</button>
       </div>
