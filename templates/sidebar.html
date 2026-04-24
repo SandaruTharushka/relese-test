@@ -72,6 +72,11 @@
           <div style="font-size:11px;color:var(--muted)">{{ _cu.role if _cu and _cu.is_authenticated else '' }}</div>
         </div>
       </div>
+      <button id="themeBtn" type="button" onclick="toggleTheme()"
+              class="btn btn-sm btn-full"
+              style="background:rgba(79,108,246,.10);color:var(--accent);border:1px solid rgba(79,108,246,.25);justify-content:center;font-size:13px;margin-bottom:8px">
+        🌙 Dark Mode
+      </button>
       <a href="{{ url_for('logout') }}"
          class="btn btn-sm btn-full"
          style="background:rgba(239,68,68,.12);color:var(--danger);border:1px solid rgba(239,68,68,.25);justify-content:center;font-size:13px">
