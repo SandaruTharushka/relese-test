@@ -1,7 +1,10 @@
-"""Sales receipt text builder.
+"""Sales receipt text builder — v2.
 
-Converts a Sale ORM object + store settings + layout settings into
-a formatted thermal receipt text string ready for ESC/POS dispatch.
+Converts a Sale ORM object + store settings + layout settings into a
+formatted thermal receipt text string ready for ESC/POS dispatch.
+
+ESC/POS formatting tags (ESCPOS_*) are embedded inline; build_escpos_payload()
+splits on them and injects the matching raw printer commands before encoding.
 """
 from __future__ import annotations
 
@@ -10,6 +13,14 @@ from decimal import Decimal
 from typing import Any
 
 from services.printing.receipt.formatter import (
+    CHAR_RULE_HEAVY,
+    CHAR_RULE_LIGHT,
+    ESCPOS_BOLD_OFF,
+    ESCPOS_BOLD_ON,
+    ESCPOS_DH_OFF,
+    ESCPOS_DH_ON,
+    ESCPOS_DW_OFF,
+    ESCPOS_DW_ON,
     THERMAL_WIDTH_58MM,
     THERMAL_WIDTH_80MM,
     center,
@@ -19,6 +30,7 @@ from services.printing.receipt.formatter import (
     pair,
     qty_amount_line,
     rule,
+    rule_heavy,
     to_decimal,
     wrap_text,
 )
@@ -50,7 +62,7 @@ class SalesReceiptBuilder:
 
         lines: list[str] = []
 
-        # ── Header ───────────────────────────────────────────────
+        # ── Header ── (DOUBLE HEIGHT on thermal printer) ──────────────
         header_align = layout.get('rcpt_header_align', 'center')
 
         def _header(text: str) -> str:
@@ -59,7 +71,10 @@ class SalesReceiptBuilder:
             return center(text, width)
 
         if show('rcpt_show_store_name'):
-            lines.append(_header(store.get('store_name', 'SuperMart POS')))
+            store_name = store.get('store_name', 'SuperMart POS')
+            lines.append(ESCPOS_DH_ON)
+            lines.append(_header(store_name))
+            lines.append(ESCPOS_DH_OFF)
         if show('rcpt_show_branch') and store.get('store_branch'):
             lines.append(_header(store['store_branch']))
         if show('rcpt_show_address') and store.get('store_address'):
@@ -72,9 +87,9 @@ class SalesReceiptBuilder:
         if show('rcpt_show_tax_number') and store.get('store_tax_number'):
             lines.append(_header(f'Tax No: {store["store_tax_number"]}'))
 
-        lines.append(rule(width, '='))
+        lines.append(rule_heavy(width))
 
-        # ── Invoice info ─────────────────────────────────────────
+        # ── Invoice info ──────────────────────────────────────────────
         if show('rcpt_show_invoice') and getattr(sale, 'invoice_number', ''):
             lines.append(pair('Invoice', sale.invoice_number, width))
         if show('rcpt_show_datetime'):
@@ -91,7 +106,7 @@ class SalesReceiptBuilder:
 
         lines.append(rule(width))
 
-        # ── Items ─────────────────────────────────────────────────
+        # ── Items ─────────────────────────────────────────────────────
         for item in getattr(sale, 'items', []) or []:
             product = getattr(item, 'product', None)
             name = product.name if product else 'Unknown Item'
@@ -126,13 +141,13 @@ class SalesReceiptBuilder:
 
         lines.append(rule(width))
 
-        # ── Totals ────────────────────────────────────────────────
-        subtotal = to_decimal(getattr(sale, 'subtotal', 0))
-        discount = to_decimal(getattr(sale, 'discount', 0))
-        tax = to_decimal(getattr(sale, 'tax', 0))
+        # ── Totals ────────────────────────────────────────────────────
+        subtotal    = to_decimal(getattr(sale, 'subtotal', 0))
+        discount    = to_decimal(getattr(sale, 'discount', 0))
+        tax         = to_decimal(getattr(sale, 'tax', 0))
         grand_total = to_decimal(getattr(sale, 'total_amount', 0))
-        paid = to_decimal(getattr(sale, 'tendered', 0))
-        change = to_decimal(getattr(sale, 'change_amount', 0))
+        paid        = to_decimal(getattr(sale, 'tendered', 0))
+        change      = to_decimal(getattr(sale, 'change_amount', 0))
 
         if show('rcpt_show_subtotal'):
             lines.append(pair('Subtotal', money(subtotal, currency), width))
@@ -141,16 +156,19 @@ class SalesReceiptBuilder:
         if show('rcpt_show_tax') and tax:
             lines.append(pair('Tax', money(tax, currency), width))
         if show('rcpt_show_grand_total'):
-            lines.append(rule(width))
+            # ── Grand Total — DOUBLE WIDTH + BOLD on thermal printer ──
+            lines.append(rule_heavy(width))
+            lines.append(ESCPOS_DW_ON)
             lines.append(pair('TOTAL', money(grand_total, currency), width))
+            lines.append(ESCPOS_DW_OFF)
         if show('rcpt_show_paid'):
             lines.append(pair('PAID', money(paid, currency), width))
         if show('rcpt_show_change'):
             lines.append(pair('CHANGE', money(change, currency), width))
 
-        lines.append(rule(width, '='))
+        lines.append(rule_heavy(width))
 
-        # ── Footer ───────────────────────────────────────────────
+        # ── Footer ────────────────────────────────────────────────────
         footer_align = layout.get('rcpt_footer_align', 'center')
 
         def _footer(text: str) -> str:
@@ -158,6 +176,7 @@ class SalesReceiptBuilder:
                 return text
             return center(text, width)
 
+        lines.append(_footer('* * * * *'))
         if show('rcpt_show_thankyou', True):
             footer_text = layout.get('rcpt_footer_text', 'Thank you for shopping!')
             for fline in wrap_text(footer_text, width):
