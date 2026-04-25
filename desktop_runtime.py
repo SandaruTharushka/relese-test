@@ -24,7 +24,7 @@ FLASK_PORT = 5000
 FLASK_URL = f'http://{FLASK_HOST}:{FLASK_PORT}'
 ICON_PATH = Path(resource_path('static', 'icons', 'icon.ico'))
 WINDOW_MIN_SIZE = (1200, 720)
-HEALTH_TIMEOUT_SECONDS = 25
+HEALTH_TIMEOUT_SECONDS = 90
 LOG_DIR_NAME = 'logs'
 LOG_FILE_NAME = 'desktop-runtime.log'
 
@@ -235,7 +235,16 @@ class LocalServer:
                 )
                 self.error = None
             else:
-                self.error = str(exc)
+                exc_str = str(exc)
+                # Surface a clear, actionable message for the most common failure: port already in use.
+                if any(keyword in exc_str.lower() for keyword in ('address already in use', 'only one usage', '10048', 'eaddrinuse')):
+                    self.error = (
+                        f'Port {FLASK_PORT} is already in use. '
+                        'Another application is listening on this port. '
+                        'Close it (or reboot) and try again.'
+                    )
+                else:
+                    self.error = exc_str
                 logger.exception('Local Flask server crashed during startup.')
             self.ready.set()
 
@@ -254,8 +263,13 @@ class LocalServer:
             except Exception:
                 time.sleep(0.25)
         if self.error is None and not self.stop_requested.is_set():
-            self.error = 'Timed out while waiting for the local Flask server to start.'
-            logger.error(self.error)
+            self.error = (
+                f'SuperMart POS could not start within {HEALTH_TIMEOUT_SECONDS} seconds. '
+                'This can happen on the first launch (database setup), when antivirus software '
+                'is scanning the application, or if another program is using port 5000. '
+                'Check the log file for details.'
+            )
+            logger.error('Startup timed out after %ds. Log: %s', HEALTH_TIMEOUT_SECONDS, log_file_path())
         self.ready.set()
 
     def wait(self, timeout: float | None = None) -> bool:
@@ -758,7 +772,12 @@ class DesktopLauncher:
             time.sleep(0.05)
 
         if not self.server.ready.is_set():
-            self.server.error = self.server.error or 'Timed out while waiting for the local Flask server to start.'
+            self.server.error = self.server.error or (
+                f'SuperMart POS could not start within {HEALTH_TIMEOUT_SECONDS} seconds. '
+                'This can happen on the first launch (database setup), when antivirus software '
+                'is scanning the application, or if another program is using port 5000. '
+                'Check the log file for details.'
+            )
 
         if self.server.error:
             splash.close_splash()
