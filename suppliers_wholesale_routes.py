@@ -18,7 +18,7 @@ from validators import parse_positive_float
 from shared_helpers import user_has_any_role
 
 
-def register_suppliers_wholesale_routes(app, *, log_action, require_destructive_admin_tools):
+def register_suppliers_wholesale_routes(app, *, log_action):
     TEMP_SUPPLIER_NAME_PATTERN = re.compile(
         r'\b(test|demo|temp|temporary|sample|placeholder|seed|seeded)\b',
         re.IGNORECASE,
@@ -238,7 +238,6 @@ def register_suppliers_wholesale_routes(app, *, log_action, require_destructive_
     @login_required
     def api_supplier_reset():
         """Delete ALL suppliers. Admin only."""
-        require_destructive_admin_tools()
         if not user_has_any_role(current_user, 'Admin', 'Operator'):
             abort(403)
         try:

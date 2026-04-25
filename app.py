@@ -79,7 +79,6 @@ LEGACY_INSECURE_SECRET_KEY = 'supermart-pos-secret-2026'
 _INSECURE_SECRET_KEY_PREFIXES = ('supermart-pos-secret-', 'change-me', 'changeme', 'secret-key', 'your-secret')
 INITIAL_SECURITY_SETUP_KEY = 'security_first_run_pending'
 PRIMARY_ADMIN_USER_ID_KEY = 'primary_admin_user_id'
-DESTRUCTIVE_ADMIN_TOOLS_ENV = 'ENABLE_DESTRUCTIVE_ADMIN_TOOLS'
 APP_RUNTIME_MODE_ENV = 'APP_RUNTIME_MODE'
 DEFAULT_IDLE_TIMEOUT_MINUTES  = 12 * 60
 DEFAULT_REMEMBER_DAYS         = 30
@@ -93,7 +92,6 @@ RECENT_MOVEMENTS_LIMIT        = 30
 TOP_PRODUCTS_LIMIT            = 5
 PROFIT_TOP_PRODUCTS_LIMIT     = 50
 RUNTIME_ENV_DEFAULTS = {
-    DESTRUCTIVE_ADMIN_TOOLS_ENV: '0',
     APP_RUNTIME_MODE_ENV: 'production',
 }
 
@@ -194,7 +192,6 @@ def ensure_env_file():
             "# DO NOT share this file or commit it to version control.\n"
             "\n"
             f"SECRET_KEY={generated_secret}\n"
-            "ENABLE_DESTRUCTIVE_ADMIN_TOOLS=0\n"
             "APP_RUNTIME_MODE=production\n"
             "\n"
             "# PayHere — configure via Settings if you use online payments\n"
@@ -373,7 +370,7 @@ Talisman(
 app.config['RUNTIME_DATA_DIR'] = str(persistent_app_dir())
 app.config['RUNTIME_ENV_FILE'] = ENV_FILE_PATH
 app.config['SECRET_KEY'] = RUNTIME_SECRET_KEY
-app.config['ENABLE_DESTRUCTIVE_ADMIN_TOOLS'] = env_flag_is_enabled(DESTRUCTIVE_ADMIN_TOOLS_ENV, default=False)
+app.config['ENABLE_DESTRUCTIVE_ADMIN_TOOLS'] = True
 app.config.setdefault('SESSION_COOKIE_HTTPONLY', True)
 app.config.setdefault('SESSION_COOKIE_SAMESITE', 'Lax')
 app.config.setdefault('SESSION_COOKIE_NAME', 'supermart_pos_session')
@@ -706,7 +703,7 @@ def inject_globals():
     reset_mode_label = 'Support/Development' if reset_mode == 'support' else 'Production-safe'
     return dict(
         g_low_stock_count=low_stock_count,
-        g_destructive_admin_tools_enabled=bool(app.config.get('ENABLE_DESTRUCTIVE_ADMIN_TOOLS')),
+        g_destructive_admin_tools_enabled=True,
         g_factory_reset_mode=reset_mode,
         g_factory_reset_mode_label=reset_mode_label,
         g_is_developer=is_developer_role(getattr(current_user, 'role', '')),
@@ -872,7 +869,7 @@ def is_first_run_admin_setup_required():
         return False
 
 def destructive_admin_tools_enabled():
-    return bool(app.config.get('ENABLE_DESTRUCTIVE_ADMIN_TOOLS'))
+    return True
 
 
 def app_runtime_mode():
@@ -883,22 +880,15 @@ def app_runtime_mode():
 
 
 def factory_reset_mode():
-    # Safe production mode is the default. Full wipe mode is restricted to
-    # explicit support/development sessions.
-    if destructive_admin_tools_enabled():
-        return 'support'
-    return app_runtime_mode()
+    return 'support'
 
 def require_destructive_admin_tools():
-    if not destructive_admin_tools_enabled():
-        abort(404)
+    pass
 
 
 def can_access_full_factory_reset(user):
     role = role_from_user(user, default='')
-    if is_developer_role(role):
-        return True
-    return destructive_admin_tools_enabled() and is_admin_role(role)
+    return is_developer_role(role) or is_admin_role(role)
 
 
 def _allowed_without_activation(endpoint):
@@ -1689,7 +1679,6 @@ register_reports_routes(
 register_suppliers_wholesale_routes(
     app,
     log_action=log_action,
-    require_destructive_admin_tools=require_destructive_admin_tools,
 )
 
 register_purchases_returns_routes(
@@ -2859,7 +2848,7 @@ def api_system_status():
         {
             'payhere_sandbox': bool(is_sandbox_mode()),
             'license_valid': bool(license_status.get('licensed')),
-            'destructive_tools_enabled': bool(app.config.get('ENABLE_DESTRUCTIVE_ADMIN_TOOLS')),
+            'destructive_tools_enabled': True,
         }
     )
 
@@ -3566,9 +3555,6 @@ def _perform_full_factory_reset(session):
 def api_reset_business_data():
     """Delete resettable business data using FK-safe child-first ordering."""
     require_roles('Admin', 'Operator')
-
-    if request.path.endswith('/reset-all'):
-        require_destructive_admin_tools()
 
     app.logger.warning(
         'Business data reset requested path=%s user_id=%s mode=%s',
