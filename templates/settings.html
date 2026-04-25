@@ -1238,11 +1238,6 @@
             <!-- Danger zone -->
             <div class="cfg-block" style="border-color:rgba(239,68,68,.3)">
               <div class="cfg-head" style="background:rgba(239,68,68,.06)"><span class="cfg-htxt" style="color:var(--danger)">⚠ Danger Zone</span></div>
-              {% if not g_destructive_admin_tools_enabled %}
-              <div class="info-banner info-yellow" style="margin:12px 16px 0">
-                Destructive admin tools are disabled in this runtime. Deep wipe actions (supplier-only reset and legacy reset-all) require <code>ENABLE_DESTRUCTIVE_ADMIN_TOOLS=1</code> only for controlled support/development.
-              </div>
-              {% endif %}
               <div class="info-banner info-blue" style="margin:12px 16px 0">
                 Reset modes: <strong>Reset All Data</strong> (keeps users/settings/license) and <strong>Factory Reset</strong> (keeps license only). A separate developer-only full wipe can delete license data.
               </div>
@@ -1251,20 +1246,12 @@
                   <div class="cfg-lbl" style="color:var(--danger)">Reset All Suppliers</div>
                   <div class="cfg-sub">Delete ALL suppliers and transaction history. Products will be unlinked.</div>
                 </div>
-                {% if g_destructive_admin_tools_enabled %}
                 <button class="btn btn-sm btn-danger" onclick="resetSuppliers()">🗑 Reset Suppliers</button>
-                {% else %}
-                <button class="btn btn-sm btn-danger" disabled title="Enable ENABLE_DESTRUCTIVE_ADMIN_TOOLS=1 to use this action">🗑 Disabled</button>
-                {% endif %}
               </div>
               <div class="cfg-row" style="background:rgba(239,68,68,.03)">
                 <div><div class="cfg-lbl" style="color:var(--danger)">Reset All Data</div>
                   <div class="cfg-sub">Delete operational data (sales, purchases, stock movements, customers, suppliers, invoices, repairs, IMEI operational history). Keep users, settings, and license data.</div></div>
-                {% if g_destructive_admin_tools_enabled %}
                 <button class="btn btn-sm btn-danger" onclick="resetAllData()">🗑 Reset</button>
-                {% else %}
-                <button class="btn btn-sm btn-danger" disabled title="Enable ENABLE_DESTRUCTIVE_ADMIN_TOOLS=1 to use this action">🗑 Disabled</button>
-                {% endif %}
               </div>
               <div class="cfg-row" style="background:rgba(239,68,68,.06);border-top:1px solid rgba(239,68,68,.2)">
                 <div>
@@ -1280,11 +1267,7 @@
                   <div class="cfg-lbl" style="color:var(--danger);font-size:15px">☠ Full Factory Reset (Delete License)</div>
                   <div class="cfg-sub"><strong>Developer access required:</strong> Deletes everything including activation/license files, clears all sessions, and restarts as a true fresh install.</div>
                 </div>
-                {% if g_full_factory_reset_unlocked %}
                 <button class="btn btn-sm btn-danger" onclick="fullFactoryReset()" style="white-space:nowrap">☠ Full Factory Reset</button>
-                {% else %}
-                <button class="btn btn-sm btn-danger" disabled title="Developer or destructive-admin access required">☠ Locked</button>
-                {% endif %}
               </div>
             </div>
 
