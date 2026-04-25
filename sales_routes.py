@@ -419,7 +419,7 @@ def register_sales_routes(
             'billing.html',
             categories=Category.query.all(),
             wholesale_customers=[c.to_dict() for c in ws_customers],
-            held_orders=held,
+            held_orders=[h.to_dict() for h in held],
         )
 
     @app.route('/api/sales', methods=['POST'])

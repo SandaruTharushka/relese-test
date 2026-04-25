@@ -46,7 +46,7 @@ if not errorlevel 1 (
     echo  RECOMMENDATION: Move the project to a local non-synced folder such as:
     echo    C:\Dev\SuperMartPOS
     echo.
-    set /p ONEDRIVE_CONTINUE= Type YES to continue anyway (not recommended):
+    set /p ONEDRIVE_CONTINUE=" Type YES to continue anyway (not recommended): "
     if /i "!ONEDRIVE_CONTINUE!" neq "YES" (
         echo  Build cancelled. Move the project and try again.
         goto :fail

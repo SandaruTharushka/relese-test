@@ -61,24 +61,24 @@ set ISCC_EXE=
 
 :: Standard 64-bit Program Files location
 if exist "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" (
-    set ISCC_EXE=%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe
+    set "ISCC_EXE=%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe"
 )
 :: 64-bit-only install (less common)
 if "%ISCC_EXE%"=="" if exist "%ProgramFiles%\Inno Setup 6\ISCC.exe" (
-    set ISCC_EXE=%ProgramFiles%\Inno Setup 6\ISCC.exe
+    set "ISCC_EXE=%ProgramFiles%\Inno Setup 6\ISCC.exe"
 )
 :: Chocolatey / scoop installs sometimes land here
 if "%ISCC_EXE%"=="" if exist "%SystemDrive%\tools\innosetup6\ISCC.exe" (
-    set ISCC_EXE=%SystemDrive%\tools\innosetup6\ISCC.exe
+    set "ISCC_EXE=%SystemDrive%\tools\innosetup6\ISCC.exe"
 )
 
 if "%ISCC_EXE%"=="" (
     echo.
-    echo  [ERROR] Inno Setup 6 compiler (ISCC.exe) was not found.
+    echo  [ERROR] Inno Setup 6 compiler ^(ISCC.exe^) was not found.
     echo.
     echo  To install Inno Setup 6:
     echo    1. Download from  https://jrsoftware.org/isinfo.php
-    echo    2. Run the installer (ISCC.exe will be placed in %ProgramFiles(x86)%\Inno Setup 6\)
+    echo    2. Run the installer ^(ISCC.exe will be placed in Program Files ^(x86^)\Inno Setup 6\^)
     echo    3. Re-run this script.
     echo.
     exit /b 1
@@ -95,8 +95,8 @@ if errorlevel 1 (
     echo.
     echo  [ERROR] Inno Setup compilation failed.
     echo  Common causes:
-    echo    - A file listed in [Files] section was not found (check dist\ contents)
-    echo    - VersionInfoVersion has invalid format (must be N.N.N.N)
+    echo    - A file listed in [Files] section was not found ^(check dist\ contents^)
+    echo    - VersionInfoVersion has invalid format ^(must be N.N.N.N^)
     echo    - SetupIconFile path is wrong
     echo  Check the ISCC output above for the exact error.
     exit /b 1

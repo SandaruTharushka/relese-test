@@ -132,9 +132,9 @@ if errorlevel 1 (
     echo.
     echo  [ERROR] PyInstaller failed for SuperMartPOS.spec.
     echo  Common causes:
-    echo    - Missing Python package  (re-run: pip install -r requirements.txt)
+    echo    - Missing Python package  ^(re-run: pip install -r requirements.txt^)
     echo    - Syntax error in spec file
-    echo    - Build path is on OneDrive (see warning above)
+    echo    - Build path is on OneDrive ^(see warning above^)
     exit /b 1
 )
 echo  [OK] SuperMartPOS.exe built successfully
