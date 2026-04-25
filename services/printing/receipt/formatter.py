@@ -12,6 +12,20 @@ from typing import Any
 THERMAL_WIDTH_80MM = 48
 THERMAL_WIDTH_58MM = 32
 
+# ── ESC/POS inline format tags ──────────────────────────────────────────────
+# Embed these in the receipt text string.  build_escpos_payload() splits on
+# them and injects the matching raw bytes before encoding each text segment.
+ESCPOS_BOLD_ON  = '\x00BOLD_ON\x00'   # ESC E 1  — bold on
+ESCPOS_BOLD_OFF = '\x00BOLD_OFF\x00'  # ESC E 0  — bold off
+ESCPOS_DH_ON    = '\x00DH_ON\x00'     # ESC ! 16 — double-height on
+ESCPOS_DH_OFF   = '\x00DH_OFF\x00'    # ESC ! 0  — reset size
+ESCPOS_DW_ON    = '\x00DW_ON\x00'     # ESC ! 48 — double-width + double-height + bold
+ESCPOS_DW_OFF   = '\x00DW_OFF\x00'    # ESC ! 0  — reset size
+
+# Box-drawing chars used for section rules (downgraded to ASCII in codepage mode)
+CHAR_RULE_LIGHT = '─'  # U+2500 thin horizontal
+CHAR_RULE_HEAVY = '═'  # U+2550 double horizontal
+
 
 def cpl_from_settings(layout: dict[str, Any], fallback: int = 48) -> int:
     """Derive characters-per-line from layout settings dict (canonical key: rcpt_cpl)."""
@@ -77,8 +91,14 @@ def center(text: str, width: int) -> str:
     return text.center(width)
 
 
-def rule(width: int, ch: str = '-') -> str:
+def rule(width: int, ch: str = CHAR_RULE_LIGHT) -> str:
+    """Horizontal rule — defaults to thin box-drawing char (ASCII fallback in codepage mode)."""
     return ch * width
+
+
+def rule_heavy(width: int) -> str:
+    """Heavy double-line rule for major section breaks."""
+    return CHAR_RULE_HEAVY * width
 
 
 def pair(left: str, right: str, width: int) -> str:

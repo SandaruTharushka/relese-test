@@ -1,77 +1,151 @@
 <div class="receipt{% if compact_mode %} compact-58{% endif %}">
-  <div class="receipt-header center" style="text-align:center;">
-    <div class="receipt-logo" aria-label="Store logo">SM</div>
-    {% if show.store_name %}<div class="store-name">{{ store.name }}</div>{% endif %}
-    {% if show.branch and store.branch %}<div class="store-line">{{ store.branch }}</div>{% endif %}
-    {% if show.address and store.address %}<div class="store-line">{{ store.address }}</div>{% endif %}
-    {% if show.phone and store.phone %}<div class="store-line">Tel: {{ store.phone }}</div>{% endif %}
-    {% if show.email and store.email %}<div class="store-line">{{ store.email }}</div>{% endif %}
+
+  {# ── 1. HEADER ────────────────────────────────────────────────── #}
+  <div class="store-header">
+    {% if show.store_name %}
+    <div class="store-name">{{ store.name }}</div>
+    {% endif %}
+    {% if show.branch and store.branch %}
+    <div class="store-tagline">{{ store.branch }}</div>
+    {% endif %}
+    {% if show.address and store.address %}
+    <div class="store-detail">{{ store.address }}</div>
+    {% endif %}
+    {% if show.phone and store.phone %}
+    <div class="store-detail">{{ store.phone }}</div>
+    {% endif %}
+    {% if show.email and store.email %}
+    <div class="store-detail">{{ store.email }}</div>
+    {% endif %}
   </div>
 
-  <div class="line"></div>
+  <hr class="sep">
 
-  <div class="meta-grid">
-    {% if show.invoice %}<div class="row"><span>Invoice No</span><span class="value">{{ sale.invoice_number }}</span></div>{% endif %}
-    {% if show.cashier %}<div class="row"><span>Cashier</span><span class="value">{{ cashier_name }}</span></div>{% endif %}
-    {% if show.datetime %}<div class="row"><span>Date</span><span class="value">{{ sale_datetime.strftime('%d/%m/%Y') if sale_datetime else '—' }}</span></div>{% endif %}
-    {% if show.datetime %}<div class="row"><span>Time</span><span class="value">{{ sale_datetime.strftime('%I:%M %p') if sale_datetime else '—' }}</span></div>{% endif %}
-    {% if show.customer %}<div class="row"><span>Customer</span><span class="value">{{ customer_name }}</span></div>{% endif %}
-    {% if show.customer_phone %}<div class="row"><span>Phone</span><span class="value">{{ customer_phone or '—' }}</span></div>{% endif %}
-    {% if show.payment_method and payment_method_label %}<div class="row"><span>Payment</span><span class="value">{{ payment_method_label }}</span></div>{% endif %}
+  {# ── 2. META ROW ──────────────────────────────────────────────── #}
+  <div class="meta-row">
+    <span class="meta-receipt-num">{% if show.invoice %}#{{ sale.invoice_number }}{% endif %}</span>
+    <span class="meta-datetime">
+      {% if show.datetime %}
+      {{ sale_datetime.strftime('%d %b %Y') if sale_datetime else '—' }}<br>
+      {{ sale_datetime.strftime('%H:%M') if sale_datetime else '' }}
+      {% endif %}
+    </span>
   </div>
+  {% if (show.cashier and cashier_name) or (show.customer and customer_name) or (show.customer_phone and customer_phone) %}
+  <div style="margin-top:4px;">
+    {% if show.cashier and cashier_name %}
+    <div class="sub-meta-row"><span class="sml">Cashier</span><span class="smv">{{ cashier_name }}</span></div>
+    {% endif %}
+    {% if show.customer and customer_name %}
+    <div class="sub-meta-row"><span class="sml">Customer</span><span class="smv">{{ customer_name }}</span></div>
+    {% endif %}
+    {% if show.customer_phone and customer_phone %}
+    <div class="sub-meta-row"><span class="sml">Phone</span><span class="smv">{{ customer_phone }}</span></div>
+    {% endif %}
+  </div>
+  {% endif %}
 
-  <div class="line"></div>
+  <hr class="sep">
 
+  {# ── 3 & 4. ITEMS ─────────────────────────────────────────────── #}
   <table>
     <thead>
       <tr>
-        <th style="text-align:left">Item</th>
-        {% if show.qty %}<th style="text-align:center">Qty</th>{% endif %}
-        {% if show.unit_price and not compact_mode %}<th style="text-align:right">Price</th>{% endif %}
-        {% if show.line_total %}<th style="text-align:right">Total</th>{% endif %}
+        <th style="text-align:left;">Item</th>
+        {% if show.qty %}<th style="text-align:center;">Qty</th>{% endif %}
+        <th style="text-align:right;">Amount</th>
       </tr>
     </thead>
     <tbody>
       {% for item in item_rows %}
       <tr>
         <td>
-          {{ item.name }}
+          <span>{{ item.name }}</span>
           {% if show.sku and item.sku %}<div class="item-sub">SKU: {{ item.sku }}</div>{% endif %}
           {% if item.imei %}<div class="item-sub">IMEI: {{ item.imei }}</div>{% endif %}
+          {% if show.unit_price and not compact_mode %}
+          <div class="item-unit">{{ item.unit_price }} ea</div>
+          {% endif %}
         </td>
-        {% if show.qty %}<td style="text-align:center">{{ item.qty }}</td>{% endif %}
-        {% if show.unit_price and not compact_mode %}<td style="text-align:right">{{ item.unit_price }}</td>{% endif %}
-        {% if show.line_total %}<td style="text-align:right">{{ item.line_total }}</td>{% endif %}
+        {% if show.qty %}<td class="td-qty">{{ item.qty }}</td>{% endif %}
+        <td class="td-price">{{ item.line_total }}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 
-  <div class="line"></div>
+  <hr class="sep">
 
-  {% if show.subtotal %}<div class="row"><span>Subtotal</span><span class="value">{{ totals.subtotal }}</span></div>{% endif %}
-  {% if show.discount_total %}<div class="row"><span>Discount</span><span class="value">{{ totals.discount }}</span></div>{% endif %}
-  {% if show.tax %}<div class="row"><span>Tax / VAT</span><span class="value">{{ totals.tax }}</span></div>{% endif %}
-  {% if show.grand_total %}<div class="row net-total"><span>Net Total</span><span class="value">{{ totals.grand_total }}</span></div>{% endif %}
-  {% if show.paid %}<div class="row"><span>Cash</span><span class="value">{{ totals.paid }}</span></div>{% endif %}
-  {% if show.change %}<div class="row"><span>Balance</span><span class="value">{{ totals.change }}</span></div>{% endif %}
+  {# ── 5. TOTALS ────────────────────────────────────────────────── #}
+  <div>
+    {% if show.subtotal %}
+    <div class="total-row"><span class="tl">Subtotal</span><span class="ta">{{ totals.subtotal }}</span></div>
+    {% endif %}
+    {% if show.discount_total %}
+    <div class="total-row"><span class="tl">Discount</span><span class="ta">{{ totals.discount }}</span></div>
+    {% endif %}
+    {% if show.tax %}
+    <div class="total-row"><span class="tl">Tax / VAT</span><span class="ta">{{ totals.tax }}</span></div>
+    {% endif %}
+    {% if totals.you_saved is defined and totals.you_saved and totals.you_saved != '0.00' %}
+    <div class="total-row"><span class="tl muted">You Saved</span><span class="ta">{{ totals.you_saved }}</span></div>
+    {% endif %}
+    {% if show.grand_total %}
+    <hr class="sep-solid">
+    <div class="grand-total-row">
+      <span class="gtl">Grand Total</span>
+      <span class="gta">{{ totals.grand_total }}</span>
+    </div>
+    {% endif %}
+  </div>
 
-  {% if totals.you_saved != '0.00' %}
-  <div class="line"></div>
-  <div class="row savings"><span>You Saved</span><span class="value">{{ totals.you_saved }}</span></div>
-  {% endif %}
+  <hr class="sep">
 
+  {# ── 6. PAYMENT ───────────────────────────────────────────────── #}
+  <div style="padding:2px 0;">
+    {% if show.payment_method and payment_method_label %}
+    <div><span class="payment-badge">{{ payment_method_label }} Payment</span></div>
+    {% else %}
+    <div><span class="payment-badge">Payment</span></div>
+    {% endif %}
+    {% if show.paid %}
+    <div class="total-row"><span class="tl">Tendered</span><span class="ta">{{ totals.paid }}</span></div>
+    {% endif %}
+    {% if show.change %}
+    <div class="total-row"><span class="tl">Change</span><span class="ta">{{ totals.change }}</span></div>
+    {% endif %}
+  </div>
+
+  {# ── 7. BARCODE ───────────────────────────────────────────────── #}
   {% if barcode_url and profile.get('enable_barcode', True) %}
-  <div class="line"></div>
-  <div class="codes">
-    <img class="barcode" src="{{ barcode_url }}" alt="Barcode">
+  <hr class="sep">
+  <div class="barcode-section">
+    <img class="barcode-img" src="{{ barcode_url }}" alt="Barcode">
     {% if profile.get('show_barcode_text', True) %}
-    <div class="caption">{{ sale.invoice_number }}</div>
+    <div class="barcode-caption">{{ sale.invoice_number }}</div>
     {% endif %}
   </div>
   {% endif %}
 
-  <div class="line"></div>
-  <div class="center thanks">Thank You!</div>
-  <div class="center provider-text">Powered by SuperMart POS</div>
+  <hr class="sep">
+
+  {# ── 8. FOOTER ────────────────────────────────────────────────── #}
+  <div class="footer-section">
+    <div class="footer-stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+    <div class="footer-thankyou">Thank You!</div>
+    {% if footer_lines %}
+    {% for line in footer_lines %}
+    <div class="footer-policy">{{ line }}</div>
+    {% endfor %}
+    {% endif %}
+    {% if show.return_policy %}
+    <div class="footer-policy">All sales are final &middot; Retain receipt for returns</div>
+    {% endif %}
+    {% if show.powered_by %}
+    <div class="footer-website">Powered by SuperMart POS</div>
+    {% endif %}
+  </div>
+
+  <!-- Perforated tear edge -->
+  <div class="receipt-tear"></div>
 </div>

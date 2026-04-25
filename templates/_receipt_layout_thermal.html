@@ -2,97 +2,183 @@
 {% set header_align = header_align or 'center' %}
 {% set footer_align = footer_align or 'center' %}
 <div class="receipt{% if compact_mode %} compact-58{% endif %}">
-  <!-- Header -->
-  <div style="text-align:{{ header_align }};font-size:14px;font-weight:800">{% if show.store_name %}{{ store.name }}{% endif %}</div>
-  {% if show.branch and store.branch %}<div style="text-align:{{ header_align }};font-size:10px;color:var(--muted)">{{ store.branch }}</div>{% endif %}
-  {% if show.address and store.address %}<div style="text-align:{{ header_align }};font-size:10px;color:var(--muted)">{{ store.address }}</div>{% endif %}
-  {% if show.phone and store.phone %}<div style="text-align:{{ header_align }};font-size:10px;color:var(--muted)">Tel: {{ store.phone }}</div>{% endif %}
-  {% if show.email and store.email %}<div style="text-align:{{ header_align }};font-size:10px;color:var(--muted)">{{ store.email }}</div>{% endif %}
 
-  <div class="line"></div>
-  <div class="center title">{% if print_mode == 'a4' %}TAX INVOICE{% else %}SALES RECEIPT{% endif %}</div>
-  <div class="line"></div>
+  {# ── 1. HEADER ────────────────────────────────────────────────── #}
+  <div style="text-align:{{ header_align }};padding:8px 0 4px;">
+    {% if show.store_name %}
+    <div style="font-family:'DM Serif Display',Georgia,serif;font-size:19px;line-height:1.15;color:var(--ink,#1a1a1a);">{{ store.name }}</div>
+    {% endif %}
+    {% if show.branch and store.branch %}
+    <div style="font-size:7.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted,#8B7D6B);margin-top:3px;">{{ store.branch }}</div>
+    {% endif %}
+    {% if show.address and store.address %}
+    <div style="font-size:9px;color:var(--muted,#8B7D6B);margin-top:1px;">{{ store.address }}</div>
+    {% endif %}
+    {% if show.phone and store.phone %}
+    <div style="font-size:9px;color:var(--muted,#8B7D6B);">{{ store.phone }}</div>
+    {% endif %}
+    {% if show.email and store.email %}
+    <div style="font-size:9px;color:var(--muted,#8B7D6B);">{{ store.email }}</div>
+    {% endif %}
+  </div>
 
-  <!-- Invoice Details -->
-  {% if show.invoice %}<div class="row"><span>Invoice #</span><span class="value">{{ sale.invoice_number }}</span></div>{% endif %}
-  {% if show.datetime %}<div class="row"><span>Date / Time</span><span class="value">{{ sale_datetime.strftime('%Y-%m-%d %H:%M') if sale_datetime else '—' }}</span></div>{% endif %}
-  {% if show.cashier %}<div class="row"><span>Cashier</span><span class="value">{{ cashier_name }}</span></div>{% endif %}
-  {% if show.customer %}<div class="row"><span>Customer</span><span class="value">{{ customer_name }}</span></div>{% endif %}
-  {% if show.customer_phone %}<div class="row"><span>Phone</span><span class="value">{{ customer_phone or '—' }}</span></div>{% endif %}
-  {% if show.payment_method and payment_method_label %}<div class="row"><span>Payment</span><span class="value">{{ payment_method_label }}</span></div>{% endif %}
+  <div class="sep line"></div>
 
-  <div class="line"></div>
+  {# ── 2. META ROW ──────────────────────────────────────────────── #}
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;font-size:9px;">
+    <span style="font-family:'DM Mono','Courier New',monospace;font-weight:500;">
+      {% if show.invoice %}#{{ sale.invoice_number }}{% endif %}
+    </span>
+    <span style="color:var(--muted,#8B7D6B);text-align:right;line-height:1.5;">
+      {% if show.datetime %}
+      {{ sale_datetime.strftime('%d %b %Y') if sale_datetime else '—' }}<br>
+      {{ sale_datetime.strftime('%H:%M') if sale_datetime else '' }}
+      {% endif %}
+    </span>
+  </div>
+  {% if (show.cashier and cashier_name) or (show.customer and customer_name) or (show.customer_phone and customer_phone) %}
+  <div style="margin-top:4px;">
+    {% if show.cashier and cashier_name %}
+    <div style="display:flex;justify-content:space-between;font-size:9px;margin:1.5px 0;">
+      <span style="color:var(--muted,#8B7D6B);">Cashier</span><span style="font-weight:500;">{{ cashier_name }}</span>
+    </div>
+    {% endif %}
+    {% if show.customer and customer_name %}
+    <div style="display:flex;justify-content:space-between;font-size:9px;margin:1.5px 0;">
+      <span style="color:var(--muted,#8B7D6B);">Customer</span><span style="font-weight:500;">{{ customer_name }}</span>
+    </div>
+    {% endif %}
+    {% if show.customer_phone and customer_phone %}
+    <div style="display:flex;justify-content:space-between;font-size:9px;margin:1.5px 0;">
+      <span style="color:var(--muted,#8B7D6B);">Phone</span><span>{{ customer_phone }}</span>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
 
-  <!-- Items Table -->
+  <div class="sep line"></div>
+
+  {# ── 3 & 4. ITEMS ─────────────────────────────────────────────── #}
   <table>
     <thead>
       <tr>
-        <th style="text-align:left">ITEM</th>
-        {% if show.qty %}<th style="text-align:center">QTY</th>{% endif %}
-        {% if show.unit_price and not compact_mode %}<th style="text-align:right">PRICE</th>{% endif %}
-        {% if show.discount and not compact_mode %}<th style="text-align:right">DISC</th>{% endif %}
-        {% if show.line_total %}<th style="text-align:right">TOTAL</th>{% endif %}
+        <th style="text-align:left;font-size:7.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted,#8B7D6B);font-weight:500;padding:3px 0 4px;border-bottom:1px dashed var(--line,#C8C0B0);">Item</th>
+        {% if show.qty %}<th style="text-align:center;font-size:7.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted,#8B7D6B);font-weight:500;padding:3px 0 4px;border-bottom:1px dashed var(--line,#C8C0B0);width:28px;">Qty</th>{% endif %}
+        {% if show.unit_price and not compact_mode %}<th style="text-align:right;font-size:7.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted,#8B7D6B);font-weight:500;padding:3px 0 4px;border-bottom:1px dashed var(--line,#C8C0B0);">Price</th>{% endif %}
+        <th style="text-align:right;font-size:7.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted,#8B7D6B);font-weight:500;padding:3px 0 4px;border-bottom:1px dashed var(--line,#C8C0B0);">Amount</th>
       </tr>
     </thead>
     <tbody>
       {% for item in item_rows %}
       <tr>
-        <td>
+        <td style="padding:4px 0;font-size:10px;vertical-align:top;border-bottom:1px dashed var(--line,#C8C0B0);">
           {{ item.name }}
-          {% if show.sku and item.sku %}<div style="font-size:9px;color:var(--muted)">SKU: {{ item.sku }}</div>{% endif %}
-          {% if item.imei %}<div style="font-size:9px;color:var(--muted)">IMEI: {{ item.imei }}</div>{% endif %}
+          {% if show.sku and item.sku %}<div style="font-size:8px;color:var(--muted,#8B7D6B);margin-top:1px;">SKU: {{ item.sku }}</div>{% endif %}
+          {% if item.imei %}<div style="font-size:8px;color:var(--muted,#8B7D6B);">IMEI: {{ item.imei }}</div>{% endif %}
+          {% if show.unit_price and not compact_mode %}<div style="font-size:8px;color:var(--muted,#8B7D6B);font-family:'DM Mono',monospace;">{{ item.unit_price }} ea</div>{% endif %}
         </td>
-        {% if show.qty %}<td style="text-align:center">{{ item.qty }}</td>{% endif %}
-        {% if show.unit_price and not compact_mode %}<td style="text-align:right">{{ item.unit_price }}</td>{% endif %}
-        {% if show.discount and not compact_mode %}<td style="text-align:right">{{ item.discount }}</td>{% endif %}
-        {% if show.line_total %}<td style="text-align:right">{{ item.line_total }}</td>{% endif %}
+        {% if show.qty %}<td style="text-align:center;padding:4px 0;font-size:10px;vertical-align:top;color:var(--muted,#8B7D6B);border-bottom:1px dashed var(--line,#C8C0B0);">{{ item.qty }}</td>{% endif %}
+        {% if show.unit_price and not compact_mode %}<td style="text-align:right;padding:4px 0;font-size:10px;vertical-align:top;font-family:'DM Mono',monospace;white-space:nowrap;border-bottom:1px dashed var(--line,#C8C0B0);">{{ item.unit_price }}</td>{% endif %}
+        <td style="text-align:right;padding:4px 0;font-size:10px;vertical-align:top;font-family:'DM Mono',monospace;white-space:nowrap;border-bottom:1px dashed var(--line,#C8C0B0);">{{ item.line_total }}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 
-  <div class="line"></div>
+  <div class="sep line"></div>
 
-  <!-- Totals -->
-  {% if show.subtotal %}<div class="row"><span>Subtotal</span><span class="value">{{ totals.subtotal }}</span></div>{% endif %}
-  {% if show.discount_total %}<div class="row"><span>Discount</span><span class="value">{{ totals.discount }}</span></div>{% endif %}
-  {% if show.tax %}<div class="row"><span>Tax</span><span class="value">{{ totals.tax }}</span></div>{% endif %}
-  {% if show.grand_total %}<div class="row" style="font-size:12px;font-weight:800"><span>Grand Total</span><span class="value">{{ totals.grand_total }}</span></div>{% endif %}
-  {% if show.paid %}<div class="row"><span>Tendered</span><span class="value">{{ totals.paid }}</span></div>{% endif %}
-  {% if show.change %}<div class="row"><span>Change</span><span class="value">{{ totals.change }}</span></div>{% endif %}
-
-  <!-- Payment Methods -->
-  {% if payments %}
-  <div class="line"></div>
-  <div style="font-weight:700;font-size:10px">Payment Methods</div>
-  {% for p in payments %}
-  <div class="row"><span>{{ p.method }}</span><span class="value">{{ p.amount }}</span></div>
-  {% endfor %}
-  {% endif %}
-
-  <!-- Footer -->
-  <div class="line"></div>
-  <div style="text-align:{{ footer_align }};font-size:10px;color:var(--muted)">
-    {% for line in footer_lines %}
-      <div>{{ line }}</div>
-    {% endfor %}
+  {# ── 5. TOTALS ────────────────────────────────────────────────── #}
+  <div>
+    {% if show.subtotal %}
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin:2.5px 0;">
+      <span style="font-size:10px;color:var(--muted,#8B7D6B);">Subtotal</span>
+      <span style="font-family:'DM Mono',monospace;font-size:10px;">{{ totals.subtotal }}</span>
+    </div>
+    {% endif %}
+    {% if show.discount_total %}
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin:2.5px 0;">
+      <span style="font-size:10px;color:var(--muted,#8B7D6B);">Discount</span>
+      <span style="font-family:'DM Mono',monospace;font-size:10px;">{{ totals.discount }}</span>
+    </div>
+    {% endif %}
+    {% if show.tax %}
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin:2.5px 0;">
+      <span style="font-size:10px;color:var(--muted,#8B7D6B);">Tax / VAT</span>
+      <span style="font-family:'DM Mono',monospace;font-size:10px;">{{ totals.tax }}</span>
+    </div>
+    {% endif %}
+    {% if show.grand_total %}
+    <div style="border:none;border-top:2px solid var(--ink,#1a1a1a);margin:6px 0 5px;"></div>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;">
+      <span style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Grand Total</span>
+      <span style="font-family:'DM Mono',monospace;font-size:13px;font-weight:700;">{{ totals.grand_total }}</span>
+    </div>
+    {% endif %}
   </div>
-  {% if show.powered_by %}<div style="text-align:{{ footer_align }};font-size:9px;color:var(--muted);margin-top:4px">Powered by SuperMart POS</div>{% endif %}
 
-  <!-- Barcode / QR Section -->
+  <div class="sep line"></div>
+
+  {# ── 6. PAYMENT ───────────────────────────────────────────────── #}
+  <div style="padding:2px 0;">
+    {% if show.payment_method and payment_method_label %}
+    <div>
+      <span style="display:inline-block;background:var(--ink,#1a1a1a);color:var(--bg,#FEFCF8);font-size:7.5px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;padding:3px 8px;border-radius:2px;margin-bottom:5px;">{{ payment_method_label }} Payment</span>
+    </div>
+    {% else %}
+    <div>
+      <span style="display:inline-block;background:var(--ink,#1a1a1a);color:var(--bg,#FEFCF8);font-size:7.5px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;padding:3px 8px;border-radius:2px;margin-bottom:5px;">Payment</span>
+    </div>
+    {% endif %}
+    {% if show.paid %}
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin:2.5px 0;">
+      <span style="font-size:10px;color:var(--muted,#8B7D6B);">Tendered</span>
+      <span style="font-family:'DM Mono',monospace;font-size:10px;">{{ totals.paid }}</span>
+    </div>
+    {% endif %}
+    {% if show.change %}
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin:2.5px 0;">
+      <span style="font-size:10px;color:var(--muted,#8B7D6B);">Change</span>
+      <span style="font-family:'DM Mono',monospace;font-size:10px;">{{ totals.change }}</span>
+    </div>
+    {% endif %}
+  </div>
+
+  {# ── 7. BARCODE ───────────────────────────────────────────────── #}
   {% if barcode_url and profile.get('enable_barcode', True) %}
-  <div class="line"></div>
-  <div style="text-align:center;margin-top:6px">
-    <img src="{{ barcode_url }}" alt="Barcode" style="width:100%;max-width:260px;height:auto;image-rendering:pixelated">
+  <div class="sep line"></div>
+  <div style="text-align:center;padding:4px 0;">
+    <img src="{{ barcode_url }}" alt="Barcode" style="width:100%;max-width:220px;height:auto;image-rendering:pixelated;">
     {% if profile.get('show_barcode_text', True) %}
-    <div style="font-size:9px;color:var(--muted);margin-top:2px;letter-spacing:1px">{{ sale.invoice_number }}</div>
+    <div style="font-family:'DM Mono','Courier New',monospace;font-size:8px;color:var(--muted,#8B7D6B);letter-spacing:.12em;margin-top:3px;">{{ sale.invoice_number }}</div>
     {% endif %}
   </div>
   {% endif %}
   {% if qr_url %}
-  <div style="text-align:center;margin-top:6px">
-    <img src="{{ qr_url }}" alt="QR Code" style="width:100px;height:100px;image-rendering:pixelated">
-    {% if invoice_detail_url %}<div style="font-size:8px;color:var(--muted);margin-top:2px;word-break:break-all">{{ invoice_detail_url }}</div>{% endif %}
+  <div style="text-align:center;margin-top:6px;">
+    <img src="{{ qr_url }}" alt="QR Code" style="width:100px;height:100px;image-rendering:pixelated;">
+    {% if invoice_detail_url %}<div style="font-size:8px;color:var(--muted,#8B7D6B);margin-top:2px;word-break:break-all;">{{ invoice_detail_url }}</div>{% endif %}
   </div>
   {% endif %}
+
+  <div class="sep line"></div>
+
+  {# ── 8. FOOTER ────────────────────────────────────────────────── #}
+  <div style="text-align:{{ footer_align }};padding:8px 0 4px;">
+    <div style="font-size:13px;letter-spacing:4px;color:var(--ink,#1a1a1a);line-height:1;">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+    <div style="font-family:'DM Serif Display',Georgia,serif;font-size:18px;margin-top:5px;line-height:1.2;">Thank You!</div>
+    {% if footer_lines %}
+    {% for line in footer_lines %}
+    <div style="font-size:8px;color:var(--muted,#8B7D6B);margin-top:4px;">{{ line }}</div>
+    {% endfor %}
+    {% endif %}
+    {% if show.return_policy %}
+    <div style="font-size:8px;color:var(--muted,#8B7D6B);margin-top:4px;">All sales are final &middot; Retain receipt for returns</div>
+    {% endif %}
+    {% if show.powered_by %}
+    <div style="font-size:7.5px;color:var(--muted,#8B7D6B);letter-spacing:.06em;margin-top:2px;">Powered by SuperMart POS</div>
+    {% endif %}
+  </div>
+
+  <!-- Perforated tear edge -->
+  <div style="height:14px;margin-top:8px;background-image:radial-gradient(circle at 50% 0%,#EDE9E0 7px,var(--bg,#FEFCF8) 7px);background-size:14px 14px;background-repeat:repeat-x;"></div>
 </div>
