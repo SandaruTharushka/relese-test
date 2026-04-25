@@ -418,7 +418,7 @@ def register_sales_routes(
         return render_template(
             'billing.html',
             categories=Category.query.all(),
-            wholesale_customers=ws_customers,
+            wholesale_customers=[c.to_dict() for c in ws_customers],
             held_orders=held,
         )
 
