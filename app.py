@@ -80,6 +80,7 @@ _INSECURE_SECRET_KEY_PREFIXES = ('supermart-pos-secret-', 'change-me', 'changeme
 INITIAL_SECURITY_SETUP_KEY = 'security_first_run_pending'
 PRIMARY_ADMIN_USER_ID_KEY = 'primary_admin_user_id'
 APP_RUNTIME_MODE_ENV = 'APP_RUNTIME_MODE'
+DESTRUCTIVE_ADMIN_TOOLS_ENV = 'ENABLE_DESTRUCTIVE_ADMIN_TOOLS'
 DEFAULT_IDLE_TIMEOUT_MINUTES  = 12 * 60
 DEFAULT_REMEMBER_DAYS         = 30
 OTP_EXPIRY_MINUTES            = 5
@@ -869,7 +870,7 @@ def is_first_run_admin_setup_required():
         return False
 
 def destructive_admin_tools_enabled():
-    return True
+    return app.config.get('ENABLE_DESTRUCTIVE_ADMIN_TOOLS', True)
 
 
 def app_runtime_mode():
@@ -3671,7 +3672,7 @@ def api_factory_reset():
 @app.route('/api/admin/full-factory-reset', methods=['POST'])
 @login_required
 def api_full_factory_reset():
-    if not can_access_full_factory_reset(current_user):
+    if not can_access_full_factory_reset(current_user) or not destructive_admin_tools_enabled():
         abort(403)
 
     data = request.get_json(silent=True) or {}
