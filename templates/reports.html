@@ -26,6 +26,28 @@
 .svc-kpi .kpi-sub { font-size:11px; font-weight:500; margin-top:2px; }
 .skeleton { background:linear-gradient(90deg,var(--stat) 25%,var(--border) 50%,var(--stat) 75%); background-size:200%; animation:shimmer 1.4s infinite; border-radius:6px; height:20px; }
 @keyframes shimmer { 0%{background-position:200%} 100%{background-position:-200%} }
+
+/* ── Report loading overlay ── */
+#rptLoadOverlay {
+  display:none; position:fixed; inset:0; z-index:1100;
+  background:rgba(15,23,42,.52); backdrop-filter:blur(2px);
+  align-items:center; justify-content:center;
+}
+.rpt-load-card {
+  background:var(--card); border:1px solid var(--border); border-radius:20px;
+  padding:40px 48px; text-align:center; max-width:380px; width:92%;
+  box-shadow:0 16px 48px rgba(0,0,0,.25);
+}
+.rpt-spinner {
+  width:48px; height:48px; border:4px solid var(--border);
+  border-top-color:var(--accent); border-radius:50%;
+  animation:rptSpin .8s linear infinite; margin:0 auto 18px;
+}
+@keyframes rptSpin { to { transform:rotate(360deg); } }
+.rpt-load-title { font-size:16px; font-weight:700; color:var(--text); margin-bottom:6px; }
+.rpt-load-sub   { font-size:13px; color:var(--warning); margin-top:8px; min-height:18px; }
+.rpt-load-error { font-size:14px; font-weight:600; color:var(--danger); margin-top:8px; }
+.rpt-load-close { margin-top:16px; }
 </style>
 {% endblock %}
 {% block body %}
@@ -58,6 +80,18 @@
       <span class="text-muted">to</span>
       <input class="form-input" id="dateTo" type="date" style="width:160px">
       <button class="btn btn-primary btn-sm" onclick="loadReport('custom')">Apply</button>
+    </div>
+
+    <!-- Report loading overlay -->
+    <div id="rptLoadOverlay" role="status" aria-live="polite">
+      <div class="rpt-load-card" id="rptLoadCard">
+        <div id="rptSpinner" class="rpt-spinner"></div>
+        <div id="rptLoadTitle" class="rpt-load-title">Loading report data…</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:2px">Report data load වෙමින් පවතී…</div>
+        <div id="rptLoadSub" class="rpt-load-sub" hidden></div>
+        <div id="rptLoadError" class="rpt-load-error" hidden></div>
+        <button id="rptLoadCloseBtn" class="btn btn-ghost btn-sm rpt-load-close" hidden onclick="_rptLoading.hide()">Close</button>
+      </div>
     </div>
 
     <div class="page-content fade-in">
@@ -372,6 +406,54 @@
 {% endblock %}
 {% block scripts %}
 <script>
+// ── Report loading state ──────────────────────────────────────────────────────
+const _rptLoading = (() => {
+  let _active = false;
+  let _timer8s = null;
+
+  function _el(id) { return document.getElementById(id); }
+
+  function show(title) {
+    if (_active) return false;
+    _active = true;
+    const overlay = _el('rptLoadOverlay');
+    if (!overlay) return true;
+    _el('rptLoadTitle').textContent = title || 'Loading report data…';
+    _el('rptLoadSub').hidden   = true;
+    _el('rptLoadError').hidden = true;
+    _el('rptLoadCloseBtn').hidden = true;
+    _el('rptSpinner').style.display = '';
+    overlay.style.display = 'flex';
+    _timer8s = setTimeout(() => {
+      const sub = _el('rptLoadSub');
+      if (sub) { sub.hidden = false; sub.textContent = 'Still loading. Large date ranges may take longer.'; }
+    }, 8000);
+    return true;
+  }
+
+  function hide() {
+    _active = false;
+    clearTimeout(_timer8s);
+    const overlay = _el('rptLoadOverlay');
+    if (overlay) overlay.style.display = 'none';
+  }
+
+  function error(msg) {
+    clearTimeout(_timer8s);
+    _active = false;
+    const overlay = _el('rptLoadOverlay');
+    if (!overlay) return;
+    _el('rptSpinner').style.display = 'none';
+    _el('rptLoadSub').hidden = true;
+    const errEl = _el('rptLoadError');
+    errEl.textContent = msg || 'Report loading failed. Please try again or select a smaller date range.';
+    errEl.hidden = false;
+    _el('rptLoadCloseBtn').hidden = false;
+  }
+
+  return { show, hide, error, get active() { return _active; } };
+})();
+
 // ── Utilities ─────────────────────────────────────────────────────────────────
 const _weekly  = {{ weekly|safe }};
 const _monthly = {{ monthly|safe }};
@@ -426,26 +508,45 @@ document.querySelectorAll('#periodChips .chip').forEach(chip => {
 });
 
 async function loadReport(period) {
+  if (!_rptLoading.show('Sales Report')) return;
   let url = `/api/reports/summary?period=${period}`;
   if (period==='custom') {
     const f=document.getElementById('dateFrom').value, t=document.getElementById('dateTo').value;
-    if (!f||!t) { toast('Select date range','error'); return; }
+    if (!f||!t) { _rptLoading.hide(); toast('Select date range','error'); return; }
     url = `/api/reports/summary?from=${f}&to=${t}`;
   }
-  const data = await api(url); if (!data) return;
-  document.getElementById('rRevenue').textContent  = fmtLKR(data.total_revenue);
-  document.getElementById('rOrders').textContent   = data.total_orders;
-  document.getElementById('rAvg').textContent      = fmtLKR(data.avg_order);
-  document.getElementById('rDiscount').textContent = fmtLKR(data.total_discount);
-  initCharts(data.daily, _monthly);
-  const tbody = document.querySelector('#topProdsTable tbody');
-  tbody.innerHTML = data.top_products.map((p,i)=>`<tr>
-    <td style="color:var(--muted)">${i+1}</td>
-    <td style="font-weight:600">${p.name}</td>
-    <td>${Math.round(p.sold)}</td>
-    <td style="color:var(--accent);font-weight:700">${fmtLKR(p.revenue)}</td>
-  </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:16px">No data</td></tr>';
-  toast(`Report updated (${data.start} → ${data.end})`,'info');
+  const ctrl = new AbortController();
+  const tOut = setTimeout(() => ctrl.abort(), 30000);
+  try {
+    const data = await api(url, { signal: ctrl.signal });
+    if (!data || data.ok === false) {
+      _rptLoading.error(data?.error || 'Report loading failed. Please try again or select a smaller date range.');
+      return;
+    }
+    document.getElementById('rRevenue').textContent  = fmtLKR(data.total_revenue);
+    document.getElementById('rOrders').textContent   = data.total_orders;
+    document.getElementById('rAvg').textContent      = fmtLKR(data.avg_order);
+    document.getElementById('rDiscount').textContent = fmtLKR(data.total_discount);
+    initCharts(data.daily, _monthly);
+    const tbody = document.querySelector('#topProdsTable tbody');
+    tbody.innerHTML = data.top_products.map((p,i)=>`<tr>
+      <td style="color:var(--muted)">${i+1}</td>
+      <td style="font-weight:600">${p.name}</td>
+      <td>${Math.round(p.sold)}</td>
+      <td style="color:var(--accent);font-weight:700">${fmtLKR(p.revenue)}</td>
+    </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:16px">No data</td></tr>';
+    toast(`Report updated (${data.start} → ${data.end})`,'info');
+  } catch(e) {
+    if (e?.name === 'AbortError') {
+      _rptLoading.error('Report loading timed out. Please select a smaller date range.');
+    } else {
+      _rptLoading.error('Report loading failed. Please try again or select a smaller date range.');
+    }
+    return;
+  } finally {
+    clearTimeout(tOut);
+    _rptLoading.hide();
+  }
 }
 
 function switchExtraTab(tab, el) {
@@ -570,6 +671,7 @@ async function initServiceSection() {
 }
 
 async function loadServiceReport() {
+  if (!_rptLoading.show('Service Report')) return;
   const f = document.getElementById('svcFrom').value;
   const t = document.getElementById('svcTo').value;
   const svcType = document.getElementById('svcTypeFilter').value;
@@ -577,37 +679,50 @@ async function loadServiceReport() {
   const status  = document.getElementById('svcStatusFilter').value;
 
   document.getElementById('svcJobsBody').innerHTML = '<tr><td colspan="10"><div style="padding:20px;text-align:center;color:var(--muted)">Loading…</div></td></tr>';
-  // Set KPIs to loading skeleton
   ['skTotalJobs','skRevenue','skLabour','skParts','skAdvance','skBalance','skDelivered','skPending']
     .forEach(id=>{document.getElementById(id).textContent='…';});
 
   let url = `/api/service/report?from=${f}&to=${t}`;
   if (svcType) url += `&service_type=${svcType}`;
-  if (techId) url += `&technician_id=${techId}`;
-  if (status) url += `&status=${status}`;
+  if (techId)  url += `&technician_id=${techId}`;
+  if (status)  url += `&status=${status}`;
 
-  const data = await api(url); if (!data) return;
-
-  const s = data.summary;
-  document.getElementById('skTotalJobs').textContent = s.total_jobs;
-  document.getElementById('skRevenue').textContent   = fmtLKR(s.total_revenue);
-  document.getElementById('skLabour').textContent    = fmtLKR(s.total_labour);
-  document.getElementById('skParts').textContent     = fmtLKR(s.total_parts);
-  document.getElementById('skAdvance').textContent   = fmtLKR(s.total_advance_paid);
-  document.getElementById('skBalance').textContent   = fmtLKR(s.balance_due);
-  document.getElementById('skDelivered').textContent = s.delivered_count;
-  document.getElementById('skPending').textContent   = s.pending_count;
-  document.getElementById('svcJobCount').textContent = `${s.total_jobs} jobs`;
-
-  svcJobsAll = data.jobs;
-  renderSvcTable(svcJobsAll);
-
-  // Reload charts with new date range
-  loadSvcStatusChart(f, t);
-  loadSvcTypeRevChart(f, t);
-  loadSvcVehicleChart(f, t);
-  loadTopCustomers(f, t);
-  loadSvcTechnicianTable(f, t);
+  const ctrl = new AbortController();
+  const tOut = setTimeout(() => ctrl.abort(), 30000);
+  try {
+    const data = await api(url, { signal: ctrl.signal });
+    if (!data || data.ok === false) {
+      _rptLoading.error(data?.error || 'Service report failed to load. Please try again.');
+      return;
+    }
+    const s = data.summary;
+    document.getElementById('skTotalJobs').textContent = s.total_jobs;
+    document.getElementById('skRevenue').textContent   = fmtLKR(s.total_revenue);
+    document.getElementById('skLabour').textContent    = fmtLKR(s.total_labour);
+    document.getElementById('skParts').textContent     = fmtLKR(s.total_parts);
+    document.getElementById('skAdvance').textContent   = fmtLKR(s.total_advance_paid);
+    document.getElementById('skBalance').textContent   = fmtLKR(s.balance_due);
+    document.getElementById('skDelivered').textContent = s.delivered_count;
+    document.getElementById('skPending').textContent   = s.pending_count;
+    document.getElementById('svcJobCount').textContent = `${s.total_jobs} jobs`;
+    svcJobsAll = data.jobs;
+    renderSvcTable(svcJobsAll);
+    loadSvcStatusChart(f, t);
+    loadSvcTypeRevChart(f, t);
+    loadSvcVehicleChart(f, t);
+    loadTopCustomers(f, t);
+    loadSvcTechnicianTable(f, t);
+  } catch(e) {
+    if (e?.name === 'AbortError') {
+      _rptLoading.error('Service report timed out. Try a smaller date range.');
+    } else {
+      _rptLoading.error('Service report failed to load. Please try again or select a smaller date range.');
+    }
+    return;
+  } finally {
+    clearTimeout(tOut);
+    _rptLoading.hide();
+  }
 }
 
 function renderSvcTable(jobs) {

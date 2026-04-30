@@ -3,29 +3,29 @@ setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
 :: ============================================================
-::  SuperMart POS — Windows Installer Build Script
-::  Builds: release\SuperMartPOS_Setup_v3.1.exe
+::  Garage Management System — Windows Installer Build Script
+::  Builds: release\GarageManagementSystem_Setup_v3.1.exe
 ::
 ::  Requires:
-::    - dist\SuperMartPOS.exe  (built by build_desktop.bat)
+::    - dist\GarageManagementSystem.exe  (built by build_desktop.bat)
 ::    - Inno Setup 6           (installed on build machine)
-::    - SuperMartPOS_Setup.iss (root-level; SourceDir = project root)
+::    - GarageManagementSystem_Setup.iss (root-level; SourceDir = project root)
 ::
-::  Note: This script calls SuperMartPOS_Setup.iss from the PROJECT ROOT,
+::  Note: This script calls GarageManagementSystem_Setup.iss from the PROJECT ROOT,
 ::  not from the installer\ subfolder.  The root .iss has correct relative
 ::  paths for dist\, static\, and release\.  The installer\ subfolder copy
 ::  is kept for reference only — it uses SourceDir=..\ to compensate.
 :: ============================================================
 
-title SuperMart POS — Installer Build
+title Garage Management System — Installer Build
 
 echo.
 echo  [build_installer] Building Windows installer...
 echo.
 
-:: ── Validate dist\SuperMartPOS.exe ───────────────────────────────────────────
-if not exist "dist\SuperMartPOS.exe" (
-    echo  [INFO] dist\SuperMartPOS.exe not found — building desktop EXE first...
+:: ── Validate dist\GarageManagementSystem.exe ───────────────────────────────────────────
+if not exist "dist\GarageManagementSystem.exe" (
+    echo  [INFO] dist\GarageManagementSystem.exe not found — building desktop EXE first...
     echo.
     call build_desktop.bat
     if errorlevel 1 (
@@ -34,16 +34,16 @@ if not exist "dist\SuperMartPOS.exe" (
     )
 )
 
-if not exist "dist\SuperMartPOS.exe" (
-    echo  [ERROR] dist\SuperMartPOS.exe still missing after desktop build attempt.
+if not exist "dist\GarageManagementSystem.exe" (
+    echo  [ERROR] dist\GarageManagementSystem.exe still missing after desktop build attempt.
     exit /b 1
 )
-echo  [OK] dist\SuperMartPOS.exe found
+echo  [OK] dist\GarageManagementSystem.exe found
 
 :: ── Validate installer source files ──────────────────────────────────────────
-if not exist "SuperMartPOS_Setup.iss" (
-    echo  [ERROR] SuperMartPOS_Setup.iss not found in project root.
-    echo  The installer script must be at: %CD%\SuperMartPOS_Setup.iss
+if not exist "GarageManagementSystem_Setup.iss" (
+    echo  [ERROR] GarageManagementSystem_Setup.iss not found in project root.
+    echo  The installer script must be at: %CD%\GarageManagementSystem_Setup.iss
     exit /b 1
 )
 if not exist "static\icons\icon.ico" (
@@ -86,11 +86,11 @@ if "%ISCC_EXE%"=="" (
 echo  [OK] Inno Setup 6 found: %ISCC_EXE%
 
 :: ── Run ISCC ──────────────────────────────────────────────────────────────────
-::  We call the ROOT-level SuperMartPOS_Setup.iss so that all relative paths
+::  We call the ROOT-level GarageManagementSystem_Setup.iss so that all relative paths
 ::  (dist\, static\, release\) resolve correctly from the project root.
 echo  [..] Compiling installer...
 echo.
-"%ISCC_EXE%" "SuperMartPOS_Setup.iss"
+"%ISCC_EXE%" "GarageManagementSystem_Setup.iss"
 if errorlevel 1 (
     echo.
     echo  [ERROR] Inno Setup compilation failed.
@@ -104,7 +104,7 @@ if errorlevel 1 (
 
 :: ── Verify output ─────────────────────────────────────────────────────────────
 set FOUND_INSTALLER=
-for %%I in ("release\SuperMartPOS_Setup_*.exe") do set FOUND_INSTALLER=%%I
+for %%I in ("release\GarageManagementSystem_Setup_*.exe") do set FOUND_INSTALLER=%%I
 if not defined FOUND_INSTALLER (
     echo  [ERROR] Installer built without error but no setup EXE found in release\
     exit /b 1
@@ -112,6 +112,6 @@ if not defined FOUND_INSTALLER (
 
 echo.
 echo  [DONE] Installer created:
-for %%I in ("release\SuperMartPOS_Setup_*.exe") do echo    %%I
+for %%I in ("release\GarageManagementSystem_Setup_*.exe") do echo    %%I
 echo.
 exit /b 0

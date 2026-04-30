@@ -971,7 +971,7 @@ async function loadStoreSettings() {
     syncTaxVisibility();
     recalc();
   } catch(e) {
-    storeSettings = { store_name:'SuperMart', store_phone:'+94 11 234 5678', store_branch:'Main Branch', receipt_footer:'', tax_rate: '0', tax_enabled: false, tax_name: 'Tax', payhere_sandbox: false };
+    storeSettings = { store_name:'Garage', store_phone:'+94 11 234 5678', store_branch:'Main Branch', receipt_footer:'', tax_rate: '0', tax_enabled: false, tax_name: 'Tax', payhere_sandbox: false };
     cardSettings = { enabled: true, terminal_type: 'manual_record_only', wait_for_response: true, auto_send_amount: true, allow_manual_fallback: true, require_approval_code: true, require_last4: true, require_rrn_reference: true, show_on_receipt: true };
     syncTaxVisibility();
     document.documentElement.style.setProperty('--print-width', '80mm');
@@ -1702,9 +1702,9 @@ async function confirmPayment() {
   const customer = {
     first_name: document.getElementById('phFirst')?.value || 'Customer',
     last_name:  document.getElementById('phLast')?.value  || '',
-    email:      document.getElementById('phEmail')?.value || 'customer@supermart.lk',
+    email:      document.getElementById('phEmail')?.value || 'customer@garage.lk',
     phone:      document.getElementById('phPhone')?.value || '0771234567',
-    address: 'SuperMart', city: 'Colombo', country: 'Sri Lanka'
+    address: 'Garage', city: 'Colombo', country: 'Sri Lanka'
   };
   const totNum = parseFloat(document.getElementById('totalDisplay').textContent.replace(/[^0-9.-]/g,'')) || 0;
 
@@ -1996,7 +1996,7 @@ function renderReceiptHtml(model, visualProfile) {
           <div class="brand-name">${escapeHtml(lockedBranding.companyName)}</div>
           <div class="brand-phone">Tel: ${escapeHtml(lockedBranding.phone)}</div>
         </div>
-        ${model.poweredBy ? '<div class="powered">Powered by SuperMart POS</div>' : ''}
+        ${model.poweredBy ? '<div class="powered">Powered by Garage Management System</div>' : ''}
       </div>
       <div class="receipt-signature"><div>Authorized Signature</div></div>
     </div>`;
@@ -2034,7 +2034,7 @@ function showReceipt(data) {
   const eq = prefix + '='.repeat(avail);
   const lockedBranding = getLockedReceiptBranding();
 
-  const storeName  = storeSettings.store_name    || 'SuperMart';
+  const storeName  = storeSettings.store_name    || 'Garage';
   const storePhone = storeSettings.store_phone   || '';
   const branch     = storeSettings.store_branch  || '';
   const storeAddr  = storeSettings.store_address || '';
@@ -2208,7 +2208,7 @@ function showReceipt(data) {
   if (warrantyLines.length) footerLines.push(...warrantyLines.slice(0, 2));
   if (storePhone) footerLines.push(`Hotline: ${storePhone}`);
   if (footerLines.length === 0) footerLines.push('Thank you for shopping with us!');
-  if (pf.show_powered_by) receipt += fAlign('Powered by SuperMart POS') + '\n';
+  if (pf.show_powered_by) receipt += fAlign('Powered by Garage Management System') + '\n';
 
   const paidAmount = currentMethod === 'Cash'
     ? ((parseFloat(document.getElementById('cashGiven')?.value || 0) || 0) > 0

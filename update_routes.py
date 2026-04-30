@@ -138,11 +138,11 @@ def app_version():
     """Return the installed application version. No authentication required.
 
     Response:
-        { "version": "3.2.0", "app_name": "SuperMart POS" }
+        { "version": "3.2.0", "app_name": "Garage Management System" }
     """
     return jsonify({
         "version":  APP_VERSION,
-        "app_name": "SuperMart POS",
+        "app_name": "Garage Management System",
     })
 
 
@@ -209,7 +209,7 @@ def download_and_install():
         if not info.installer_asset:
             msg = (
                 "No installer asset found in the latest GitHub Release. "
-                "Attach a SuperMartPOS_Setup_v<version>.exe to the release."
+                "Attach a GarageManagementSystem_Setup_v<version>.exe to the release."
             )
             log_update_event(f"Install aborted: {msg}")
             return jsonify({"success": False, "error": msg})

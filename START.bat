@@ -2,13 +2,13 @@ REM Developer use only — not for customer use
 @echo off
 setlocal enabledelayedexpansion
 
-title SuperMart POS - Desktop Mode
+title Garage Management System - Desktop Mode
 color 0A
 cls
 
 echo.
 echo  ============================================
-echo    SuperMart POS  v3.1  -- Desktop Mode
+echo    Garage Management System  v3.2  -- Desktop Mode
 echo  ============================================
 echo.
 
@@ -76,7 +76,7 @@ set EXIT_CODE=!errorlevel!
 
 if !EXIT_CODE! neq 0 (
     echo.
-    echo  [ERROR] SuperMart POS exited with code !EXIT_CODE!.
+    echo  [ERROR] Garage Management System exited with code !EXIT_CODE!.
 )
 
 :end

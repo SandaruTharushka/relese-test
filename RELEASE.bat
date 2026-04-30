@@ -2,12 +2,12 @@
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
-title SuperMart POS — Automated GitHub Release
+title Garage Management System — Automated GitHub Release
 color 0B
 
 echo.
 echo  =====================================================
-echo    SuperMart POS  v3.1  --  GitHub Release Tool
+echo    Garage Management System  v3.2  --  GitHub Release Tool
 echo  =====================================================
 echo.
 
@@ -70,12 +70,12 @@ echo.
 echo  [4/4] Creating GitHub Release and uploading assets...
 :: Find the setup EXE dynamically
 set SETUP_EXE=
-for %%F in (release\SuperMartPOS_Setup_*.exe) do set SETUP_EXE=%%F
+for %%F in (release\GarageManagementSystem_Setup_*.exe) do set SETUP_EXE=%%F
 
 if exist "venv\Scripts\python.exe" (
-    venv\Scripts\python.exe github_release.py %VERSION_TAG% release\SuperMartPOS.exe release\SuperMartPrinterManager.exe !SETUP_EXE!
+    venv\Scripts\python.exe github_release.py %VERSION_TAG% release\GarageManagementSystem.exe release\SuperMartPrinterManager.exe !SETUP_EXE!
 ) else (
-    python github_release.py %VERSION_TAG% release\SuperMartPOS.exe release\SuperMartPrinterManager.exe !SETUP_EXE!
+    python github_release.py %VERSION_TAG% release\GarageManagementSystem.exe release\SuperMartPrinterManager.exe !SETUP_EXE!
 )
 
 if errorlevel 1 (

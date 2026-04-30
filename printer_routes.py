@@ -53,7 +53,7 @@ def register_printer_routes(
     def _printer_manager_executable_path() -> str:
         candidates: list[str] = []
         if getattr(sys, 'frozen', False):
-            candidates.append(os.path.join(os.path.dirname(sys.executable), 'SuperMartPrinterManager.exe'))
+            candidates.append(os.path.join(os.path.dirname(sys.executable), 'GarageManagementSystem.exe'))
         candidates.append(os.path.join(os.path.dirname(__file__), 'printer_manager_app.py'))
         for candidate in candidates:
             if candidate and os.path.exists(candidate):
@@ -91,12 +91,12 @@ def register_printer_routes(
         _require_admin()
         executable = _printer_manager_executable_path()
         if not executable:
-            return jsonify({'ok': False, 'code': 'MANAGER_NOT_INSTALLED', 'msg': 'SuperMart Printer Manager is not installed on this machine.'}), 404
+            return jsonify({'ok': False, 'code': 'MANAGER_NOT_INSTALLED', 'msg': 'Garage Printer Manager is not installed on this machine.'}), 404
         if executable.lower().endswith('.exe'):
             subprocess.Popen([executable], close_fds=True)
         else:
             subprocess.Popen([sys.executable, executable], close_fds=True)
-        return jsonify({'ok': True, 'msg': 'Opening SuperMart Printer Manager...'})
+        return jsonify({'ok': True, 'msg': 'Opening Garage Printer Manager...'})
 
     # ── Hardware auto-connect stub ────────────────────────────────
     @app.route('/api/hardware/auto-connect', methods=['POST'])

@@ -99,7 +99,7 @@ def register_settings_routes(
             ]
             result = {k: all_settings.get(k, '') for k in core_keys}
             if not result['store_name']:
-                result['store_name'] = 'SuperMart'
+                result['store_name'] = 'Garage'
             # Include all pref_ keys
             for k, v in all_settings.items():
                 if k.startswith('pref_'):

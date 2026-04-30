@@ -11,7 +11,7 @@ _log = logging.getLogger(__name__)
 # ── Storage location (with fallback) ─────────────────────────────────────────
 def _get_license_dir():
     """Get license directory — tries ProgramData first, falls back to Documents."""
-    primary = os.path.join(os.environ.get('PROGRAMDATA', r'C:\ProgramData'), 'SuperMartPOS')
+    primary = os.path.join(os.environ.get('PROGRAMDATA', r'C:\ProgramData'), 'GarageManagementSystem')
     try:
         os.makedirs(primary, exist_ok=True)
         # Test if we can write
@@ -24,7 +24,7 @@ def _get_license_dir():
         pass
 
     # Fallback to user's Documents folder
-    fallback = os.path.join(str(Path.home()), 'Documents', 'SuperMartPOS')
+    fallback = os.path.join(str(Path.home()), 'Documents', 'GarageManagementSystem')
     try:
         os.makedirs(fallback, exist_ok=True)
         return fallback

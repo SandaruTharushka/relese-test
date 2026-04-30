@@ -115,7 +115,7 @@
     }
   }
 
-  windowObj.SuperMartReceiptPrint = {
+  windowObj.GmsReceiptPrint = windowObj.SuperMartReceiptPrint = {
     printFromUrl,
   };
 })(window);

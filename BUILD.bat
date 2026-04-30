@@ -3,9 +3,9 @@ setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
 :: ============================================================
-::  SuperMart POS — Master Build Script
-::  Produces: dist\SuperMartPOS.exe + dist\SuperMartPrinterManager.exe
-::            + release\SuperMartPOS_Setup_v3.1.exe  (if Inno Setup found)
+::  Garage Management System — Master Build Script
+::  Produces: dist\GarageManagementSystem.exe + dist\SuperMartPrinterManager.exe
+::            + release\GarageManagementSystem_Setup_v3.1.exe  (if Inno Setup found)
 ::
 ::  Usage:  BUILD.bat
 ::
@@ -18,12 +18,12 @@ cd /d "%~dp0"
 ::    5. Print a clear pass/fail summary
 :: ============================================================
 
-title SuperMart POS — Full Build
+title Garage Management System — Full Build
 color 0A
 
 echo.
 echo  =====================================================
-echo    SuperMart POS  v3.1  --  Full Build Pipeline
+echo    Garage Management System  v3.2  --  Full Build Pipeline
 echo  =====================================================
 echo.
 
@@ -44,7 +44,7 @@ if not errorlevel 1 (
     echo    - Random PyInstaller mid-build failures
     echo.
     echo  RECOMMENDATION: Move the project to a local non-synced folder such as:
-    echo    C:\Dev\SuperMartPOS
+    echo    C:\Dev\GarageManagementSystem
     echo.
     set /p ONEDRIVE_CONTINUE=" Type YES to continue anyway (not recommended): "
     if /i "!ONEDRIVE_CONTINUE!" neq "YES" (
@@ -98,7 +98,7 @@ for %%F in (
     desktop_runtime.py
     app.py
     runtime_paths.py
-    SuperMartPOS.spec
+    GarageManagementSystem.spec
     SuperMartPrinterManager.spec
     requirements.txt
     static\icons\icon.ico
@@ -200,25 +200,25 @@ echo.
 echo  =====================================================
 echo    BUILD SUMMARY
 echo  =====================================================
-if exist "dist\SuperMartPOS.exe" (
-    echo  [PASS] dist\SuperMartPOS.exe
+if exist "dist\GarageManagementSystem.exe" (
+    echo  [PASS] dist\GarageManagementSystem.exe
 ) else (
-    echo  [FAIL] dist\SuperMartPOS.exe  NOT FOUND
+    echo  [FAIL] dist\GarageManagementSystem.exe  NOT FOUND
 )
 if exist "dist\SuperMartPrinterManager.exe" (
     echo  [PASS] dist\SuperMartPrinterManager.exe
 ) else (
     echo  [WARN] dist\SuperMartPrinterManager.exe  NOT FOUND
 )
-if exist "release\SuperMartPOS.exe" (
-    echo  [PASS] release\SuperMartPOS.exe
+if exist "release\GarageManagementSystem.exe" (
+    echo  [PASS] release\GarageManagementSystem.exe
 )
-for %%I in (release\SuperMartPOS_Setup_*.exe) do (
+for %%I in (release\GarageManagementSystem_Setup_*.exe) do (
     echo  [PASS] %%I
 )
 echo.
 
-if not exist "dist\SuperMartPOS.exe" goto :fail
+if not exist "dist\GarageManagementSystem.exe" goto :fail
 
 echo  BUILD COMPLETE
 echo.

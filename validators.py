@@ -1,4 +1,4 @@
-"""Centralised input-validation helpers for SuperMart POS.
+"""Centralised input-validation helpers for Garage Management System.
 
 Each helper raises ``ValueError`` with a clear, user-facing message when
 validation fails.  Routes should catch ``ValueError`` and return a 400

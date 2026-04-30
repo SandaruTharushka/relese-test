@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import logging
 import os
-import sys
 import shutil
+import sys
 from functools import lru_cache
 from pathlib import Path
 
-APP_NAME = 'SuperMartPOS'
-WINDOWS_DATA_DIR_NAME = 'SuperMart POS'
+APP_NAME = 'GarageManagementSystem'
+WINDOWS_DATA_DIR_NAME = 'Garage Management System'
+# Legacy name kept for safe one-time migration only — never create new data here.
+_LEGACY_WINDOWS_DATA_DIR_NAME = 'SuperMart POS'
 PORTABLE_RUNTIME_MARKERS = ('.env', 'supermart.db')
 LEGACY_MIGRATION_ITEMS = PORTABLE_RUNTIME_MARKERS + ('backups', 'logs')
 RUNTIME_SUBDIRS = (
@@ -20,6 +23,8 @@ RUNTIME_SUBDIRS = (
     'config',
     'license',
 )
+
+_migration_logger = logging.getLogger('garage.runtime_paths')
 
 
 def is_frozen() -> bool:
@@ -77,6 +82,65 @@ def _migrate_legacy_runtime_artifacts(exe_dir: Path, target_dir: Path) -> None:
         _copy_missing_tree(exe_dir / name, target_dir / name)
 
 
+def _migrate_supermart_to_garage(new_dir: Path) -> None:
+    """
+    One-time safe migration from the old 'SuperMart POS' data folder to the new
+    'Garage Management System' folder.
+
+    Rules:
+    1. If new_dir already contains a DB, it wins — skip migration.
+    2. If old folder exists and has a DB, copy all items to new_dir.
+    3. Back up old DB before copying (old_dir remains intact, never deleted).
+    4. Log every step so the operator can audit.
+    """
+    base_dir = os.getenv('LOCALAPPDATA') or os.getenv('APPDATA')
+    if not base_dir:
+        return
+
+    old_dir = Path(base_dir) / _LEGACY_WINDOWS_DATA_DIR_NAME
+    if not old_dir.exists():
+        return
+
+    # Rule 1: new location already has data — nothing to do.
+    if (new_dir / 'supermart.db').exists():
+        _migration_logger.info(
+            'Data migration skipped: %s already contains supermart.db', new_dir
+        )
+        return
+
+    old_db = old_dir / 'supermart.db'
+    if not old_db.exists():
+        return  # old folder exists but no DB — nothing meaningful to migrate
+
+    _migration_logger.info(
+        'Migrating data from legacy folder %s → %s', old_dir, new_dir
+    )
+    new_dir.mkdir(parents=True, exist_ok=True)
+
+    # Back up old DB before copying.
+    backup_path = new_dir / 'supermart_migration_backup.db'
+    try:
+        shutil.copy2(old_db, backup_path)
+        _migration_logger.info('Migration backup written to %s', backup_path)
+    except OSError as exc:
+        _migration_logger.warning('Could not write migration backup: %s', exc)
+
+    # Copy all migration items that do not already exist in new_dir.
+    for name in LEGACY_MIGRATION_ITEMS:
+        src = old_dir / name
+        dst = new_dir / name
+        if src.exists() and not dst.exists():
+            try:
+                _copy_missing_tree(src, dst)
+                _migration_logger.info('Migrated %s → %s', src, dst)
+            except OSError as exc:
+                _migration_logger.warning('Could not migrate %s: %s', name, exc)
+
+    _migration_logger.info(
+        'Data migration complete. Old folder %s has NOT been deleted.', old_dir
+    )
+
+
 def _windows_preferred_data_dir(exe_dir: Path) -> Path:
     portable_dir = _portable_runtime_dir(exe_dir)
     if portable_dir is not None:
@@ -96,6 +160,7 @@ def _cached_persistent_app_dir() -> Path:
         if os.name == 'nt':
             target_dir = _windows_preferred_data_dir(exe_dir)
             _migrate_legacy_runtime_artifacts(exe_dir, target_dir)
+            _migrate_supermart_to_garage(target_dir)
             return target_dir
         return exe_dir
     return Path(__file__).resolve().parent

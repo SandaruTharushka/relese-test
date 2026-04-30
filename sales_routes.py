@@ -1141,7 +1141,7 @@ def register_sales_routes(
             customer_name = sale.wholesale_customer.name or customer_name
             customer_phone = sale.wholesale_customer.phone or ''
         store = {
-            'name': StoreSettings.get('store_name', 'SuperMart POS'),
+            'name': StoreSettings.get('store_name', 'Garage Management System'),
             'phone': StoreSettings.get('store_phone', ''),
             'address': StoreSettings.get('store_address', ''),
         }
@@ -1162,7 +1162,7 @@ def register_sales_routes(
             abort(404)
 
         store = {
-            'name': StoreSettings.get('store_name', 'SuperMart POS'),
+            'name': StoreSettings.get('store_name', 'Garage Management System'),
             'phone': StoreSettings.get('store_phone', ''),
             'address': StoreSettings.get('store_address', ''),
             'email': StoreSettings.get('store_email', ''),

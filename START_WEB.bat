@@ -1,13 +1,13 @@
 REM Developer use only — not for customer use
 @echo off
 setlocal enabledelayedexpansion
-title SuperMart POS - Browser Mode
+title Garage Management System - Browser Mode
 color 0A
 cls
 
 echo.
 echo  ============================================
-echo    SuperMart POS  v3.0  -- Browser Mode
+echo    Garage Management System  v3.2  -- Browser Mode
 echo    Python 3.11 Edition
 echo  ============================================
 echo.
@@ -86,7 +86,7 @@ echo.
 echo  Starting server at http://localhost:5000
 echo  First run: create a secure admin account in the setup screen
 echo.
-echo  Keep this window open while using SuperMart POS.
+echo  Keep this window open while using Garage Management System.
 echo  ──────────────────────────────────────────────
 echo.
 timeout /t 2 /nobreak >nul
@@ -95,6 +95,6 @@ python app.py
 
 :end
 echo.
-echo  SuperMart POS stopped.
+echo  Garage Management System stopped.
 echo  Press any key to close...
 pause >nul
