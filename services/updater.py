@@ -5,21 +5,24 @@ Public surface:
   UpdateChecker.check()               → UpdateInfo  (never raises)
   UpdateChecker.download_installer()  → Path        (raises on failure)
   launch_installer()                  → None        (raises on missing file)
-  backup_before_update()              → Path | None (triggers DB backup)
+  backup_before_update()              → Path | None (triggers DB + config backup)
+  log_update_event()                  → None        (write to update.log)
 
 Update flow used by the desktop runtime:
   1. check()              — fetch latest release metadata, compare semver
                             (retries up to 3× with exponential backoff)
-  2. backup_before_update() — snapshot DB before any file changes
-  3. download_installer() — stream installer asset to temp file
+  2. backup_before_update() — snapshot DB + all config before any file changes
+  3. download_installer() — stream installer asset to persistent updates dir
   4. launch_installer()   — detach installer process; caller exits the app
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -39,6 +42,39 @@ except ImportError:          # pragma: no cover
     _requests = None         # type: ignore[assignment]
     _REQUESTS_OK = False
     log.warning("'requests' library not found; update checking is disabled")
+
+
+# ── Runtime paths helper ──────────────────────────────────────────────────────
+
+def _persistent_app_dir() -> Optional[Path]:
+    """Return the writable app data directory, or None if unavailable."""
+    try:
+        from runtime_paths import persistent_app_dir
+        return persistent_app_dir()
+    except Exception:
+        return None
+
+
+# ── Update logging ────────────────────────────────────────────────────────────
+
+def log_update_event(message: str) -> None:
+    """Append a timestamped line to %LOCALAPPDATA%\\SuperMart POS\\logs\\update.log.
+
+    Never raises; silently skips if the log path cannot be resolved.
+    Tokens and secrets must NOT be passed through this function.
+    """
+    try:
+        app_dir = _persistent_app_dir()
+        if app_dir is None:
+            return
+        log_dir = app_dir / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_path = log_dir / "update.log"
+        ts = time.strftime("%Y-%m-%d %H:%M:%S")
+        with open(log_path, "a", encoding="utf-8") as fh:
+            fh.write(f"[{ts}] {message}\n")
+    except Exception:
+        pass
 
 
 # ── Version helpers ───────────────────────────────────────────────────────────
@@ -270,7 +306,10 @@ class UpdateChecker:
         progress_callback: Optional[Callable[[int, int], None]] = None,
     ) -> Path:
         """
-        Stream-download an installer asset to a temp file.
+        Stream-download an installer asset to a persistent updates directory.
+
+        Downloads to: %LOCALAPPDATA%\\SuperMart POS\\updates\\<asset_name>
+        Falls back to a temp file if the persistent directory is unavailable.
 
         Args:
             asset:             The ReleaseAsset to download.
@@ -279,23 +318,37 @@ class UpdateChecker:
                                the server does not send Content-Length.
 
         Returns:
-            Path to the downloaded installer temp file.
+            Path to the downloaded installer file.
 
         Raises:
             RuntimeError:  Download failed or file is empty.
             Exception:     Re-raised from requests on non-recoverable errors.
-
-        The temp file is cleaned up automatically on failure.
         """
         if not _REQUESTS_OK:
             raise RuntimeError("requests library not available; cannot download")
 
-        suffix   = Path(asset.name).suffix or ".exe"
-        fd, raw_path = tempfile.mkstemp(prefix="SuperMartPOS_upd_", suffix=suffix)
-        tmp = Path(raw_path)
+        # Prefer persistent updates dir so the file survives temp-dir cleanup.
+        dest_path: Optional[Path] = None
+        app_dir = _persistent_app_dir()
+        if app_dir is not None:
+            try:
+                updates_dir = app_dir / "updates"
+                updates_dir.mkdir(parents=True, exist_ok=True)
+                dest_path = updates_dir / asset.name
+            except Exception as exc:
+                log.warning("Could not prepare updates directory: %s", exc)
+
+        # Fall back to a temp file if persistent dir is unavailable.
+        if dest_path is None:
+            suffix = Path(asset.name).suffix or ".exe"
+            fd, raw_path = tempfile.mkstemp(prefix="SuperMartPOS_upd_", suffix=suffix)
+            os.close(fd)
+            dest_path = Path(raw_path)
+            log.warning("Falling back to temp file for installer download: %s", dest_path)
+
+        log_update_event(f"Downloading installer: {asset.name} ({asset.size} bytes expected) → {dest_path}")
 
         try:
-            os.close(fd)
             with _requests.get(
                 asset.browser_download_url,
                 headers=self._headers(),
@@ -305,7 +358,7 @@ class UpdateChecker:
                 resp.raise_for_status()
                 total    = int(resp.headers.get("content-length") or 0)
                 received = 0
-                with open(tmp, "wb") as fh:
+                with open(dest_path, "wb") as fh:
                     for chunk in resp.iter_content(chunk_size=65536):
                         if chunk:
                             fh.write(chunk)
@@ -313,22 +366,21 @@ class UpdateChecker:
                             if progress_callback and total:
                                 progress_callback(received, total)
 
-            size = tmp.stat().st_size
+            size = dest_path.stat().st_size
             if size == 0:
                 raise RuntimeError("Downloaded installer is empty (0 bytes)")
-            # Size sanity: the GitHub release advertises asset.size. If Content-Length
-            # agreed with it during streaming, the actual bytes on disk must match too.
             if asset.size and size != asset.size:
                 raise RuntimeError(
                     f"Downloaded installer size mismatch: expected {asset.size} bytes, got {size} bytes"
                 )
 
-            log.info("Installer downloaded: %s (%d bytes)", tmp, size)
-            return tmp
+            log.info("Installer downloaded: %s (%d bytes)", dest_path, size)
+            log_update_event(f"Download complete: {dest_path} ({size} bytes)")
+            return dest_path
 
         except Exception:
             try:
-                tmp.unlink(missing_ok=True)
+                dest_path.unlink(missing_ok=True)
             except Exception:
                 pass
             raise
@@ -351,6 +403,7 @@ def launch_installer(installer_path: Path) -> None:
         raise FileNotFoundError(f"Installer file not found: {installer_path}")
 
     log.info("Launching installer: %s", installer_path)
+    log_update_event(f"Launching installer: {installer_path}")
 
     if sys.platform == "win32":
         DETACHED_PROCESS      = 0x00000008
@@ -365,44 +418,187 @@ def launch_installer(installer_path: Path) -> None:
         subprocess.Popen([str(installer_path)], close_fds=True)
 
     log.info("Installer process started; caller should now exit the app")
+    log_update_event("Installer process started — app should now close")
 
 
 # ── Backup-before-update ──────────────────────────────────────────────────────
 
-def backup_before_update(db_path: str | Path, backup_dir: str | Path | None = None) -> Optional[Path]:
-    """Copy the SQLite database to a timestamped backup before applying an update.
+def backup_before_update(
+    db_path: str | Path,
+    backup_root: str | Path | None = None,
+) -> Optional[Path]:
+    """Create a comprehensive pre-update backup before applying an update.
 
-    This creates a point-in-time snapshot that can be manually restored if the
-    update causes data corruption.
+    Backs up:
+      - supermart.db (via SQLite online backup API for consistency)
+      - activation / license JSON files (ProgramData and Documents fallback)
+      - %LOCALAPPDATA%\\SuperMart POS\\config\\*.json
+      - %LOCALAPPDATA%\\SuperMart POS\\.env
+      - backup_info.json (version + timestamp metadata)
+
+    Backup directory:
+      %LOCALAPPDATA%\\SuperMart POS\\backups\\pre_update_YYYYMMDD_HHMMSS\\
 
     Args:
-        db_path:    Path to the live ``supermart.db`` file.
-        backup_dir: Directory to write the backup into.  Defaults to a
-                    ``backups/pre_update/`` sub-folder beside the database.
+        db_path:     Path to the live supermart.db file.
+        backup_root: Override the parent directory for the backup folder.
+                     Defaults to the backups/ folder beside the database.
 
     Returns:
-        Path of the written backup file, or None if the DB does not exist or
-        the copy fails (non-fatal — update can proceed but logs a warning).
+        Path to the backup directory, or None if backup failed (non-fatal).
     """
     src = Path(db_path)
     if not src.exists():
         log.warning("backup_before_update: source DB not found at %s", src)
+        log_update_event(f"Pre-update backup skipped: DB not found at {src}")
         return None
 
-    if backup_dir is None:
-        backup_dir = src.parent / "backups" / "pre_update"
+    # Determine where to write the backup
+    app_dir = _persistent_app_dir()
+    if backup_root is None:
+        if app_dir is not None:
+            backup_root = app_dir / "backups"
+        else:
+            backup_root = src.parent / "backups"
 
-    dest_dir = Path(backup_dir)
+    ts = time.strftime("%Y%m%d_%H%M%S")
+    dest_dir = Path(backup_root) / f"pre_update_{ts}"
+
     try:
         dest_dir.mkdir(parents=True, exist_ok=True)
-        ts = time.strftime("%Y%m%d_%H%M%S")
-        dest = dest_dir / f"supermart_pre_update_{ts}.db"
-        shutil.copy2(str(src), str(dest))
-        log.info("Pre-update backup written to %s (%d bytes)", dest, dest.stat().st_size)
-        return dest
+
+        # ── 1. Database (SQLite online backup API) ────────────────────────
+        db_dest = dest_dir / "supermart.db"
+        try:
+            src_conn = sqlite3.connect(str(src), timeout=10)
+            dst_conn = sqlite3.connect(str(db_dest))
+            try:
+                src_conn.backup(dst_conn, pages=200)
+            finally:
+                dst_conn.close()
+                src_conn.close()
+        except Exception as exc:
+            log.warning("SQLite online backup failed, falling back to file copy: %s", exc)
+            shutil.copy2(str(src), str(db_dest))
+
+        # ── 2. Config and .env files ──────────────────────────────────────
+        config_dest = dest_dir / "config"
+        config_dest.mkdir(exist_ok=True)
+
+        config_sources: list[Path] = []
+        if app_dir is not None:
+            config_sources += [
+                app_dir / ".env",
+                app_dir / "config" / "settings.json",
+                app_dir / "config" / "company.json",
+                app_dir / "config" / "receipt_templates.json",
+                app_dir / "config" / "printer_settings.json",
+                app_dir / "config" / "label_settings.json",
+                app_dir / "config" / "receipt_layout.json",
+                app_dir / "config" / "scanner_settings.json",
+            ]
+            # Also pick up any other JSON in config/ we may have missed
+            config_dir_path = app_dir / "config"
+            if config_dir_path.is_dir():
+                for extra in config_dir_path.glob("*.json"):
+                    if extra not in config_sources:
+                        config_sources.append(extra)
+
+        for cfg_file in config_sources:
+            if cfg_file.exists() and cfg_file.is_file():
+                shutil.copy2(str(cfg_file), str(config_dest / cfg_file.name))
+
+        # ── 3. License / activation files ────────────────────────────────
+        license_dest = dest_dir / "license"
+        license_dest.mkdir(exist_ok=True)
+
+        license_search_dirs: list[Path] = []
+        programdata = os.environ.get("PROGRAMDATA", r"C:\ProgramData")
+        license_search_dirs.append(Path(programdata) / "SuperMartPOS")
+        license_search_dirs.append(Path.home() / "Documents" / "SuperMartPOS")
+        if app_dir is not None:
+            license_search_dirs.append(app_dir / ".license")
+            license_search_dirs.append(app_dir / "license")
+
+        for ldir in license_search_dirs:
+            if ldir.exists() and ldir.is_dir():
+                for lfile in ldir.glob("*.json"):
+                    shutil.copy2(str(lfile), str(license_dest / lfile.name))
+
+        # ── 4. Backup metadata ────────────────────────────────────────────
+        try:
+            from version import APP_VERSION
+        except Exception:
+            APP_VERSION = "unknown"
+
+        meta = {
+            "backup_type": "pre_update",
+            "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "app_version": APP_VERSION,
+            "db_path": str(src),
+            "backup_dir": str(dest_dir),
+        }
+        (dest_dir / "backup_info.json").write_text(
+            json.dumps(meta, indent=2), encoding="utf-8"
+        )
+
+        size_bytes = sum(f.stat().st_size for f in dest_dir.rglob("*") if f.is_file())
+        log.info(
+            "Pre-update backup written to %s (%d bytes total)", dest_dir, size_bytes
+        )
+        log_update_event(
+            f"Pre-update backup created: {dest_dir} ({size_bytes // 1024} KB)"
+        )
+        return dest_dir
+
     except Exception as exc:
         log.warning("backup_before_update failed (non-fatal): %s", exc)
+        log_update_event(f"Pre-update backup FAILED: {exc}")
         return None
+
+
+def list_pre_update_backups(backup_root: str | Path | None = None) -> list[dict]:
+    """Return metadata for all pre-update backup directories, newest first.
+
+    Each entry: {path, created_at, app_version, size_kb, db_path}
+    """
+    if backup_root is None:
+        app_dir = _persistent_app_dir()
+        backup_root = (app_dir / "backups") if app_dir else None
+
+    if backup_root is None:
+        return []
+
+    result: list[dict] = []
+    try:
+        for d in sorted(Path(backup_root).glob("pre_update_*"), reverse=True):
+            if not d.is_dir():
+                continue
+            meta: dict = {}
+            info_file = d / "backup_info.json"
+            if info_file.exists():
+                try:
+                    meta = json.loads(info_file.read_text(encoding="utf-8"))
+                except Exception:
+                    pass
+            size_kb = sum(
+                f.stat().st_size for f in d.rglob("*") if f.is_file()
+            ) // 1024
+            result.append({
+                "path": str(d),
+                "name": d.name,
+                "created_at": meta.get("created_at", ""),
+                "app_version": meta.get("app_version", "unknown"),
+                "size_kb": size_kb,
+                "db_path": meta.get("db_path", ""),
+                "has_db": (d / "supermart.db").exists(),
+                "has_config": (d / "config").is_dir(),
+                "has_license": (d / "license").is_dir(),
+            })
+    except Exception as exc:
+        log.warning("list_pre_update_backups failed: %s", exc)
+
+    return result
 
 
 def verify_installer_checksum(installer_path: Path, expected_sha256: str) -> bool:
@@ -426,7 +622,13 @@ def verify_installer_checksum(installer_path: Path, expected_sha256: str) -> boo
                 "Installer checksum mismatch! expected=%s actual=%s",
                 expected, actual,
             )
+            log_update_event(
+                f"Checksum MISMATCH: expected={expected[:16]}… actual={actual[:16]}…"
+            )
+        else:
+            log_update_event("Installer checksum verified OK")
         return match
     except Exception as exc:
         log.warning("Checksum verification failed: %s", exc)
+        log_update_event(f"Checksum verification error: {exc}")
         return False
