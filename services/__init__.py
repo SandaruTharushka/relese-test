@@ -1,1 +1,1 @@
-"""Printing service layer for SuperMart POS."""
+"""Printing service layer for Garage Management System."""

@@ -372,7 +372,7 @@
                     <div class="device-info">
                       <div class="device-name" id="label-device-name">Managed by Printer Manager</div>
                       <div class="device-desc" id="label-device-desc">No label printer selected</div>
-                      <div class="printer-meta">Use the standalone SuperMart Printer Manager for label/barcode setup, status, and test print</div>
+                      <div class="printer-meta">Use the standalone Garage Printer Manager for label/barcode setup, status, and test print</div>
                     </div>
                     <span class="device-status status-off" id="label-status-badge">Not checked</span>
                   </div>
@@ -514,7 +514,7 @@
               </div>
               <div class="cfg-row"><div><div class="cfg-lbl">Show Thank You Message</div></div><div class="toggle on" id="t_rl_thankyou" onclick="tog(this,'_rl_thankyou')"></div></div>
               <div class="cfg-row"><div><div class="cfg-lbl">Show Return Policy Note</div></div><div class="toggle" id="t_rl_returnPolicy" onclick="tog(this,'_rl_returnPolicy')"></div></div>
-              <div class="cfg-row"><div><div class="cfg-lbl">Show "Powered by SuperMart POS"</div></div><div class="toggle" id="t_rl_poweredBy" onclick="tog(this,'_rl_poweredBy')"></div></div>
+              <div class="cfg-row"><div><div class="cfg-lbl">Show "Powered by Garage Management System"</div></div><div class="toggle" id="t_rl_poweredBy" onclick="tog(this,'_rl_poweredBy')"></div></div>
             </div>
 
             <!-- Actions -->
@@ -1018,7 +1018,7 @@
               <div class="cfg-head"><span class="cfg-htxt">🏪 Business Details</span></div>
               <div style="padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
                 <div class="form-group"><label class="form-label">Store Name *</label>
-                  <input class="form-input" id="co_name" value="SuperMart"></div>
+                  <input class="form-input" id="co_name" value="Garage"></div>
                 <div class="form-group"><label class="form-label">Branch Name</label>
                   <input class="form-input" id="co_branch" placeholder="Main Branch"></div>
                 <div class="form-group" style="grid-column:1/-1"><label class="form-label">Address</label>
@@ -1026,7 +1026,7 @@
                 <div class="form-group"><label class="form-label">Phone</label>
                   <input class="form-input" id="co_phone" value="+94 11 234 5678"></div>
                 <div class="form-group"><label class="form-label">Email</label>
-                  <input class="form-input" id="co_email" value="info@supermart.lk"></div>
+                  <input class="form-input" id="co_email" value="info@garage.lk"></div>
                 <div class="form-group"><label class="form-label">Business Reg / VAT No.</label>
                   <input class="form-input" id="co_reg" placeholder="BRN / VAT number"></div>
                 <div class="form-group"><label class="form-label">Receipt Header</label>
@@ -1161,7 +1161,7 @@
                 <div><div class="cfg-lbl">Backup Location</div></div>
                 <div class="flex gap-2" style="flex:1;max-width:400px">
                   <input class="form-input" id="s_backupDir" style="flex:1;padding:7px 12px;font-size:12px"
-                         placeholder="Documents\SuperMartPOS\Backups" onchange="sp('backupDir',this.value)">
+                         placeholder="Documents\GarageManagementSystem\Backups" onchange="sp('backupDir',this.value)">
                   <button class="btn btn-ghost btn-sm" onclick="saveBackupCfg()">Save</button>
                 </div>
               </div>
@@ -1226,7 +1226,7 @@
                 </div>
               </div>
               <div class="cfg-row">
-                <div><div class="cfg-lbl">Upload Backup File</div><div class="cfg-sub">Restore from a SuperMart backup .zip file</div></div>
+                <div><div class="cfg-lbl">Upload Backup File</div><div class="cfg-sub">Restore from a Garage Management System backup .zip file</div></div>
                 <div class="flex gap-2">
                   <input type="file" id="restoreUploadFile" accept=".zip" class="form-input" style="width:260px;padding:5px 10px">
                   <button class="btn btn-sm" style="background:var(--warning);color:#fff;border:none"
@@ -1451,7 +1451,7 @@
             <div class="cfg-block">
               <div class="cfg-head"><span class="cfg-htxt">Installed Version / ස්ථාපිත අනුවාදය</span></div>
               <div class="cfg-row">
-                <div><div class="cfg-lbl">Current Version / දැනට ඇති අනුවාදය</div><div class="cfg-sub">SuperMart POS installed on this machine</div></div>
+                <div><div class="cfg-lbl">Current Version / දැනට ඇති අනුවාදය</div><div class="cfg-sub">Garage Management System installed on this machine</div></div>
                 <span id="upd-cur-ver" style="font-weight:700;color:var(--accent);font-size:16px">{{ app_version }}</span>
               </div>
               <div class="cfg-row" style="border-top:1px solid var(--border)">
@@ -1524,7 +1524,7 @@
                   <li>Click <strong>Install Update</strong> to download and launch the installer.</li>
                   <li>Your database, settings and license are automatically backed up first.</li>
                   <li>The app closes, the installer upgrades the program files only.</li>
-                  <li>Your data is preserved — it lives in <code style="background:var(--stat);padding:2px 6px;border-radius:4px">%LOCALAPPDATA%\SuperMart POS</code>.</li>
+                  <li>Your data is preserved — it lives in <code style="background:var(--stat);padding:2px 6px;border-radius:4px">%LOCALAPPDATA%\Garage Management System</code>.</li>
                 </ol>
               </div>
             </div>
@@ -1535,9 +1535,9 @@
               <div style="padding:14px 18px;font-size:13px;line-height:1.8">
                 <p style="margin:0 0 10px;color:var(--muted)">If an update fails or causes problems, your data is safe:</p>
                 <ul style="margin:0 0 12px;padding-left:20px;color:var(--muted)">
-                  <li>Pre-update backups are stored in <code style="background:var(--stat);padding:2px 5px;border-radius:3px">%LOCALAPPDATA%\SuperMart POS\backups\</code></li>
+                  <li>Pre-update backups are stored in <code style="background:var(--stat);padding:2px 5px;border-radius:3px">%LOCALAPPDATA%\Garage Management System\backups\</code></li>
                   <li>Each backup folder is named <code style="background:var(--stat);padding:2px 5px;border-radius:3px">pre_update_YYYYMMDD_HHMMSS</code> and contains the database, config and license files.</li>
-                  <li>To restore: use <strong>Settings → Backup → Restore</strong>, or copy <code>supermart.db</code> manually back to <code>%LOCALAPPDATA%\SuperMart POS\</code>.</li>
+                  <li>To restore: use <strong>Settings → Backup → Restore</strong>, or copy <code>supermart.db</code> manually back to <code>%LOCALAPPDATA%\Garage Management System\</code>.</li>
                 </ul>
                 <div style="margin-top:8px">
                   <button class="btn btn-ghost btn-sm" id="upd-list-backups-btn" onclick="listPreUpdateBackups()" style="font-size:12px">📂 List Pre-Update Backups</button>
@@ -1551,11 +1551,11 @@
 
         <!-- ─────────────── ABOUT ─────────────── -->
         <div class="s-page" id="p-about">
-          <div class="s-header"><div class="s-htitle">ℹ️ About SuperMart POS</div><div class="s-hsub">Version and system information</div></div>
+          <div class="s-header"><div class="s-htitle">ℹ️ About Garage Management System</div><div class="s-hsub">Version and system information</div></div>
           <div class="s-inner">
             <div style="text-align:center;padding:20px 0">
               <div style="width:72px;height:72px;background:linear-gradient(135deg,var(--accent),#7C3AED);border-radius:18px;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;font-size:36px">🛒</div>
-              <div style="font-size:24px;font-weight:900">SuperMart POS</div>
+              <div style="font-size:24px;font-weight:900">Garage Management System</div>
               <div style="font-size:13px;color:var(--muted);margin-top:4px">Version {{ app_version }} · Garage Management System</div>
             </div>
             <div class="cfg-block">
@@ -1578,9 +1578,9 @@
               </div>
               {% if current_user.role == 'Admin' %}
               <div class="cfg-row" style="border-top:1px solid var(--border);margin-top:4px">
-                <div><div class="cfg-lbl">Manual Activation Key</div><div class="cfg-sub">Use format SMPOS-XXXXXXXX-XXXXXXXX-XXXXXXXX</div></div>
+                <div><div class="cfg-lbl">Manual Activation Key</div><div class="cfg-sub">Use format GMS-XXXXXXXX-XXXXXXXX-XXXXXXXX</div></div>
                 <div class="cfg-right">
-                  <input class="form-input" id="newLicKey" placeholder="SMPOS-XXXXXXXX-XXXXXXXX-XXXXXXXX"
+                  <input class="form-input" id="newLicKey" placeholder="GMS-XXXXXXXX-XXXXXXXX-XXXXXXXX"
                          style="width:230px;padding:7px 12px;font-family:monospace;letter-spacing:1px;text-transform:uppercase"
                          oninput="this.value=this.value.toUpperCase()">
                   <button class="btn btn-primary btn-sm" onclick="activateLicense()">⚡ Activate</button>
@@ -1687,7 +1687,7 @@ function withCsrfHeaders(headers = {}) {
   return merged;
 }
 
-const SETTINGS_SCROLL_KEY = 'supermart:settings:scroll:v1';
+const SETTINGS_SCROLL_KEY = 'gms:settings:scroll:v1';
 function readSettingsScrollMap() {
   try {
     const raw = sessionStorage.getItem(SETTINGS_SCROLL_KEY);
@@ -1720,7 +1720,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /* ══ PREFS ═══════════════════════════════════════════════════════════════ */
-const PK = 'supermart_prefs';
+const PK = 'gms_prefs';
 function gp(k, def) { try { const p=JSON.parse(localStorage.getItem(PK)||'{}'); return k in p?p[k]:def; } catch{return def;} }
 function sp(k, v)   { try { const p=JSON.parse(localStorage.getItem(PK)||'{}'); p[k]=v; localStorage.setItem(PK,JSON.stringify(p)); markSaved(); } catch{} }
 
@@ -1775,7 +1775,7 @@ window.loadCompanyInfo = async function() {
       const el = document.getElementById(id);
       if (el) el.value = value || '';
     };
-    setValue('co_name', settings.store_name || 'SuperMart');
+    setValue('co_name', settings.store_name || 'Garage');
     setValue('co_branch', settings.store_branch);
     setValue('co_addr', settings.store_address);
     setValue('co_phone', settings.store_phone);

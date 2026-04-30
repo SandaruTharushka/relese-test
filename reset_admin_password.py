@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Safely reset SuperMart POS admin credentials.
+"""Safely reset Garage Management System admin credentials.
 
 Resolves the database path automatically using the same logic as the main
 application (runtime_paths.persistent_path).  Pass --db to override.
@@ -27,7 +27,7 @@ def _default_db_path() -> Path:
     try:
         # Import the project's path resolver so this script stays in sync with
         # wherever the app stores its data (beside the script, or in
-        # %LOCALAPPDATA%\SuperMart POS on frozen Windows builds).
+        # %LOCALAPPDATA%\Garage Management System on frozen Windows builds).
         from runtime_paths import persistent_path
         return Path(persistent_path("supermart.db"))
     except ImportError:
@@ -38,7 +38,7 @@ def _default_db_path() -> Path:
 
 def parse_args() -> argparse.Namespace:
     default_db = str(_default_db_path())
-    parser = argparse.ArgumentParser(description="Reset admin password for SuperMart POS")
+    parser = argparse.ArgumentParser(description="Reset admin password for Garage Management System")
     parser.add_argument(
         "--db",
         default=default_db,

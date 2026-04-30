@@ -6,7 +6,7 @@
 <!-- Prevent search engine indexing — POS runs on localhost only -->
 <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
 <meta name="csrf-token" content="{{ csrf_token() }}">
-<title>SuperMart POS{% block title %}{% endblock %}</title>
+<title>Garage Management System{% block title %}{% endblock %}</title>
 <script>
 (() => {
   try {
@@ -578,7 +578,7 @@ function toast(msg, type='success') {
 }
 
 const ScrollPersistence = (() => {
-  const STORAGE_KEY = 'supermart:scroll:v1';
+  const STORAGE_KEY = 'gms:scroll:v1';
   const CONTAINER_SELECTORS = [
     '.page-content',
     '.content-area',

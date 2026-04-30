@@ -43,7 +43,7 @@ class PrintingDomainService:
         out = svc.execute_text(
             cfg=cfg,
             receipt_text=ReceiptPrintExecutionService.build_test_receipt(resolved.name, resolved.mode),
-            title='SuperMart POS Receipt Printer Test',
+            title='Garage Management System Receipt Printer Test',
             copies=1,
             resolved=resolved,
         )

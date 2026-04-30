@@ -180,7 +180,7 @@ def run_cleanup(apply_changes: bool) -> int:
     steps = cleanup_steps()
     total_candidates = 0
 
-    print('=== SuperMart POS demo-data cleanup ===')
+    print('=== Garage Management System demo-data cleanup ===')
     print(f"Mode: {'APPLY' if apply_changes else 'DRY RUN'}")
     for step in steps:
         count = step.count_fn()
@@ -202,7 +202,7 @@ def run_cleanup(apply_changes: bool) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description='Remove obvious demo/sample records from SuperMart POS database.')
+    parser = argparse.ArgumentParser(description='Remove obvious demo/sample records from Garage Management System database.')
     parser.add_argument('--apply', action='store_true', help='Apply deletions. Without this flag the script only prints matches.')
     parser.add_argument('--dry-run', action='store_true', help='Force dry-run mode (default).')
     args = parser.parse_args()

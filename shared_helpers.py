@@ -3,13 +3,13 @@ import re
 OBVIOUS_WEAK_PASSWORDS = {
     '1234567890', '123456789', '12345678', 'password', 'password1', 'password123',
     'qwerty123', 'qwerty1234', 'abc123456', 'letmein123', 'admin123', 'manager123',
-    'cash123', 'welcome123', 'supermart123', 'changeme123', '1111111111', '0000000000',
+    'cash123', 'welcome123', 'supermart123', 'garage123', 'changeme123', '1111111111', '0000000000',
 }
 OBVIOUS_WEAK_PASSWORD_PATTERNS = (
     r'(password|passw0rd)\d{0,4}',
     r'(admin|administrator)\d{0,4}',
     r'(welcome|letmein|changeme)\d{0,4}',
-    r'(supermart|cashier|manager)\d{0,4}',
+    r'(supermart|garage|cashier|manager)\d{0,4}',
     r'(qwerty|asdfgh|zxcvbn)\d{0,4}',
 )
 

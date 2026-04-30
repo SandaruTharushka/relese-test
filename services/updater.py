@@ -1,5 +1,5 @@
 """
-GitHub Releases update checker and installer handoff for SuperMart POS.
+GitHub Releases update checker and installer handoff for Garage Management System.
 
 Public surface:
   UpdateChecker.check()               → UpdateInfo  (never raises)
@@ -58,7 +58,7 @@ def _persistent_app_dir() -> Optional[Path]:
 # ── Update logging ────────────────────────────────────────────────────────────
 
 def log_update_event(message: str) -> None:
-    """Append a timestamped line to %LOCALAPPDATA%\\SuperMart POS\\logs\\update.log.
+    """Append a timestamped line to %LOCALAPPDATA%\\Garage Management System\\logs\\update.log.
 
     Never raises; silently skips if the log path cannot be resolved.
     Tokens and secrets must NOT be passed through this function.
@@ -214,7 +214,7 @@ class UpdateChecker:
         h: dict[str, str] = {
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": f"SuperMartPOS/{self._current}",
+            "User-Agent": f"GarageManagementSystem/{self._current}",
         }
         if self._token:
             h["Authorization"] = f"Bearer {self._token}"
@@ -308,7 +308,7 @@ class UpdateChecker:
         """
         Stream-download an installer asset to a persistent updates directory.
 
-        Downloads to: %LOCALAPPDATA%\\SuperMart POS\\updates\\<asset_name>
+        Downloads to: %LOCALAPPDATA%\\Garage Management System\\updates\\<asset_name>
         Falls back to a temp file if the persistent directory is unavailable.
 
         Args:
@@ -341,7 +341,7 @@ class UpdateChecker:
         # Fall back to a temp file if persistent dir is unavailable.
         if dest_path is None:
             suffix = Path(asset.name).suffix or ".exe"
-            fd, raw_path = tempfile.mkstemp(prefix="SuperMartPOS_upd_", suffix=suffix)
+            fd, raw_path = tempfile.mkstemp(prefix="GMS_upd_", suffix=suffix)
             os.close(fd)
             dest_path = Path(raw_path)
             log.warning("Falling back to temp file for installer download: %s", dest_path)
@@ -432,12 +432,12 @@ def backup_before_update(
     Backs up:
       - supermart.db (via SQLite online backup API for consistency)
       - activation / license JSON files (ProgramData and Documents fallback)
-      - %LOCALAPPDATA%\\SuperMart POS\\config\\*.json
-      - %LOCALAPPDATA%\\SuperMart POS\\.env
+      - %LOCALAPPDATA%\\Garage Management System\\config\\*.json
+      - %LOCALAPPDATA%\\Garage Management System\\.env
       - backup_info.json (version + timestamp metadata)
 
     Backup directory:
-      %LOCALAPPDATA%\\SuperMart POS\\backups\\pre_update_YYYYMMDD_HHMMSS\\
+      %LOCALAPPDATA%\\Garage Management System\\backups\\pre_update_YYYYMMDD_HHMMSS\\
 
     Args:
         db_path:     Path to the live supermart.db file.
@@ -514,8 +514,8 @@ def backup_before_update(
 
         license_search_dirs: list[Path] = []
         programdata = os.environ.get("PROGRAMDATA", r"C:\ProgramData")
-        license_search_dirs.append(Path(programdata) / "SuperMartPOS")
-        license_search_dirs.append(Path.home() / "Documents" / "SuperMartPOS")
+        license_search_dirs.append(Path(programdata) / "GarageManagementSystem")
+        license_search_dirs.append(Path.home() / "Documents" / "GarageManagementSystem")
         if app_dir is not None:
             license_search_dirs.append(app_dir / ".license")
             license_search_dirs.append(app_dir / "license")

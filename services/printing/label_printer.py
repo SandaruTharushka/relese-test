@@ -241,7 +241,7 @@ class LabelPrintExecutionService:
                     printer_name=resolved.name,
                     img=image,
                     copies=copies,
-                    doc_name='SuperMart POS Barcode Label',
+                    doc_name='Garage Management System Barcode Label',
                 )
         except Exception as exc:
             self.logger.exception('Label print execution failed')

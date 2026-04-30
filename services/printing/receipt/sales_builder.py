@@ -71,7 +71,7 @@ class SalesReceiptBuilder:
             return center(text, width)
 
         if show('rcpt_show_store_name'):
-            store_name = store.get('store_name', 'SuperMart POS')
+            store_name = store.get('store_name', 'Garage Management System')
             lines.append(ESCPOS_DH_ON)
             lines.append(_header(store_name))
             lines.append(ESCPOS_DH_OFF)
@@ -184,7 +184,7 @@ class SalesReceiptBuilder:
         if show('rcpt_show_return_policy', False):
             lines.append(_footer('For returns, keep this receipt.'))
         if show('rcpt_show_powered_by', False):
-            lines.append(_footer('Powered by SuperMart POS'))
+            lines.append(_footer('Powered by Garage Management System'))
 
         lines.append('')
         lines.append('')

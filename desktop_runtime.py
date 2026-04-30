@@ -17,8 +17,8 @@ from typing import Any
 from runtime_paths import persistent_app_dir, persistent_path, resource_path
 from version import APP_VERSION
 
-APP_NAME = 'SuperMart POS'
-APP_ID = 'stalgo.supermart.pos.desktop'
+APP_NAME = 'Garage Management System'
+APP_ID = 'stalgo.garage.management.system.desktop'
 FLASK_HOST = '127.0.0.1'
 FLASK_PORT = 5000
 FLASK_URL = f'http://{FLASK_HOST}:{FLASK_PORT}'
@@ -28,7 +28,7 @@ HEALTH_TIMEOUT_SECONDS = 90
 LOG_DIR_NAME = 'logs'
 LOG_FILE_NAME = 'desktop-runtime.log'
 
-logger = logging.getLogger('supermart.desktop')
+logger = logging.getLogger('garage.desktop')
 _runtime_logging_configured = False
 
 SPLASH_HTML = """<!DOCTYPE html>
@@ -61,8 +61,8 @@ SPLASH_HTML = """<!DOCTYPE html>
 </head>
 <body>
 <div class="box">
-  <div class="logo">🛒</div>
-  <div class="name">SuperMart POS</div>
+  <div class="logo">🔧</div>
+  <div class="name">Garage Management System</div>
   <div class="sub">Starting secure desktop mode…</div>
   <div class="bar-wrap"><div class="bar-fill"></div></div>
   <div class="dots">
@@ -196,10 +196,10 @@ class LocalServer:
             self.stop_requested.clear()
             self.error = None
             self._server = None
-            self.thread = threading.Thread(target=self._run, name='supermart-local-server', daemon=True)
+            self.thread = threading.Thread(target=self._run, name='garage-local-server', daemon=True)
             self.health_thread = threading.Thread(
                 target=self._wait_until_ready,
-                name='supermart-health-check',
+                name='garage-health-check',
                 daemon=True,
             )
             logger.info('Starting local Flask server on %s.', FLASK_URL)
@@ -264,7 +264,7 @@ class LocalServer:
                 time.sleep(0.25)
         if self.error is None and not self.stop_requested.is_set():
             self.error = (
-                f'SuperMart POS could not start within {HEALTH_TIMEOUT_SECONDS} seconds. '
+                f'Garage Management System could not start within {HEALTH_TIMEOUT_SECONDS} seconds. '
                 'This can happen on the first launch (database setup), when antivirus software '
                 'is scanning the application, or if another program is using port 5000. '
                 'Check the log file for details.'
@@ -642,7 +642,7 @@ class DesktopLauncher:
                 logo.setStyleSheet('font-size: 28px; color: rgba(255,255,255,0.9);')
                 card_layout.addWidget(logo)
 
-                title = QtWidgets.QLabel('SuperMart POS')
+                title = QtWidgets.QLabel('Garage Management System')
                 title.setAlignment(QtCore.Qt.AlignCenter)
                 title.setStyleSheet(
                     'font-size: 44px; font-weight: 800; letter-spacing: 0.4px;'
@@ -773,7 +773,7 @@ class DesktopLauncher:
 
         if not self.server.ready.is_set():
             self.server.error = self.server.error or (
-                f'SuperMart POS could not start within {HEALTH_TIMEOUT_SECONDS} seconds. '
+                f'Garage Management System could not start within {HEALTH_TIMEOUT_SECONDS} seconds. '
                 'This can happen on the first launch (database setup), when antivirus software '
                 'is scanning the application, or if another program is using port 5000. '
                 'Check the log file for details.'
@@ -877,7 +877,7 @@ class DesktopLauncher:
                 target=self._background_update_check,
                 args=(view,),
                 daemon=True,
-                name="supermart-update-check",
+                name="garage-update-check",
             ).start()
         )
         _upd_timer.start()

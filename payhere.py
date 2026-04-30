@@ -45,7 +45,7 @@ def build_payment_data(order_id, amount, customer, items_desc, base_url):
         'last_name':   customer.get('last_name', ''),
         'email':       customer.get('email', 'customer@supermart.lk'),
         'phone':       customer.get('phone', '0771234567'),
-        'address':     customer.get('address', 'SuperMart Store'),
+        'address':     customer.get('address', 'Garage'),
         'city':        customer.get('city', 'Colombo'),
         'country':     customer.get('country', 'Sri Lanka'),
     }

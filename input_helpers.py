@@ -1,4 +1,4 @@
-"""Centralised safe input-parsing helpers for SuperMart POS.
+"""Centralised safe input-parsing helpers for Garage Management System.
 
 These helpers are designed for use at the HTTP boundary — parsing
 ``request.args`` (query-string) and JSON body dicts without raising

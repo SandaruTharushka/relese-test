@@ -1,4 +1,4 @@
-"""Full application backup and restore utilities for SuperMart POS."""
+"""Full application backup and restore utilities for Garage Management System."""
 
 from __future__ import annotations
 
@@ -76,13 +76,13 @@ def _utc_now_iso() -> str:
 
 
 def _backup_dir() -> str:
-    docs_dir = Path.home() / "Documents" / "SuperMartPOS" / "Backups"
+    docs_dir = Path.home() / "Documents" / "GarageManagementSystem" / "Backups"
     docs_dir.mkdir(parents=True, exist_ok=True)
     return str(docs_dir)
 
 
 def _cfg_path() -> str:
-    cfg_dir = Path.home() / "Documents" / "SuperMartPOS"
+    cfg_dir = Path.home() / "Documents" / "GarageManagementSystem"
     cfg_dir.mkdir(parents=True, exist_ok=True)
     return str(cfg_dir / "backup_config.json")
 
@@ -207,14 +207,14 @@ def _format_backup_filename(backup_type: str) -> str:
 
 def _store_name() -> str:
     if not has_app_context():
-        return "SuperMart"
+        return "Garage"
     try:
         from models import StoreSettings
 
         name = StoreSettings.get("store_name", "")
-        return name or "SuperMart"
+        return name or "Garage"
     except Exception:
-        return "SuperMart"
+        return "Garage"
 
 
 def _app_data_sources() -> list[tuple[Path, str]]:
@@ -243,7 +243,7 @@ def _app_data_sources() -> list[tuple[Path, str]]:
                 rel = file_path.relative_to(root).as_posix()
                 sources.append((file_path, f"data/{rel}"))
 
-    docs_root = Path.home() / "Documents" / "SuperMartPOS"
+    docs_root = Path.home() / "Documents" / "GarageManagementSystem"
     if docs_root.exists():
         for item in docs_root.glob("*.json"):
             if item.name.lower().startswith("backup_"):
@@ -345,7 +345,7 @@ def _do_backup_sync(*, backup_type: str = "manual", reason: str = "") -> dict:
         )
 
         try:
-            with tempfile.TemporaryDirectory(prefix="supermart_backup_") as temp_root:
+            with tempfile.TemporaryDirectory(prefix="gms_backup_") as temp_root:
                 stage_dir = Path(temp_root) / "payload"
                 stage_dir.mkdir(parents=True, exist_ok=True)
 
@@ -469,7 +469,7 @@ def do_restore(filepath: str) -> dict:
         with zipfile.ZipFile(filepath, "r") as zf:
             members = [m for m in zf.namelist() if not m.endswith("/")]
             if not members or "backup_metadata.json" not in members:
-                return {"ok": False, "msg": "Invalid backup file. Please choose a SuperMart backup archive."}
+                return {"ok": False, "msg": "Invalid backup file. Please choose a Garage Management System backup archive."}
 
             temp_dir = Path(tempfile.mkdtemp(prefix="restore_"))
             temp_cleanup = str(temp_dir)
@@ -499,7 +499,7 @@ def do_restore(filepath: str) -> dict:
 
         return {
             "ok": True,
-            "msg": "Backup restored successfully. Please restart SuperMart POS.",
+            "msg": "Backup restored successfully. Please restart Garage Management System.",
             "safety_backup": current_safety.get("name"),
         }
     except zipfile.BadZipFile:
