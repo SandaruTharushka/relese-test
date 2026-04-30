@@ -90,7 +90,12 @@ document.getElementById('activateBtn').addEventListener('click', async () => {
     });
     const data = await res.json();
     if (!res.ok || !data.ok) {
-      showAlert(data.msg || 'Activation failed.');
+      const currentInstallId = data.install_id || document.getElementById('installId').textContent.trim();
+      let msg = data.msg || 'Activation failed.';
+      if (data.install_id) {
+        msg += `\n\nThis key is not valid for Install ID: ${currentInstallId}\nCopy the Install ID shown above exactly and request a new key.`;
+      }
+      showAlert(msg);
       return;
     }
     showAlert('Activation successful. Redirecting...', 'success');
@@ -98,7 +103,7 @@ document.getElementById('activateBtn').addEventListener('click', async () => {
       window.location.href = data.redirect || '/login';
     }, 600);
   } catch (e) {
-    showAlert('Activation request failed.');
+    showAlert('Activation request failed. Please try again.');
   } finally {
     btn.disabled = false;
     btn.textContent = 'Activate Offline';

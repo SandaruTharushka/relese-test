@@ -899,6 +899,10 @@ def _allowed_without_activation(endpoint):
         'activation_setup',
         'api_activation_status',
         'api_activation_activate',
+        # License endpoints that must remain reachable for the activation flow
+        'api_license_activate',
+        'api_license_check',
+        'api_license_info',
         'static',
         'health',
     }
@@ -914,6 +918,9 @@ def _allowed_before_first_run_setup(endpoint):
         'activation_setup',
         'api_activation_status',
         'api_activation_activate',
+        'api_license_activate',
+        'api_license_check',
+        'api_license_info',
         'static',
         'health',
     }
@@ -1144,9 +1151,6 @@ def enforce_password_change():
 @app.before_request
 def enforce_activation_and_first_run_flow():
     endpoint = request.endpoint or ''
-    if request.path.startswith('/api/license/'):
-        return None
-
     activation = lic_module.activation_status()
     if activation.get('requires_activation'):
         if _allowed_without_activation(endpoint):
@@ -2809,28 +2813,30 @@ def api_change_password():
 
 # ── API: LICENSE ──────────────────────────────────────────────────────────────
 @app.route('/api/license/check')
-@login_required
 def api_license_check():
-    return jsonify(lic_module.check())
+    status = lic_module.activation_status()
+    result = lic_module.check()
+    result['status'] = status
+    return jsonify(result)
 
 @app.route('/api/license/activate', methods=['POST'])
-@login_required
 def api_license_activate():
-    data = request.get_json() or {}
-    key = data.get('key', '').strip()
-    customer = data.get('customer', '').strip()
-    result = lic_module.activate(key, customer)
+    data = request.get_json(silent=True) or {}
+    key = (data.get('key') or '').strip()
+    result = lic_module.activate_offline(key)
     log_action(
         'License activation attempted' if not result.get('ok') else 'License activated',
         target_type='license',
         metadata={
-            'customer': customer or (result.get('info') or {}).get('customer', ''),
             'key_suffix': key[-4:] if key else '',
             'status': 'success' if result.get('ok') else 'failed',
         },
         commit=True,
     )
-    return jsonify(result)
+    if result.get('ok'):
+        result['redirect'] = '/setup-admin' if is_first_run_admin_setup_required() else '/login'
+        return jsonify(result)
+    return jsonify(result), 400
 
 @app.route('/api/license/info')
 @login_required
