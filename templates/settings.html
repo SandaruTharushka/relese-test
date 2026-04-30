@@ -1443,21 +1443,21 @@
         <div class="s-page" id="p-updates">
           <div class="s-header">
             <div class="s-htitle">🔄 Software Updates</div>
-            <div class="s-hsub">Check for new versions and install updates safely</div>
+            <div class="s-hsub">Check for new versions and install updates safely / නව අනුවාද සොයා ආරක්ෂිතව යාවත්කාලීන කරන්න</div>
           </div>
           <div class="s-inner">
 
             <!-- Current version card -->
             <div class="cfg-block">
-              <div class="cfg-head"><span class="cfg-htxt">Installed Version</span></div>
+              <div class="cfg-head"><span class="cfg-htxt">Installed Version / ස්ථාපිත අනුවාදය</span></div>
               <div class="cfg-row">
-                <div><div class="cfg-lbl">Current Version</div><div class="cfg-sub">SuperMart POS installed on this machine</div></div>
+                <div><div class="cfg-lbl">Current Version / දැනට ඇති අනුවාදය</div><div class="cfg-sub">SuperMart POS installed on this machine</div></div>
                 <span id="upd-cur-ver" style="font-weight:700;color:var(--accent);font-size:16px">{{ app_version }}</span>
               </div>
               <div class="cfg-row" style="border-top:1px solid var(--border)">
                 <div>
-                  <div class="cfg-lbl">Check for Updates</div>
-                  <div class="cfg-sub">Fetches the latest release info from GitHub. Requires internet access.</div>
+                  <div class="cfg-lbl">Last Checked / අවසන් පරීක්ෂාව</div>
+                  <div class="cfg-sub" id="upd-last-checked-sub">Never — click Check Now</div>
                 </div>
                 <div class="cfg-right">
                   <button class="btn btn-primary btn-sm" id="upd-btn" onclick="checkForUpdates()">🔍 Check Now</button>
@@ -1471,23 +1471,27 @@
             <!-- Update available card (hidden until a newer version is found) -->
             <div class="cfg-block" id="upd-available-card" style="display:none;border-color:rgba(16,185,129,.4)">
               <div class="cfg-head" style="background:rgba(16,185,129,.08)">
-                <span class="cfg-htxt" style="color:#059669">✅ Update Available</span>
+                <span class="cfg-htxt" style="color:#059669">✅ Update Available / යාවත්කාලීන කිරීමක් ඇත</span>
                 <span id="upd-new-ver-badge" class="device-status status-on" style="font-size:12px"></span>
               </div>
               <div class="cfg-row">
-                <div><div class="cfg-lbl">Latest Version</div></div>
+                <div><div class="cfg-lbl">Latest Version / නවතම අනුවාදය</div></div>
                 <span id="upd-new-ver" style="font-weight:700;color:#059669;font-size:16px"></span>
+              </div>
+              <div class="cfg-row" id="upd-published-row" style="border-top:1px solid var(--border);display:none">
+                <div class="cfg-lbl">Released / නිකුත් කළ දිනය</div>
+                <span id="upd-published-at" style="font-size:13px;color:var(--muted)"></span>
               </div>
               <div class="cfg-row" id="upd-notes-row" style="border-top:1px solid var(--border);display:none">
                 <div style="width:100%">
-                  <div class="cfg-lbl" style="margin-bottom:8px">Release Notes</div>
+                  <div class="cfg-lbl" style="margin-bottom:8px">Release Notes / නිකුත් කිරීමේ සටහන්</div>
                   <pre id="upd-notes" style="font-size:12px;white-space:pre-wrap;word-break:break-word;color:var(--muted);background:var(--stat);padding:12px;border-radius:8px;max-height:200px;overflow-y:auto;margin:0;font-family:inherit"></pre>
                 </div>
               </div>
               <div class="cfg-row" style="border-top:1px solid var(--border)">
                 <div>
-                  <div class="cfg-lbl">Install Update</div>
-                  <div class="cfg-sub">Downloads the installer and launches it. The app will close for the update.</div>
+                  <div class="cfg-lbl">Install Update / යාවත්කාල කරන්න</div>
+                  <div class="cfg-sub">Downloads the installer, backs up your data, then launches the update. / ස්ථාපකය බාගත කර දත්ත රැකගෙන යාවත්කාල කරයි.</div>
                 </div>
                 <div class="cfg-right">
                   <button class="btn btn-primary btn-sm" id="upd-install-btn" onclick="installUpdate()" style="background:#059669">⬇️ Install Update</button>
@@ -1495,18 +1499,50 @@
               </div>
             </div>
 
+            <!-- Backup created notification (shown after successful update launch) -->
+            <div class="cfg-block" id="upd-backup-card" style="display:none;border-color:rgba(59,130,246,.4)">
+              <div class="cfg-head" style="background:rgba(59,130,246,.08)">
+                <span class="cfg-htxt" style="color:#2563eb">🗄️ Pre-Update Backup Created / යාවත්කාල කිරීමට පෙර උපස්ථය සාදන ලදී</span>
+              </div>
+              <div class="cfg-row">
+                <div style="width:100%">
+                  <div class="cfg-lbl" style="margin-bottom:4px">Backup Location / උපස්ථ ස්ථානය</div>
+                  <code id="upd-backup-path" style="font-size:11px;background:var(--stat);padding:4px 8px;border-radius:4px;display:block;word-break:break-all;color:var(--accent)"></code>
+                  <div class="cfg-sub" style="margin-top:6px">Your database, config and license were saved here. If anything goes wrong, restore from this folder. / ඔබේ දත්ත ගබඩාව, සැකසුම් සහ බලපත්‍රය මෙහි සංරක්ෂිත විය.</div>
+                </div>
+              </div>
+            </div>
+
             <!-- How updates work info block -->
             <div class="cfg-block">
-              <div class="cfg-head"><span class="cfg-htxt">ℹ️ How Updates Work</span></div>
+              <div class="cfg-head"><span class="cfg-htxt">ℹ️ How Updates Work / යාවත්කාල ක්‍රියාවලිය</span></div>
               <div style="padding:14px 18px;font-size:13px;color:var(--muted);line-height:1.8">
                 <p style="margin:0 0 8px">Updates are distributed as Windows installers through GitHub Releases.</p>
                 <ol style="margin:0;padding-left:20px">
                   <li>Click <strong>Check Now</strong> to query the latest release.</li>
                   <li>If a newer version is available, review the release notes.</li>
-                  <li>Click <strong>Install Update</strong> to download the installer.</li>
-                  <li>The installer launches automatically and upgrades the app.</li>
-                  <li>Your database and settings are preserved — they live in <code style="background:var(--stat);padding:2px 6px;border-radius:4px">%LOCALAPPDATA%\SuperMart POS</code>.</li>
+                  <li>Click <strong>Install Update</strong> to download and launch the installer.</li>
+                  <li>Your database, settings and license are automatically backed up first.</li>
+                  <li>The app closes, the installer upgrades the program files only.</li>
+                  <li>Your data is preserved — it lives in <code style="background:var(--stat);padding:2px 6px;border-radius:4px">%LOCALAPPDATA%\SuperMart POS</code>.</li>
                 </ol>
+              </div>
+            </div>
+
+            <!-- Rollback / Recovery block -->
+            <div class="cfg-block">
+              <div class="cfg-head"><span class="cfg-htxt">🔄 Recovery / ප්‍රතිසාධනය</span></div>
+              <div style="padding:14px 18px;font-size:13px;line-height:1.8">
+                <p style="margin:0 0 10px;color:var(--muted)">If an update fails or causes problems, your data is safe:</p>
+                <ul style="margin:0 0 12px;padding-left:20px;color:var(--muted)">
+                  <li>Pre-update backups are stored in <code style="background:var(--stat);padding:2px 5px;border-radius:3px">%LOCALAPPDATA%\SuperMart POS\backups\</code></li>
+                  <li>Each backup folder is named <code style="background:var(--stat);padding:2px 5px;border-radius:3px">pre_update_YYYYMMDD_HHMMSS</code> and contains the database, config and license files.</li>
+                  <li>To restore: use <strong>Settings → Backup → Restore</strong>, or copy <code>supermart.db</code> manually back to <code>%LOCALAPPDATA%\SuperMart POS\</code>.</li>
+                </ul>
+                <div style="margin-top:8px">
+                  <button class="btn btn-ghost btn-sm" id="upd-list-backups-btn" onclick="listPreUpdateBackups()" style="font-size:12px">📂 List Pre-Update Backups</button>
+                </div>
+                <div id="upd-backup-list" style="margin-top:10px;display:none"></div>
               </div>
             </div>
 
@@ -2945,12 +2981,20 @@ async function loadGDriveLogs() {
 
 /* ══ UPDATES ═════════════════════════════════════════════════════════════ */
 
+// State machine: up_to_date | checking | update_available | downloading | installing | failed
+let _updState = 'up_to_date';
+
 function resetUpdateUI() {
-  document.getElementById('upd-available-card').style.display = 'none';
-  document.getElementById('upd-status-row').style.display     = 'none';
-  document.getElementById('upd-status').innerHTML             = '';
+  _updState = 'up_to_date';
+  document.getElementById('upd-available-card').style.display  = 'none';
+  document.getElementById('upd-status-row').style.display      = 'none';
+  document.getElementById('upd-status').innerHTML              = '';
+  document.getElementById('upd-backup-card').style.display     = 'none';
+  const listDiv = document.getElementById('upd-backup-list');
+  if (listDiv) listDiv.style.display = 'none';
   const btn = document.getElementById('upd-install-btn');
   if (btn) { btn.disabled = false; btn.textContent = '⬇️ Install Update'; }
+  _updRefreshLastChecked();
 }
 
 function _updSetStatus(html) {
@@ -2960,31 +3004,68 @@ function _updSetStatus(html) {
   if (row) row.style.display = '';
 }
 
+function _updRefreshLastChecked() {
+  const sub = document.getElementById('upd-last-checked-sub');
+  if (!sub) return;
+  const raw = localStorage.getItem('upd_last_checked');
+  if (raw) {
+    try {
+      const dt = new Date(raw);
+      sub.textContent = 'Last checked: ' + dt.toLocaleString();
+    } catch(_) { sub.textContent = 'Last checked: ' + raw; }
+  } else {
+    sub.textContent = 'Never — click Check Now / දැනට පරීක්ෂා කර නැත';
+  }
+}
+
 async function checkForUpdates() {
+  if (_updState === 'downloading' || _updState === 'installing') return;
+  _updState = 'checking';
   const btn = document.getElementById('upd-btn');
   if (btn) btn.disabled = true;
   document.getElementById('upd-available-card').style.display = 'none';
-  _updSetStatus('<span style="color:var(--muted)">⏳ Checking for updates…</span>');
+  document.getElementById('upd-backup-card').style.display    = 'none';
+  _updSetStatus('<span style="color:var(--muted)">⏳ Checking for updates… / යාවත්කාල සොයමින්…</span>');
 
   try {
     const r = await fetch('/api/updates/check');
     if (!r.ok) throw new Error('Server returned HTTP ' + r.status);
     const d = await r.json();
 
+    // Persist last-checked timestamp
+    const ts = d.last_checked || new Date().toISOString();
+    localStorage.setItem('upd_last_checked', ts);
+    _updRefreshLastChecked();
+
     if (d.error && !d.is_update_available) {
+      _updState = 'failed';
       _updSetStatus('<span style="color:var(--danger)">⚠️ ' + _esc(d.error) + '</span>');
       return;
     }
 
-    if (d.is_update_available) {
+    if (d.is_update_available || d.update_available) {
+      _updState = 'update_available';
       _updSetStatus('');
       document.getElementById('upd-status-row').style.display = 'none';
 
       document.getElementById('upd-available-card').style.display = '';
-      document.getElementById('upd-new-ver').textContent          = d.latest_version || '';
+      document.getElementById('upd-new-ver').textContent           = d.latest_version || '';
       const badge = document.getElementById('upd-new-ver-badge');
       if (badge) badge.textContent = 'v' + (d.latest_version || '');
 
+      // Published date
+      const pubRow = document.getElementById('upd-published-row');
+      const pubEl  = document.getElementById('upd-published-at');
+      if (d.published_at && pubRow && pubEl) {
+        try {
+          pubEl.textContent  = new Date(d.published_at).toLocaleDateString(undefined, {year:'numeric',month:'long',day:'numeric'});
+          pubRow.style.display = '';
+        } catch(_) { pubRow.style.display = 'none'; }
+      } else if (pubRow) {
+        pubRow.style.display = 'none';
+      }
+
+      // Release notes
       const notesEl  = document.getElementById('upd-notes');
       const notesRow = document.getElementById('upd-notes-row');
       if (d.release_notes && d.release_notes.trim()) {
@@ -2994,21 +3075,32 @@ async function checkForUpdates() {
         notesRow.style.display = 'none';
       }
     } else {
-      _updSetStatus('<span style="color:#059669">✅ You are up to date — v' + _esc(d.current_version) + '</span>');
+      _updState = 'up_to_date';
+      _updSetStatus('<span style="color:#059669">✅ You are up to date — v' + _esc(d.current_version) + ' / යාවත්කාලීනයි</span>');
     }
   } catch (e) {
-    _updSetStatus('<span style="color:var(--danger)">⚠️ Check failed: ' + _esc(e.message) + '</span>');
+    _updState = 'failed';
+    _updSetStatus('<span style="color:var(--danger)">⚠️ Check failed / පරීක්ෂා කිරීම අසාර්ථකයි: ' + _esc(e.message) + '</span>');
   } finally {
     if (btn) btn.disabled = false;
   }
 }
 
 async function installUpdate() {
-  if (!confirm('Download and install the update now?\n\nThe app will close once the installer launches. Your data is preserved.')) return;
+  if (_updState === 'downloading' || _updState === 'installing') return;
+  if (!confirm(
+    'Download and install the update now?\n\n' +
+    'The app will:\n' +
+    '  1. Back up your database, settings and license\n' +
+    '  2. Download the installer\n' +
+    '  3. Launch the installer and close\n\n' +
+    'Your data is preserved. / ඔබේ දත්ත ආරක්ෂිතයි.'
+  )) return;
 
+  _updState = 'downloading';
   const btn = document.getElementById('upd-install-btn');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Downloading…'; }
-  _updSetStatus('<span style="color:var(--muted)">⏳ Downloading installer — this may take a minute…</span>');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Downloading… / බාගත කරමින්…'; }
+  _updSetStatus('<span style="color:var(--muted)">⏳ Creating backup and downloading installer — this may take a minute… / උපස්ථයක් සාදමින් ස්ථාපකය බාගත කරමින්…</span>');
 
   const controller = new AbortController();
   const guard = setTimeout(() => controller.abort(), 600000); // 10-min safety
@@ -3025,23 +3117,77 @@ async function installUpdate() {
     try { d = await r.json(); } catch (_) {}
 
     if (d.success) {
-      _updSetStatus('<span style="color:#059669">✅ Installer launched! Closing app…</span>');
+      _updState = 'installing';
+      if (btn) { btn.disabled = true; btn.textContent = '✅ Installer Launched'; }
+      _updSetStatus('<span style="color:#059669">✅ Installer launched! App is closing… / ස්ථාපකය ආරම්භ විය! යෙදුම වැසෙයි…</span>');
+
+      // Show backup location
+      if (d.backup) {
+        document.getElementById('upd-backup-path').textContent = d.backup;
+        document.getElementById('upd-backup-card').style.display = '';
+      }
+
       // Give the response time to render, then close the Qt window
       setTimeout(function() {
         if (window.pywebview && window.pywebview.api) {
           window.pywebview.api.close_window();
         }
-      }, 1200);
+      }, 1800);
     } else {
+      _updState = 'failed';
       const msg = (d && d.error) ? d.error : ('HTTP ' + r.status);
-      _updSetStatus('<span style="color:var(--danger)">⚠️ ' + _esc(msg) + '</span>');
+      _updSetStatus('<span style="color:var(--danger)">⚠️ Update failed / යාවත්කාල අසාර්ථකයි: ' + _esc(msg) + '</span>');
       if (btn) { btn.disabled = false; btn.textContent = '⬇️ Install Update'; }
     }
   } catch (e) {
     clearTimeout(guard);
-    const msg = e.name === 'AbortError' ? 'Download timed out' : e.message;
+    _updState = 'failed';
+    const msg = e.name === 'AbortError' ? 'Download timed out / බාගැනීම කාලය ඉකුත් විය' : e.message;
     _updSetStatus('<span style="color:var(--danger)">⚠️ ' + _esc(msg) + '</span>');
     if (btn) { btn.disabled = false; btn.textContent = '⬇️ Install Update'; }
+  }
+}
+
+async function listPreUpdateBackups() {
+  const listDiv = document.getElementById('upd-backup-list');
+  const lbBtn   = document.getElementById('upd-list-backups-btn');
+  if (!listDiv) return;
+  if (lbBtn) lbBtn.disabled = true;
+
+  try {
+    const r = await fetch('/api/updates/pre-update-backups');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    const backups = d.backups || [];
+
+    if (backups.length === 0) {
+      listDiv.innerHTML = '<p style="font-size:13px;color:var(--muted);margin:0">No pre-update backups found. / යාවත්කාල උපස්ථ නොමැත.</p>';
+    } else {
+      listDiv.innerHTML = backups.map(b => `
+        <div style="background:var(--stat);border-radius:6px;padding:10px 14px;margin-bottom:8px;font-size:12px">
+          <div style="font-weight:700;color:var(--accent);margin-bottom:4px">${_esc(b.name)}</div>
+          <div style="color:var(--muted)">
+            Version: <strong>${_esc(b.app_version)}</strong> &nbsp;|&nbsp;
+            Size: <strong>${_esc(String(b.size_kb))} KB</strong> &nbsp;|&nbsp;
+            Date: <strong>${_esc(b.created_at)}</strong>
+          </div>
+          <div style="color:var(--muted);margin-top:3px;word-break:break-all">
+            📁 <code style="font-size:11px">${_esc(b.path)}</code>
+          </div>
+          <div style="margin-top:4px;font-size:11px;color:var(--muted)">
+            ${b.has_db ? '✅ DB' : '❌ DB'} &nbsp;
+            ${b.has_config ? '✅ Config' : '⚠️ Config'} &nbsp;
+            ${b.has_license ? '✅ License' : '⚠️ License'}
+          </div>
+        </div>
+      `).join('');
+    }
+    listDiv.style.display = '';
+  } catch(e) {
+    listDiv.innerHTML = '<p style="color:var(--danger);font-size:13px;margin:0">⚠️ ' + _esc(e.message) + '</p>';
+    listDiv.style.display = '';
+  } finally {
+    if (lbBtn) lbBtn.disabled = false;
   }
 }
 
