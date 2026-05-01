@@ -187,7 +187,7 @@ def register_repair_routes(app, log_action=None, print_domain=None):
             for k in SERVICE_RECEIPT_LAYOUT_KEYS
         }
         store = {
-            'store_name': str(StoreSettings.get('store_name', 'AutoServ Garage') or 'AutoServ Garage'),
+            'store_name': str(StoreSettings.get('store_name', '') or ''),
             'store_phone': str(StoreSettings.get('store_phone', '') or ''),
             'store_address': str(StoreSettings.get('store_address', '') or ''),
         }
@@ -358,7 +358,7 @@ def register_repair_routes(app, log_action=None, print_domain=None):
         job = RepairJob.query.get_or_404(jid)
         payment = _repair_payment_snapshot(job)
         store = {
-            'name': StoreSettings.get('store_name', 'AutoServ Garage'),
+            'name': StoreSettings.get('store_name', ''),
             'phone': StoreSettings.get('store_phone', ''),
             'address': StoreSettings.get('store_address', ''),
             'email': StoreSettings.get('store_email', ''),
@@ -432,14 +432,29 @@ def register_repair_routes(app, log_action=None, print_domain=None):
             return jsonify({'ok': False, 'code': 'REPAIR_JOB_NOT_FOUND', 'error': 'Repair job not found.'}), 404
 
         try:
-            receipt_payload = _build_repair_receipt_text_payload(job)
+            from services.printing.receipt.receipt_engine import ReceiptEngine
+            engine = ReceiptEngine(StoreSettings)
+            result = engine.build_service_receipt(
+                job_id=jid,
+                actor_user_id=getattr(current_user, 'id', None),
+            )
+            job_number = job.job_number or f'JOB-{jid}'
             try:
                 copies = max(1, min(int(data.get('copies') or 1), 5))
             except (TypeError, ValueError):
                 copies = 1
+
+            app.logger.info(
+                'receipt_print job=%s layout_type=%s cpl=%s paper=%s target=legacy_route',
+                jid,
+                result.debug.get('layout_type'),
+                result.cpl,
+                result.paper_size,
+            )
+
             ok, payload, status = print_domain.print_receipt(
-                receipt_text=str(receipt_payload['receipt_text'] or ''),
-                title=str(receipt_payload['title'] or f'Service Job {receipt_payload["job_number"]}'),
+                receipt_text=result.receipt_text,
+                title=f'Service Job {job_number}',
                 copies=copies,
                 actor_id=getattr(current_user, 'id', None),
             )
@@ -454,7 +469,7 @@ def register_repair_routes(app, log_action=None, print_domain=None):
                 return jsonify({
                     'ok': False,
                     'job_id': jid,
-                    'job_number': receipt_payload['job_number'],
+                    'job_number': job_number,
                     'code': payload.get('code') or 'PRINT_FAILED',
                     'error': payload.get('msg') or 'Receipt print failed.',
                     'printer': payload.get('receipt'),
@@ -465,16 +480,16 @@ def register_repair_routes(app, log_action=None, print_domain=None):
                 jid,
                 payload.get('target'),
                 payload.get('copies'),
-                receipt_payload.get('paper_size'),
+                result.paper_size,
             )
             return jsonify({
                 'ok': True,
                 'job_id': jid,
-                'job_number': receipt_payload['job_number'],
+                'job_number': job_number,
                 'msg': payload.get('msg') or 'Receipt sent to printer.',
                 'target': payload.get('target'),
                 'copies': payload.get('copies'),
-                'paper_size': receipt_payload.get('paper_size'),
+                'paper_size': result.paper_size,
             }), status
         except Exception:
             app.logger.exception(
@@ -730,15 +745,31 @@ def register_repair_routes(app, log_action=None, print_domain=None):
                     'code': 'REPAIR_JOB_NOT_FOUND',
                 }), 404
 
-            receipt_payload = _build_repair_receipt_text_payload(job)
+            from services.printing.receipt.receipt_engine import ReceiptEngine
+            engine = ReceiptEngine(StoreSettings)
+            result = engine.build_service_receipt(
+                job_id=jid,
+                actor_user_id=getattr(current_user, 'id', None),
+            )
+            job_number = job.job_number or f'JOB-{jid}'
             app.logger.info(
-                'GET /api/repairs/%s/receipt-text success user=%s job_number=%s chars=%s',
+                'GET /api/repairs/%s/receipt-text success user=%s job_number=%s chars=%s cpl=%s',
                 jid,
                 getattr(current_user, 'id', None),
-                receipt_payload['job_number'],
-                len(receipt_payload['receipt_text'] or ''),
+                job_number,
+                len(result.receipt_text or ''),
+                result.cpl,
             )
-            return jsonify({'ok': True, **receipt_payload}), 200
+            return jsonify({
+                'ok': True,
+                'job_id': jid,
+                'job_number': job_number,
+                'receipt_text': result.receipt_text,
+                'title': f'Service Job {job_number}',
+                'paper_size': result.paper_size,
+                'cpl': result.cpl,
+                'layout': result.layout,
+            }), 200
         except Exception as exc:
             app.logger.exception('Service receipt text generation failed jid=%s', jid)
             return jsonify({

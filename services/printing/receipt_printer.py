@@ -150,11 +150,11 @@ class ReceiptPrintExecutionService:
     @staticmethod
     def build_test_receipt(resolved_name: str, mode: str) -> str:
         return (
-            '*** SUPERMART POS - TEST RECEIPT ***\n'
+            '*** RECEIPT PRINTER TEST ***\n'
             f'Printer: {resolved_name}\n'
             f'Mode: {mode}\n'
             f'Time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n'
-            '------------------------------------\n'
+            '----------------------------\n'
             'TEST PRINT SUCCESS\n'
         )
 
