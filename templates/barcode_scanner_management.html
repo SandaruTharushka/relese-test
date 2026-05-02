@@ -45,6 +45,7 @@
 {% block scripts %}
 <script>
 const state={products:[],product:null,settings:{},activeTab:'scanner',printers:[],savedLabelPrinter:'',printersLoaded:false};
+let _printing=false;
 const $=(id)=>document.getElementById(id);
 function toastMsg(m,t='info'){ if(window.toast) toast(m,t); else alert(m); }
 
@@ -207,17 +208,46 @@ function adjCopies(n){ const el=$('pr_copies'); el.value=Math.max(1,Number(el.va
 function currentPrintProduct(){ return {id:state.product?.id||null,name:$('pr_name').value,barcode:$('pr_barcode').value,sell_price:$('pr_sell').value,wholesale_price:$('pr_ws').value,sku:$('pr_sku').value,rack_number:$('pr_rack').value,section_number:$('pr_section').value}; }
 async function renderLabelPreview(){ try { const d=await api('/api/barcode-scanner/label-preview',{method:'POST',body:JSON.stringify({product:currentPrintProduct(),settings:state.settings})}); $('label_preview').innerHTML=`<img src="${d.image_data_url}" style="max-width:100%">`; } catch(e){ $('label_preview').innerHTML=`<div class='text-muted'>Preview unavailable: ${e.message}</div>`; } }
 async function printLabel(){
+  if(_printing){ toastMsg('Print job already in progress…','warning'); return; }
   const p=currentPrintProduct();
   if(!p.barcode){ toastMsg('Please select a product with a barcode first.','error'); return; }
-  try { await api('/api/barcode/label',{method:'POST',body:JSON.stringify({product:p,copies:Number($('pr_copies').value||1)})}); toastMsg('Label print dispatched ✓','success'); }
-  catch(e){ toastMsg('Print failed: '+e.message,'error'); }
+  _printing=true;
+  const btn=document.querySelector('[onclick="printLabel()"]');
+  const orig=btn?btn.textContent:'';
+  if(btn){ btn.disabled=true; btn.textContent='Printing…'; }
+  try {
+    await api('/api/barcode/label',{method:'POST',body:JSON.stringify({product:p,copies:Number($('pr_copies').value||1)})});
+    toastMsg('Label print dispatched ✓','success');
+  } catch(e){ toastMsg('Print failed: '+e.message,'error'); }
+  finally { _printing=false; if(btn){ btn.disabled=false; btn.textContent=orig; } }
 }
 async function testPrintLabel(){
-  try { await api('/api/barcode-label/sample',{method:'POST',body:JSON.stringify({...currentPrintProduct(),copies:Number($('pr_copies').value||1)})}); toastMsg('Test label print dispatched ✓','success'); }
-  catch(e){ toastMsg('Test print failed: '+e.message,'error'); }
+  if(_printing){ toastMsg('Print job already in progress…','warning'); return; }
+  _printing=true;
+  const btn=document.querySelector('[onclick="testPrintLabel()"]');
+  const orig=btn?btn.textContent:'';
+  if(btn){ btn.disabled=true; btn.textContent='Printing…'; }
+  try {
+    await api('/api/barcode-label/sample',{method:'POST',body:JSON.stringify({...currentPrintProduct(),copies:Number($('pr_copies').value||1)})});
+    toastMsg('Test label print dispatched ✓','success');
+  } catch(e){ toastMsg('Test print failed: '+e.message,'error'); }
+  finally { _printing=false; if(btn){ btn.disabled=false; btn.textContent=orig; } }
 }
 function selectAllBulk(){ [...$('pr_bulk_products').options].forEach(o=>{ if(o.value) o.selected=true; }); }
-async function bulkPrintLabels(){ const ids=[...$('pr_bulk_products').selectedOptions].map(o=>Number(o.value)).filter(Boolean); if(!ids.length){ toastMsg('Select at least one product','error'); return; } const d=await api('/api/barcode/label/bulk',{method:'POST',body:JSON.stringify({product_ids:ids,copies:Number($('pr_copies').value||1)})}); toastMsg(`Printed: ${d.printed}, Failed: ${d.failed}`, d.failed?'warning':'success'); }
+async function bulkPrintLabels(){
+  if(_printing){ toastMsg('Print job already in progress…','warning'); return; }
+  const ids=[...$('pr_bulk_products').selectedOptions].map(o=>Number(o.value)).filter(Boolean);
+  if(!ids.length){ toastMsg('Select at least one product','error'); return; }
+  _printing=true;
+  const btn=document.querySelector('[onclick="bulkPrintLabels()"]');
+  const orig=btn?btn.textContent:'';
+  if(btn){ btn.disabled=true; btn.textContent='Printing…'; }
+  try {
+    const d=await api('/api/barcode/label/bulk',{method:'POST',body:JSON.stringify({product_ids:ids,copies:Number($('pr_copies').value||1)})});
+    toastMsg(`Printed: ${d.printed}, Failed: ${d.failed}`, d.failed?'warning':'success');
+  } catch(e){ toastMsg('Bulk print failed: '+e.message,'error'); }
+  finally { _printing=false; if(btn){ btn.disabled=false; btn.textContent=orig; } }
+}
 
 async function saveScannerConfig(){ const payload={scanner_input_mode:$('sc_mode').value,scanner_prefix:$('sc_prefix').value,scanner_suffix:$('sc_suffix').value,scanner_target:$('sc_target').value,scanner_auto_search:$('sc_auto').value,barcode_auto_mode:state.settings.barcode_auto_mode||'random',barcode_prefix:state.settings.barcode_prefix||'SM'}; await api('/api/scanner/settings',{method:'POST',body:JSON.stringify(payload)}); Object.assign(state.settings,payload); toastMsg('Scanner config saved','success'); }
 async function saveLabelSettings(){

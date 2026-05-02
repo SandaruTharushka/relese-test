@@ -2239,6 +2239,9 @@ async function printSampleLabel() {
   const barcode = (document.getElementById('s_labelSampleBarcode')?.value || '').trim() || 'SM-SAMPLE-001';
   const name = (document.getElementById('s_labelSampleName')?.value || '').trim() || 'Sample Label';
   const copies = Math.max(1, parseInt(document.getElementById('s_labelCopies')?.value || '1', 10));
+  const btn = document.querySelector('[onclick="printSampleLabel()"]');
+  const orig = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Printing…'; }
   toast('Sending sample label to label printer…', 'info');
   try {
     const r = await fetch('/api/barcode-label/sample', {
@@ -2251,6 +2254,8 @@ async function printSampleLabel() {
     else toast(d.error || d.msg || 'Sample print failed', 'error');
   } catch (e) {
     toast('Sample label error: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = orig; }
   }
 }
 
@@ -2264,6 +2269,9 @@ async function printBarcodeLabel() {
   }
   const name = (document.getElementById('s_labelSampleName')?.value || '').trim() || 'Barcode Label';
   const copies = Math.max(1, parseInt(document.getElementById('s_labelCopies')?.value || '1', 10));
+  const btn = document.querySelector('[onclick="printBarcodeLabel()"]');
+  const orig = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Printing…'; }
   toast('Sending barcode label to label printer…', 'info');
   try {
     const r = await fetch('/api/barcode/label', {
@@ -2279,6 +2287,8 @@ async function printBarcodeLabel() {
     else toast(d.error || d.msg || 'Barcode label print failed', 'error');
   } catch (e) {
     toast('Barcode label error: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = orig; }
   }
 }
 
