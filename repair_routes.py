@@ -25,8 +25,8 @@ import re
 from decimal import Decimal
 
 from services.printing.settings_service import PrintSettingsService
-from services.printing.receipt.service_builder import ServiceReceiptBuilder
-from services.printing.domain.constants import SERVICE_RECEIPT_LAYOUT_DEFAULTS, SERVICE_RECEIPT_LAYOUT_KEYS
+# ServiceReceiptBuilder and layout constants are no longer imported here —
+# all receipt builds go through ReceiptEngine in the route handlers below.
 
 from validators import parse_positive_float, parse_positive_int
 from customer_linking import ensure_customer_profile, normalize_phone
@@ -172,45 +172,8 @@ def register_repair_routes(app, log_action=None, print_domain=None):
             raise ValueError('Invalid request payload. Expected a JSON object.')
         return data
 
-    def _build_repair_receipt_text_payload(job):
-        payment = _repair_payment_snapshot(job)
-        parts_total = sum(money_to_decimal(p.total) for p in (job.parts or []))
-        payment_snapshot = {
-            'parts_total': Decimal(str(parts_total or 0)),
-            'labor_total': Decimal(str(money_to_decimal(job.labour_charge) or 0)),
-            'grand_total': Decimal(str(payment.get('total_amount', 0))),
-            'paid_total': Decimal(str(payment.get('final_paid_amount', 0))),
-            'balance_total': Decimal(str(payment.get('remaining_balance', 0))),
-        }
-        layout = {
-            k: str(StoreSettings.get(k, SERVICE_RECEIPT_LAYOUT_DEFAULTS.get(k, '')) or SERVICE_RECEIPT_LAYOUT_DEFAULTS.get(k, ''))
-            for k in SERVICE_RECEIPT_LAYOUT_KEYS
-        }
-        store = {
-            'store_name': str(StoreSettings.get('store_name', '') or ''),
-            'store_phone': str(StoreSettings.get('store_phone', '') or ''),
-            'store_address': str(StoreSettings.get('store_address', '') or ''),
-        }
-        builder = ServiceReceiptBuilder()
-        receipt_text = builder.build(
-            job=job,
-            payment_snapshot=payment_snapshot,
-            store=store,
-            layout=layout,
-        )
-        job_number = job.job_number or f'JOB-{job.id}'
-        width_raw = layout.get('svc_rcpt_cpl', '48')
-        try:
-            width = max(24, min(int(width_raw), 96))
-        except (TypeError, ValueError):
-            width = 48
-        return {
-            'job_id': job.id,
-            'job_number': job_number,
-            'receipt_text': receipt_text,
-            'title': f'Service Job {job_number}',
-            'paper_size': '58mm' if width <= 32 else '80mm',
-        }
+    # _build_repair_receipt_text_payload removed — was dead code.
+    # All service receipt builds now go through ReceiptEngine directly.
 
     def _normalize_plate(value):
         raw_value = (value or '').strip().upper()
@@ -271,8 +234,8 @@ def register_repair_routes(app, log_action=None, print_domain=None):
             space = width - len(left_txt) - len(right_txt)
         return f"{left_txt}{' ' * max(space, 1)}{right_txt}"
 
-    # _build_service_receipt_text was here — DELETED (dead code).
-    # Canonical service receipt is now built by ServiceReceiptBuilder via _build_repair_receipt_text_payload.
+    # All service receipt builds go through ReceiptEngine (see api_repair_job_receipt_direct_print
+    # and api_repair_receipt_text below).  No local builder is needed here.
 
     def _refresh_payment_status(job):
         snap = _repair_payment_snapshot(job)
