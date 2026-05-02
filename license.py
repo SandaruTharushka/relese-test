@@ -1,15 +1,17 @@
 """Unified offline activation/trial module for all runtimes."""
 
-import os, json, hashlib, hmac, platform, uuid, re
+import os, json, hashlib, hmac, platform, uuid, re, logging
 from datetime import datetime, timedelta
 from pathlib import Path
 
 from runtime_paths import persistent_app_dir
 
+_log = logging.getLogger(__name__)
+
 # ── Storage location (with fallback) ─────────────────────────────────────────
 def _get_license_dir():
     """Get license directory — tries ProgramData first, falls back to Documents."""
-    primary = os.path.join(os.environ.get('PROGRAMDATA', r'C:\ProgramData'), 'SuperMartPOS')
+    primary = os.path.join(os.environ.get('PROGRAMDATA', r'C:\ProgramData'), 'GarageManagementSystem')
     try:
         os.makedirs(primary, exist_ok=True)
         # Test if we can write
@@ -22,7 +24,7 @@ def _get_license_dir():
         pass
 
     # Fallback to user's Documents folder
-    fallback = os.path.join(str(Path.home()), 'Documents', 'SuperMartPOS')
+    fallback = os.path.join(str(Path.home()), 'Documents', 'GarageManagementSystem')
     try:
         os.makedirs(fallback, exist_ok=True)
         return fallback
@@ -109,16 +111,9 @@ def _save_activation_data(data: dict) -> None:
 
 def ensure_activation_initialized() -> dict:
     data = _load_activation_data()
-    install_id = get_install_id()
     changed = False
     if not data:
         data = _activation_file_payload()
-        changed = True
-    if not data.get("install_id"):
-        data["install_id"] = install_id
-        changed = True
-    if not data.get("machine_id"):
-        data["machine_id"] = _get_machine_id()
         changed = True
     if not data.get("trial_started_at"):
         data["trial_started_at"] = datetime.now().strftime("%Y-%m-%d")
@@ -131,7 +126,8 @@ def ensure_activation_initialized() -> dict:
         changed = True
     if changed:
         _save_activation_data(data)
-    return data
+    # Always normalize install_id/machine_id so displayed ID matches validated ID
+    return normalize_activation_data(data)
 
 
 def _trial_days_left(trial_started_at: str) -> int:
@@ -144,19 +140,14 @@ def _trial_days_left(trial_started_at: str) -> int:
 
 
 def activation_status() -> dict:
+    # ensure_activation_initialized calls normalize_activation_data internally,
+    # so data always has current install_id/machine_id.
     data = ensure_activation_initialized()
     install_id = data.get("install_id") or get_install_id()
     machine_id = data.get("machine_id") or _get_machine_id()
     trial_started_at = data.get("trial_started_at") or datetime.now().strftime("%Y-%m-%d")
     activated = bool(data.get("activated"))
-    key = (data.get("activation_key") or "").strip().upper()
-    expected_key = _derive_activation_key(install_id)
-    if activated:
-        if key != expected_key or machine_id != _get_machine_id():
-            activated = False
-            data["activated"] = False
-            data["activation_key"] = ""
-            _save_activation_data(data)
+
     if activated:
         days_left = 0
         trial_active = False
@@ -165,10 +156,12 @@ def activation_status() -> dict:
         days_left = _trial_days_left(trial_started_at)
         trial_active = days_left > 0
         trial_expired = days_left <= 0
+
     if data.get("trial_days_left") != days_left or data.get("trial_active") != trial_active:
         data["trial_days_left"] = days_left
         data["trial_active"] = trial_active
         _save_activation_data(data)
+
     requires_activation = (not activated) and trial_expired
     return {
         "activated": activated,
@@ -186,35 +179,137 @@ def activation_status() -> dict:
     }
 
 
-def verify_offline_activation_key(key: str) -> bool:
+def current_machine_state() -> dict:
+    """Return the current machine's install_id and machine_id."""
+    return {
+        "install_id": get_install_id(),
+        "machine_id": _get_machine_id(),
+    }
+
+
+def normalize_activation_data(data: dict) -> dict:
+    """Ensure install_id/machine_id are always current; invalidate moved activations.
+
+    For unactivated state: always updates install_id and machine_id to the
+    current machine so the displayed ID always matches what validation uses.
+    For activated state: if machine_id or key no longer matches, deactivates.
+    """
+    current_install_id = get_install_id()
+    current_machine_id = _get_machine_id()
+    changed = False
+
+    if data.get("activated"):
+        stored_key = (data.get("activation_key") or "").strip().upper()
+        stored_machine_id = data.get("machine_id", "")
+        expected_key = _derive_activation_key(current_install_id)
+
+        if stored_key != expected_key or stored_machine_id != current_machine_id:
+            _log.info(
+                "normalize_activation_data: invalidating — install_id=%s machine_id=%.8s key_suffix=%.4s",
+                current_install_id,
+                current_machine_id,
+                stored_key[-4:] if stored_key else "",
+            )
+            data["activated"] = False
+            data["activation_key"] = ""
+            data["activated_at"] = None
+            data["install_id"] = current_install_id
+            data["machine_id"] = current_machine_id
+            days_left = _trial_days_left(data.get("trial_started_at") or "")
+            data["trial_active"] = days_left > 0
+            data["trial_days_left"] = days_left
+            changed = True
+    else:
+        # Not activated: always sync install_id/machine_id to current machine
+        # so the displayed Install ID always matches what verify uses.
+        if data.get("install_id") != current_install_id:
+            _log.info(
+                "normalize_activation_data: updating stale install_id → %s machine_id=%.8s",
+                current_install_id,
+                current_machine_id,
+            )
+            data["install_id"] = current_install_id
+            changed = True
+        if data.get("machine_id") != current_machine_id:
+            data["machine_id"] = current_machine_id
+            changed = True
+
+    if changed:
+        _save_activation_data(data)
+    return data
+
+
+def expected_key_for_current_install() -> str:
+    """Return the valid activation key for the current machine (for owner use)."""
+    return _derive_activation_key(get_install_id())
+
+
+def generate_activation_key_for_install_id(install_id: str) -> str:
+    """Generate an activation key for a given install_id (admin/testing only)."""
+    return _derive_activation_key(install_id.strip().upper())
+
+
+def verify_offline_activation_key(key: str, install_id: str = None) -> bool:
+    """Validate key against a specific install_id (or current machine if None).
+
+    Always pass the install_id that was shown to the user to avoid stale-ID mismatches.
+    """
     value = (key or "").strip().upper()
     if not OFFLINE_ACTIVATION_RE.fullmatch(value):
         return False
-    install_id = get_install_id()
-    return value == _derive_activation_key(install_id)
+    if install_id is None:
+        install_id = get_install_id()
+    result = value == _derive_activation_key(install_id)
+    _log.info(
+        "verify_offline_activation_key: install_id=%s key_suffix=%.4s result=%s",
+        install_id,
+        value[-4:] if value else "",
+        result,
+    )
+    return result
 
 
 def activate_offline(key: str) -> dict:
     value = (key or "").strip().upper()
     if not OFFLINE_ACTIVATION_RE.fullmatch(value):
+        data = ensure_activation_initialized()
+        install_id = data.get("install_id") or get_install_id()
         return {
             "ok": False,
             "msg": "Invalid activation key format. Expected: SMPOS-XXXXXXXX-XXXXXXXX-XXXXXXXX",
+            "install_id": install_id,
         }
-    if not verify_offline_activation_key(value):
+    # Normalize first so install_id in file matches current machine
+    data = ensure_activation_initialized()
+    install_id = data.get("install_id") or get_install_id()
+
+    if not verify_offline_activation_key(value, install_id):
+        _log.warning(
+            "activate_offline: key rejected — install_id=%s key_suffix=%.4s",
+            install_id,
+            value[-4:] if value else "",
+        )
         return {
             "ok": False,
-            "msg": "Activation key is invalid for this installation ID.",
+            "msg": "Activation key is not valid for this Install ID. Copy the Install ID shown on screen exactly and request a new key.",
+            "install_id": install_id,
         }
-    data = ensure_activation_initialized()
+
+    current_machine_id = _get_machine_id()
     data["activated"] = True
     data["activation_key"] = value
     data["activated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     data["trial_active"] = False
     data["trial_days_left"] = 0
-    data["install_id"] = get_install_id()
-    data["machine_id"] = _get_machine_id()
+    data["install_id"] = install_id
+    data["machine_id"] = current_machine_id
     _save_activation_data(data)
+    _log.info(
+        "activate_offline: success — install_id=%s machine_id=%.8s key_suffix=%.4s",
+        install_id,
+        current_machine_id,
+        value[-4:] if value else "",
+    )
     status = activation_status()
     return {"ok": True, "msg": "Activation successful.", "status": status}
 

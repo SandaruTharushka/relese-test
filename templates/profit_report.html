@@ -26,6 +26,28 @@
 .breakdown-divider { border:none; border-top:1px solid var(--border); margin:12px 0; }
 .profit-positive { color:var(--accent2)!important; }
 .profit-negative { color:var(--danger)!important; }
+
+/* ── Report loading overlay ── */
+#rptLoadOverlay {
+  display:none; position:fixed; inset:0; z-index:1100;
+  background:rgba(15,23,42,.52); backdrop-filter:blur(2px);
+  align-items:center; justify-content:center;
+}
+.rpt-load-card {
+  background:var(--card); border:1px solid var(--border); border-radius:20px;
+  padding:40px 48px; text-align:center; max-width:380px; width:92%;
+  box-shadow:0 16px 48px rgba(0,0,0,.25);
+}
+.rpt-spinner {
+  width:48px; height:48px; border:4px solid var(--border);
+  border-top-color:var(--accent); border-radius:50%;
+  animation:rptSpin .8s linear infinite; margin:0 auto 18px;
+}
+@keyframes rptSpin { to { transform:rotate(360deg); } }
+.rpt-load-title { font-size:16px; font-weight:700; color:var(--text); margin-bottom:6px; }
+.rpt-load-sub   { font-size:13px; color:var(--warning); margin-top:8px; min-height:18px; }
+.rpt-load-error { font-size:14px; font-weight:600; color:var(--danger); margin-top:8px; }
+.rpt-load-close { margin-top:16px; }
 </style>
 {% endblock %}
 
@@ -37,6 +59,18 @@
       <div>
         <div style="font-size:18px;font-weight:800">💰 Profit Report</div>
         <div style="font-size:12px;color:var(--muted)">Revenue vs cost analysis — product sales &amp; service jobs</div>
+      </div>
+    </div>
+
+    <!-- Report loading overlay -->
+    <div id="rptLoadOverlay" role="status" aria-live="polite">
+      <div class="rpt-load-card">
+        <div id="rptSpinner" class="rpt-spinner"></div>
+        <div id="rptLoadTitle" class="rpt-load-title">Loading report data…</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:2px">Report data load වෙමින් පවතී…</div>
+        <div id="rptLoadSub" class="rpt-load-sub" hidden></div>
+        <div id="rptLoadError" class="rpt-load-error" hidden></div>
+        <button id="rptLoadCloseBtn" class="btn btn-ghost btn-sm rpt-load-close" hidden onclick="_rptLoading.hide()">Close</button>
       </div>
     </div>
 
@@ -510,6 +544,49 @@
 
 {% block scripts %}
 <script>
+// ── Report loading state ──────────────────────────────────────────────────────
+const _rptLoading = (() => {
+  let _active = false;
+  let _timer8s = null;
+  function _el(id) { return document.getElementById(id); }
+  function show(title) {
+    if (_active) return false;
+    _active = true;
+    const overlay = _el('rptLoadOverlay');
+    if (!overlay) return true;
+    _el('rptLoadTitle').textContent = title || 'Loading report data…';
+    _el('rptLoadSub').hidden   = true;
+    _el('rptLoadError').hidden = true;
+    _el('rptLoadCloseBtn').hidden = true;
+    _el('rptSpinner').style.display = '';
+    overlay.style.display = 'flex';
+    _timer8s = setTimeout(() => {
+      const sub = _el('rptLoadSub');
+      if (sub) { sub.hidden = false; sub.textContent = 'Still loading. Large date ranges may take longer.'; }
+    }, 8000);
+    return true;
+  }
+  function hide() {
+    _active = false;
+    clearTimeout(_timer8s);
+    const overlay = _el('rptLoadOverlay');
+    if (overlay) overlay.style.display = 'none';
+  }
+  function error(msg) {
+    clearTimeout(_timer8s);
+    _active = false;
+    const overlay = _el('rptLoadOverlay');
+    if (!overlay) return;
+    _el('rptSpinner').style.display = 'none';
+    _el('rptLoadSub').hidden = true;
+    const errEl = _el('rptLoadError');
+    errEl.textContent = msg || 'Report loading failed. Please try again or select a smaller date range.';
+    errEl.hidden = false;
+    _el('rptLoadCloseBtn').hidden = false;
+  }
+  return { show, hide, error, get active() { return _active; } };
+})();
+
 // ── Globals ───────────────────────────────────────────────────────────────────
 let dailyChart, monthlyChart, productProfitChart, marginChart;
 let svcBreakdownChart, svcTrendChart;
@@ -577,7 +654,10 @@ function setDays(days, el) {
 }
 
 async function loadDaily(days) {
-  const data=await api(`/api/profit/daily?days=${days}`); if(!data)return;
+  if (!_rptLoading.show('Daily Profit')) return;
+  const ctrl=new AbortController(); const tOut=setTimeout(()=>ctrl.abort(),30000);
+  try {
+  const data=await api(`/api/profit/daily?days=${days}`,{signal:ctrl.signal}); if(!data||data.ok===false){_rptLoading.error(data?.error||'Daily profit failed to load.');return;}
   updateSummary(data);
   const labels=data.map(r=>r.day);
   const chartCanvas = el('dailyChart');
@@ -602,10 +682,15 @@ async function loadDaily(days) {
       <td><span class="badge" style="background:rgba(79,108,246,.12);color:var(--accent)">${m}%</span></td></tr>`;
   }).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">No data</td></tr>';
   elHtml('dailyTableBody', html);
+  } catch(e) { _rptLoading.error(e?.name==='AbortError'?'Timed out. Try fewer days.':'Daily profit failed to load.'); return; }
+  finally { clearTimeout(tOut); _rptLoading.hide(); }
 }
 
 async function loadMonthly() {
-  const data=await api('/api/profit/monthly?months=12'); if(!data)return;
+  if (!_rptLoading.show('Monthly Profit')) return;
+  const ctrl=new AbortController(); const tOut=setTimeout(()=>ctrl.abort(),30000);
+  try {
+  const data=await api('/api/profit/monthly?months=12',{signal:ctrl.signal}); if(!data||data.ok===false){_rptLoading.error(data?.error||'Monthly profit failed to load.');return;}
   updateSummary(data);
   const chartCanvas = el('monthlyChart');
   if (chartCanvas) {
@@ -628,13 +713,18 @@ async function loadMonthly() {
       <td><span class="badge" style="background:rgba(79,108,246,.12);color:var(--accent)">${m}%</span></td></tr>`;
   }).join('');
   elHtml('monthlyTableBody', html);
+  } catch(e) { _rptLoading.error(e?.name==='AbortError'?'Timed out. Try fewer months.':'Monthly profit failed to load.'); return; }
+  finally { clearTimeout(tOut); _rptLoading.hide(); }
 }
 
 async function loadProductProfit() {
+  if (!_rptLoading.show('Product Profit')) return;
   const f=document.getElementById('prodFrom')?.value||(today().substring(0,7)+'-01');
   const t=document.getElementById('prodTo')?.value||today();
   if(document.getElementById('prodFrom')){document.getElementById('prodFrom').value=f;document.getElementById('prodTo').value=t;}
-  const data=await api(`/api/profit/by-product?from=${f}&to=${t}`); if(!data)return;
+  const ctrl=new AbortController(); const tOut=setTimeout(()=>ctrl.abort(),30000);
+  try {
+  const data=await api(`/api/profit/by-product?from=${f}&to=${t}`,{signal:ctrl.signal}); if(!data||data.ok===false){_rptLoading.error(data?.error||'Product profit failed to load.');return;}
   productData=data;
   const rev=data.reduce((s,r)=>s+r.revenue,0), cost=data.reduce((s,r)=>s+r.cost,0);
   const profit=rev-cost, margin=rev>0?(profit/rev*100):0;
@@ -663,6 +753,8 @@ async function loadProductProfit() {
     });
   }
   renderProductTable(data);
+  } catch(e) { _rptLoading.error(e?.name==='AbortError'?'Timed out. Try a smaller date range.':'Product profit failed to load.'); return; }
+  finally { clearTimeout(tOut); _rptLoading.hide(); }
 }
 function renderProductTable(data){
   const html = data.map(r=>{
@@ -694,8 +786,11 @@ async function initServiceProfitTab(){
   loadServiceProfit(); loadSvcTrendChart();
 }
 async function loadServiceProfit(){
+  if (!_rptLoading.show('Service Profit')) return;
+  const ctrl=new AbortController(); const tOut=setTimeout(()=>ctrl.abort(),30000);
   const f=document.getElementById('svcFrom').value, t=document.getElementById('svcTo').value;
-  const data=await api(`/api/profit/combined?from=${f}&to=${t}`); if(!data)return;
+  try {
+  const data=await api(`/api/profit/combined?from=${f}&to=${t}`,{signal:ctrl.signal}); if(!data||data.ok===false){_rptLoading.error(data?.error||'Service profit failed to load.');return;}
   document.getElementById('svcJobCount').textContent=data.job_count;
   document.getElementById('svcTotalRev').textContent=fmtLKR(data.service_total_revenue);
   document.getElementById('svcLabourRev').textContent=fmtLKR(data.service_labour_revenue);
@@ -725,7 +820,7 @@ async function loadServiceProfit(){
     });
   }
   // Technician profit table
-  const rows=await fetch(`/api/service/technician-performance?from=${f}&to=${t}`).then(r=>r.json());
+  const rows=await fetch(`/api/service/technician-performance?from=${f}&to=${t}`,{signal:ctrl.signal}).then(r=>r.json());
   const html = rows.length
     ?rows.map(r=>`<tr>
         <td><strong>${r.technician}</strong></td>
@@ -736,6 +831,8 @@ async function loadServiceProfit(){
       </tr>`).join('')
     :'<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:16px">No data</td></tr>';
   elHtml('svcTechProfitBody', html);
+  } catch(e) { _rptLoading.error(e?.name==='AbortError'?'Timed out. Try a smaller date range.':'Service profit failed to load.'); return; }
+  finally { clearTimeout(tOut); _rptLoading.hide(); }
 }
 async function loadSvcTrendChart(){
   const rows=await fetch('/api/service/monthly-trend?months=6').then(r=>r.json());
@@ -769,8 +866,11 @@ async function initCombinedProfitTab(){
   loadCombinedProfit(); loadCombTrendChart();
 }
 async function loadCombinedProfit(){
+  if (!_rptLoading.show('Combined Profit')) return;
+  const ctrl=new AbortController(); const tOut=setTimeout(()=>ctrl.abort(),30000);
   const f=document.getElementById('combFrom').value, t=document.getElementById('combTo').value;
-  const d=await api(`/api/profit/combined?from=${f}&to=${t}`); if(!d)return;
+  try {
+  const d=await api(`/api/profit/combined?from=${f}&to=${t}`,{signal:ctrl.signal}); if(!d||d.ok===false){_rptLoading.error(d?.error||'Combined profit failed to load.');return;}
   // Top KPI cards
   document.getElementById('ccCombRev').textContent=fmtLKR(d.combined_revenue);
   document.getElementById('ccSalesRev').textContent=fmtLKR(d.product_sales_revenue);
@@ -818,6 +918,8 @@ async function loadCombinedProfit(){
       <span style="margin-left:auto;font-size:12px;font-weight:700">${fmtLKR(x.val)} <span style="color:var(--muted);font-weight:400">(${total>0?Math.round(x.val/total*100):0}%)</span></span>
     </div>`).join('');
   elHtml('combBreakdownLegend', legendHtml);
+  } catch(e) { _rptLoading.error(e?.name==='AbortError'?'Timed out. Try a smaller date range.':'Combined profit failed to load.'); return; }
+  finally { clearTimeout(tOut); _rptLoading.hide(); }
 }
 async function loadCombTrendChart(){
   const rows=await fetch('/api/service/revenue-trend?days=30').then(r=>r.json());
@@ -864,10 +966,12 @@ async function loadFinanceTab(){
   const f=document.getElementById('finFrom').value;
   const t=document.getElementById('finTo').value;
   if(!f||!t) return;
-
+  if (!_rptLoading.show('Finance Report')) return;
+  const ctrl=new AbortController(); const tOut=setTimeout(()=>ctrl.abort(),30000);
+  try {
   // Extended profit summary
-  const d = await api(`/api/profit/extended?from=${f}&to=${t}`);
-  if(!d) return;
+  const d = await api(`/api/profit/extended?from=${f}&to=${t}`,{signal:ctrl.signal});
+  if(!d||d.ok===false){_rptLoading.error(d?.error||'Finance report failed to load.');return;}
   _finLoaded = true;
 
   const fmt = fmtLKR;
@@ -919,7 +1023,7 @@ async function loadFinanceTab(){
 
   // Broker table
   try {
-    const brokers = await api(`/api/brokers?active=0`);
+    const brokers = await api(`/api/brokers?active=0`,{signal:ctrl.signal});
     const tbody = document.getElementById('finBrokerTable');
     if(tbody && Array.isArray(brokers) && brokers.length){
       tbody.innerHTML = brokers.map(b=>`
@@ -934,7 +1038,9 @@ async function loadFinanceTab(){
     } else if(tbody){
       tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">No brokers found</td></tr>';
     }
-  } catch(e) {}
+  } catch(e2) {}
+  } catch(e) { _rptLoading.error(e?.name==='AbortError'?'Timed out. Try a smaller date range.':'Finance report failed to load.'); return; }
+  finally { clearTimeout(tOut); _rptLoading.hide(); }
 }
 
 function esc(s){ const d=document.createElement('div');d.textContent=s||'';return d.innerHTML; }

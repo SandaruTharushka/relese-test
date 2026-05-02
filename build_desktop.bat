@@ -3,14 +3,14 @@ setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
 :: ============================================================
-::  SuperMart POS — Desktop EXE Build Script
-::  Builds: dist\SuperMartPOS.exe + dist\SuperMartPrinterManager.exe
+::  Garage Management System — Desktop EXE Build Script
+::  Builds: dist\GarageManagementSystem.exe + dist\SuperMartPrinterManager.exe
 ::
 ::  Called by BUILD.bat (which sets up the venv first), but can
 ::  also be run directly if the venv already exists.
 ::
 ::  Hardening against real-world Windows build failures:
-::    - Kills stale SuperMartPOS.exe process before touching dist\
+::    - Kills stale GarageManagementSystem.exe process before touching dist\
 ::    - Retries dist\build\ deletion up to 5 times (AV / file-lock)
 ::    - Detects OneDrive sync folder and warns
 ::    - Validates Python 3.x venv
@@ -18,7 +18,7 @@ cd /d "%~dp0"
 ::    - Copies output to release\ on success
 :: ============================================================
 
-title SuperMart POS — Desktop EXE Build
+title Garage Management System — Desktop EXE Build
 
 echo.
 echo  [build_desktop] Building standalone desktop executables...
@@ -61,7 +61,7 @@ if errorlevel 1 (
 
 :: ── Validate required spec and source files ──────────────────────────────────
 for %%F in (
-    SuperMartPOS.spec
+    GarageManagementSystem.spec
     SuperMartPrinterManager.spec
     main.py
     desktop_runtime.py
@@ -77,13 +77,13 @@ for %%F in (
 )
 echo  [OK] All required spec and source files present
 
-:: ── Kill stale SuperMartPOS.exe process ──────────────────────────────────────
-::  If a previous build is still running (or the user has dist\SuperMartPOS.exe
+:: ── Kill stale GarageManagementSystem.exe process ──────────────────────────────────────
+::  If a previous build is still running (or the user has dist\GarageManagementSystem.exe
 ::  open), the dist\ deletion will fail with "Access is denied".
-tasklist 2>nul | findstr /i "SuperMartPOS.exe" >nul 2>&1
+tasklist 2>nul | findstr /i "GarageManagementSystem.exe" >nul 2>&1
 if not errorlevel 1 (
-    echo  [!] Detected running SuperMartPOS.exe — terminating before build...
-    taskkill /f /im SuperMartPOS.exe >nul 2>&1
+    echo  [!] Detected running GarageManagementSystem.exe — terminating before build...
+    taskkill /f /im GarageManagementSystem.exe >nul 2>&1
     timeout /t 2 /nobreak >nul
 )
 tasklist 2>nul | findstr /i "SuperMartPrinterManager.exe" >nul 2>&1
@@ -114,30 +114,30 @@ if exist "dist" (
     call :delete_with_retry "dist"
     if errorlevel 1 (
         echo  [ERROR] Could not remove dist\ folder after retries.
-        echo  This usually means SuperMartPOS.exe or SuperMartPrinterManager.exe
+        echo  This usually means GarageManagementSystem.exe or SuperMartPrinterManager.exe
         echo  is still running, or your antivirus has a lock on the file.
         echo  Steps to fix:
-        echo    1. Close any running SuperMart POS instances.
+        echo    1. Close any running Garage Management System instances.
         echo    2. Temporarily disable real-time antivirus scanning for this folder.
         echo    3. Re-run this script.
         exit /b 1
     )
 )
 
-:: ── Build SuperMartPOS.exe ────────────────────────────────────────────────────
+:: ── Build GarageManagementSystem.exe ────────────────────────────────────────────────────
 echo.
-echo  [1/2] Running PyInstaller for SuperMartPOS...
-python -m PyInstaller --clean --noconfirm SuperMartPOS.spec
+echo  [1/2] Running PyInstaller for GarageManagementSystem...
+python -m PyInstaller --clean --noconfirm GarageManagementSystem.spec
 if errorlevel 1 (
     echo.
-    echo  [ERROR] PyInstaller failed for SuperMartPOS.spec.
+    echo  [ERROR] PyInstaller failed for GarageManagementSystem.spec.
     echo  Common causes:
     echo    - Missing Python package  ^(re-run: pip install -r requirements.txt^)
     echo    - Syntax error in spec file
     echo    - Build path is on OneDrive ^(see warning above^)
     exit /b 1
 )
-echo  [OK] SuperMartPOS.exe built successfully
+echo  [OK] GarageManagementSystem.exe built successfully
 
 :: ── Build SuperMartPrinterManager.exe ────────────────────────────────────────
 echo.
@@ -151,20 +151,20 @@ if errorlevel 1 (
 echo  [OK] SuperMartPrinterManager.exe built successfully
 
 :: ── Verify outputs exist ──────────────────────────────────────────────────────
-if not exist "dist\SuperMartPOS.exe" (
-    echo  [ERROR] Build reported success but dist\SuperMartPOS.exe was not found.
+if not exist "dist\GarageManagementSystem.exe" (
+    echo  [ERROR] Build reported success but dist\GarageManagementSystem.exe was not found.
     exit /b 1
 )
 
 :: ── Copy to release\ ──────────────────────────────────────────────────────────
-copy /y "dist\SuperMartPOS.exe" "release\SuperMartPOS.exe" >nul
+copy /y "dist\GarageManagementSystem.exe" "release\GarageManagementSystem.exe" >nul
 if exist "dist\SuperMartPrinterManager.exe" (
     copy /y "dist\SuperMartPrinterManager.exe" "release\SuperMartPrinterManager.exe" >nul
 )
 
 echo.
 echo  [DONE] Desktop executables ready:
-echo    dist\SuperMartPOS.exe
+echo    dist\GarageManagementSystem.exe
 if exist "dist\SuperMartPrinterManager.exe" echo    dist\SuperMartPrinterManager.exe
 echo.
 exit /b 0

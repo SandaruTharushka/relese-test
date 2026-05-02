@@ -28,10 +28,10 @@
     <div class="card" style="padding:12px;margin-bottom:16px">
       <div style="font-weight:700;margin-bottom:6px">Contact owner for activation key</div>
       <div style="font-size:14px;display:flex;flex-wrap:wrap;gap:8px 16px">
-        <a href="mailto:{{ status.owner_contact.email }}?subject=SuperMart%20POS%20Activation%20Request&body=Install%20ID:%20{{ status.install_id }}">
+        <a href="mailto:{{ status.owner_contact.email }}?subject=Garage%20Management%20System%20Activation%20Request&body=Install%20ID:%20{{ status.install_id }}">
           📧 {{ status.owner_contact.email }}
         </a>
-        <a href="https://wa.me/{{ status.owner_contact.whatsapp|replace('0','94',1) }}?text=SuperMart%20POS%20activation%20request.%20Install%20ID:%20{{ status.install_id }}" target="_blank" rel="noopener noreferrer">
+        <a href="https://wa.me/{{ status.owner_contact.whatsapp|replace('0','94',1) }}?text=Garage%20Management%20System%20activation%20request.%20Install%20ID:%20{{ status.install_id }}" target="_blank" rel="noopener noreferrer">
           💬 WhatsApp: {{ status.owner_contact.whatsapp }}
         </a>
       </div>
@@ -40,7 +40,7 @@
     <div id="activationAlert" class="alert" style="display:none;margin-bottom:14px"></div>
     <div class="form-group" style="margin-bottom:10px">
       <label class="form-label">Manual Activation Key</label>
-      <input id="activationKey" class="form-input" placeholder="SMPOS-XXXXXXXX-XXXXXXXX-XXXXXXXX" autocomplete="off" spellcheck="false">
+      <input id="activationKey" class="form-input" placeholder="GMS-XXXXXXXX-XXXXXXXX-XXXXXXXX" autocomplete="off" spellcheck="false">
     </div>
 
     <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
@@ -90,7 +90,12 @@ document.getElementById('activateBtn').addEventListener('click', async () => {
     });
     const data = await res.json();
     if (!res.ok || !data.ok) {
-      showAlert(data.msg || 'Activation failed.');
+      const currentInstallId = data.install_id || document.getElementById('installId').textContent.trim();
+      let msg = data.msg || 'Activation failed.';
+      if (data.install_id) {
+        msg += `\n\nThis key is not valid for Install ID: ${currentInstallId}\nCopy the Install ID shown above exactly and request a new key.`;
+      }
+      showAlert(msg);
       return;
     }
     showAlert('Activation successful. Redirecting...', 'success');
@@ -98,7 +103,7 @@ document.getElementById('activateBtn').addEventListener('click', async () => {
       window.location.href = data.redirect || '/login';
     }, 600);
   } catch (e) {
-    showAlert('Activation request failed.');
+    showAlert('Activation request failed. Please try again.');
   } finally {
     btn.disabled = false;
     btn.textContent = 'Activate Offline';

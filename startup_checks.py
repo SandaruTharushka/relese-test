@@ -1,4 +1,4 @@
-"""Startup health checks for SuperMart POS desktop runtime.
+"""Startup health checks for Garage Management System desktop runtime.
 
 Call ``run_startup_checks(app)`` after app config is ready. The function returns
 human-readable issue strings (empty list = all good) and logs each issue.

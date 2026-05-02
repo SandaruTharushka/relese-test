@@ -1,12 +1,12 @@
 @echo off
 setlocal enabledelayedexpansion
-title SuperMart POS - DEBUG MODE
+title Garage Management System - DEBUG MODE
 color 0E
 cls
 
 echo.
 echo  ============================================
-echo    SuperMart POS -- DEBUG MODE
+echo    Garage Management System -- DEBUG MODE
 echo  ============================================
 echo.
 

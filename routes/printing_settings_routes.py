@@ -48,6 +48,40 @@ def register_printing_settings_routes(
             db.session.rollback()
             return jsonify({'ok': False, 'msg': f'Failed to save {label}: {exc}'}), 500
 
+    def _save_layout_with_version(request_data, allowed_keys, label, version_prefix: str):
+        """Save layout keys and bump the layout version counter + timestamp."""
+        from datetime import datetime, timezone
+        payload = {k: v for k, v in (request_data or {}).items() if k in set(allowed_keys)}
+        if not payload:
+            return jsonify({'ok': False, 'msg': f'No recognized {label} keys provided'}), 400
+        try:
+            StoreSettings.set_many(payload)
+
+            # Bump version counter and record timestamp
+            version_key = f'{version_prefix}_layout_version'
+            updated_key = f'{version_prefix}_layout_updated_at'
+            try:
+                current_version = int(StoreSettings.get(version_key, '0') or '0')
+            except (TypeError, ValueError):
+                current_version = 0
+            StoreSettings.set(version_key, str(current_version + 1))
+            StoreSettings.set(updated_key, datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'))
+
+            db.session.commit()
+            log_action(
+                f'{label} updated',
+                target_type='printer_settings',
+                metadata={'keys': sorted(payload.keys()), 'version': current_version + 1},
+            )
+            return jsonify({
+                'ok': True,
+                'saved': len(payload),
+                version_key: current_version + 1,
+            }), 200
+        except Exception as exc:
+            db.session.rollback()
+            return jsonify({'ok': False, 'msg': f'Failed to save {label}: {exc}'}), 500
+
     # ── Receipt printer hardware settings ────────────────────────
     @app.route('/api/printing/settings/receipt', methods=['GET', 'POST'])
     @login_required
@@ -65,8 +99,13 @@ def register_printing_settings_routes(
         _require_admin()
         if request.method == 'GET':
             from services.printing.domain.constants import RECEIPT_LAYOUT_DEFAULTS
-            return jsonify({'ok': True, 'settings': _load(RECEIPT_LAYOUT_KEYS, RECEIPT_LAYOUT_DEFAULTS)})
-        return _save_keys(request.get_json(silent=True), RECEIPT_LAYOUT_KEYS, 'receipt layout settings')
+            settings = _load(RECEIPT_LAYOUT_KEYS, RECEIPT_LAYOUT_DEFAULTS)
+            settings['receipt_layout_version'] = str(StoreSettings.get('receipt_layout_version', '0') or '0')
+            settings['receipt_layout_updated_at'] = str(StoreSettings.get('receipt_layout_updated_at', '') or '')
+            return jsonify({'ok': True, 'settings': settings})
+        return _save_layout_with_version(
+            request.get_json(silent=True), RECEIPT_LAYOUT_KEYS, 'receipt layout settings', 'receipt'
+        )
 
     # ── Service receipt layout settings (job/service receipts) ───
     @app.route('/api/printing/settings/service-receipt-layout', methods=['GET', 'POST'])
@@ -75,8 +114,13 @@ def register_printing_settings_routes(
         _require_admin()
         if request.method == 'GET':
             from services.printing.domain.constants import SERVICE_RECEIPT_LAYOUT_DEFAULTS
-            return jsonify({'ok': True, 'settings': _load(SERVICE_RECEIPT_LAYOUT_KEYS, SERVICE_RECEIPT_LAYOUT_DEFAULTS)})
-        return _save_keys(request.get_json(silent=True), SERVICE_RECEIPT_LAYOUT_KEYS, 'service receipt layout settings')
+            settings = _load(SERVICE_RECEIPT_LAYOUT_KEYS, SERVICE_RECEIPT_LAYOUT_DEFAULTS)
+            settings['service_receipt_layout_version'] = str(StoreSettings.get('service_receipt_layout_version', '0') or '0')
+            settings['service_receipt_layout_updated_at'] = str(StoreSettings.get('service_receipt_layout_updated_at', '') or '')
+            return jsonify({'ok': True, 'settings': settings})
+        return _save_layout_with_version(
+            request.get_json(silent=True), SERVICE_RECEIPT_LAYOUT_KEYS, 'service receipt layout settings', 'service_receipt'
+        )
 
     # ── Label printer settings ────────────────────────────────────
     @app.route('/api/printing/settings/label', methods=['GET', 'POST'])

@@ -1,10 +1,33 @@
-"""Sales receipt text builder — v2.
+"""Sales receipt text builder — v3.
 
-Converts a Sale ORM object + store settings + layout settings into a
-formatted thermal receipt text string ready for ESC/POS dispatch.
+Uses EscposLayoutEngine to produce a structured, configurable thermal receipt:
 
-ESC/POS formatting tags (ESCPOS_*) are embedded inline; build_escpos_payload()
-splits on them and injects the matching raw printer commands before encoding.
+    ================================
+            GARAGE MANAGEMENT
+          Automobile & Electronics
+              077 XXX XXXX
+    --------------------------------
+              SALES INVOICE
+    --------------------------------
+    Invoice No : INV-0001
+    Date       : 2026-05-02 12:44
+    Cashier    : Admin
+    Customer   : Walk-in Customer
+    --------------------------------
+    ITEM              QTY   PRICE      TOTAL
+    Engine Oil          1 2500.00    2500.00
+    Brake Cable         2  850.00    1700.00
+    --------------------------------
+    Subtotal                       LKR 4,200.00
+    Discount                          LKR 0.00
+    Grand Total                    LKR 4,200.00
+    PAID                           LKR 4,200.00
+    CHANGE                            LKR 0.00
+    ================================
+          Thank you for your business!
+
+All visible fields are controlled by rcpt_* layout settings loaded from
+StoreSettings.  No hardcoded values in this file.
 """
 from __future__ import annotations
 
@@ -12,27 +35,12 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from services.printing.receipt.formatter import (
-    CHAR_RULE_HEAVY,
-    CHAR_RULE_LIGHT,
-    ESCPOS_BOLD_OFF,
-    ESCPOS_BOLD_ON,
-    ESCPOS_DH_OFF,
-    ESCPOS_DH_ON,
-    ESCPOS_DW_OFF,
-    ESCPOS_DW_ON,
-    THERMAL_WIDTH_58MM,
-    THERMAL_WIDTH_80MM,
-    center,
-    clean_line,
-    cpl_from_settings,
-    money,
-    pair,
-    qty_amount_line,
-    rule,
-    rule_heavy,
-    to_decimal,
-    wrap_text,
+from services.escpos_layout_engine import (
+    EscposLayoutEngine,
+    _clip,
+    _safe,
+    _to_dec,
+    _wrap,
 )
 
 
@@ -42,7 +50,7 @@ def _as_bool(layout: dict[str, Any], key: str, default: bool = True) -> bool:
 
 
 class SalesReceiptBuilder:
-    """Builds a thermal-printable text receipt from a Sale record."""
+    """Builds a thermal-printable sales invoice receipt from a Sale record."""
 
     def build(
         self,
@@ -56,136 +64,164 @@ class SalesReceiptBuilder:
         payment_method_label: str = '',
         currency: str = 'LKR',
     ) -> str:
-        """Return formatted receipt text for thermal printing."""
-        width = cpl_from_settings(layout)
+        # ── Width / settings ───────────────────────────────────────────────────
+        raw_cpl = layout.get('rcpt_cpl', '48')
+        try:
+            width = max(24, min(int(raw_cpl), 96))
+        except (TypeError, ValueError):
+            width = 48
+
         show = lambda key, default=True: _as_bool(layout, key, default)
-
-        lines: list[str] = []
-
-        # ── Header ── (DOUBLE HEIGHT on thermal printer) ──────────────
         header_align = layout.get('rcpt_header_align', 'center')
+        footer_align = layout.get('rcpt_footer_align', 'center')
 
-        def _header(text: str) -> str:
-            if header_align == 'left':
-                return text
-            return center(text, width)
+        eng = EscposLayoutEngine(width=width)
+
+        # ── Store header block ─────────────────────────────────────────────────
+        # Format: ==== first, then store info, then ---- separator
+        eng.double_separator()
 
         if show('rcpt_show_store_name'):
-            store_name = store.get('store_name', 'SuperMart POS')
-            lines.append(ESCPOS_DH_ON)
-            lines.append(_header(store_name))
-            lines.append(ESCPOS_DH_OFF)
+            store_name = store.get('store_name') or 'Garage Management System'
+            eng.double_height(store_name, align=header_align)
         if show('rcpt_show_branch') and store.get('store_branch'):
-            lines.append(_header(store['store_branch']))
+            if header_align == 'center':
+                eng.center(store['store_branch'])
+            else:
+                eng.left(store['store_branch'])
         if show('rcpt_show_address') and store.get('store_address'):
-            for addr_line in wrap_text(store['store_address'], width):
-                lines.append(_header(addr_line))
+            for addr_line in _wrap(store['store_address'], width):
+                if header_align == 'center':
+                    eng.center(addr_line)
+                else:
+                    eng.left(addr_line)
         if show('rcpt_show_phone') and store.get('store_phone'):
-            lines.append(_header(store['store_phone']))
+            if header_align == 'center':
+                eng.center(store['store_phone'])
+            else:
+                eng.left(store['store_phone'])
         if show('rcpt_show_email') and store.get('store_email'):
-            lines.append(_header(store['store_email']))
+            if header_align == 'center':
+                eng.center(store['store_email'])
+            else:
+                eng.left(store['store_email'])
         if show('rcpt_show_tax_number') and store.get('store_tax_number'):
-            lines.append(_header(f'Tax No: {store["store_tax_number"]}'))
+            if header_align == 'center':
+                eng.center(f'Tax No: {store["store_tax_number"]}')
+            else:
+                eng.left(f'Tax No: {store["store_tax_number"]}')
 
-        lines.append(rule_heavy(width))
+        eng.separator()
+        eng.center('SALES INVOICE')
+        eng.separator()
 
-        # ── Invoice info ──────────────────────────────────────────────
+        # ── Invoice info ───────────────────────────────────────────────────────
         if show('rcpt_show_invoice') and getattr(sale, 'invoice_number', ''):
-            lines.append(pair('Invoice', sale.invoice_number, width))
+            eng.kv_row('Invoice No', sale.invoice_number)
         if show('rcpt_show_datetime'):
             sale_dt = getattr(sale, 'sale_date', None) or datetime.utcnow()
-            lines.append(pair('Date', sale_dt.strftime('%Y-%m-%d %H:%M'), width))
+            eng.kv_row('Date', sale_dt.strftime('%Y-%m-%d %H:%M'))
         if show('rcpt_show_cashier') and cashier_name:
-            lines.append(pair('Cashier', cashier_name, width))
+            eng.kv_row('Cashier', cashier_name)
         if show('rcpt_show_customer') and customer_name:
-            lines.append(pair('Customer', customer_name, width))
+            eng.kv_row('Customer', customer_name)
         if show('rcpt_show_customer_phone') and customer_phone:
-            lines.append(pair('Phone', customer_phone, width))
+            eng.kv_row('Phone', customer_phone)
         if show('rcpt_show_payment_method') and payment_method_label:
-            lines.append(pair('Payment', payment_method_label, width))
+            eng.kv_row('Payment', payment_method_label)
 
-        lines.append(rule(width))
+        eng.separator()
 
-        # ── Items ─────────────────────────────────────────────────────
-        for item in getattr(sale, 'items', []) or []:
+        # ── Items ──────────────────────────────────────────────────────────────
+        items = getattr(sale, 'items', []) or []
+        if items:
+            eng.three_col_header()
+
+        for item in items:
             product = getattr(item, 'product', None)
             name = product.name if product else 'Unknown Item'
             qty = item.quantity
-            qty_display = int(qty) if qty == int(qty) else qty
+            try:
+                qty_display = int(qty) if float(qty) == int(float(qty)) else qty
+            except (TypeError, ValueError):
+                qty_display = qty
 
             if show('rcpt_show_sku') and product and getattr(product, 'barcode', ''):
-                lines.append(f'  SKU: {product.barcode}')
+                eng.left(f'  SKU: {product.barcode}')
 
             if show('rcpt_show_qty') and show('rcpt_show_unit_price') and show('rcpt_show_line_total'):
-                item_lines = qty_amount_line(name, qty_display, item.total, width, currency)
-                lines.extend(item_lines)
-                if show('rcpt_show_unit_price'):
-                    lines.append(pair('  Unit price', money(item.price, currency), width))
-                if show('rcpt_show_discount') and getattr(item, 'discount', 0):
-                    lines.append(pair('  Discount', f'-{money(item.discount, currency)}', width))
+                eng.three_col_item(
+                    name, qty_display,
+                    _to_dec(item.price),
+                    _to_dec(item.total),
+                )
+                if show('rcpt_show_discount') and _to_dec(getattr(item, 'discount', 0)):
+                    eng.indented_pair('Discount', f'-{_to_dec(item.discount):,.2f}')
             else:
-                wrap = show('rcpt_wrap_product_names')
-                if wrap:
-                    for name_line in wrap_text(name, width):
-                        lines.append(name_line)
+                wrap_names = show('rcpt_wrap_product_names')
+                if wrap_names:
+                    for name_line in _wrap(name, width):
+                        eng.left(name_line)
                 else:
-                    lines.append(clean_line(name, width))
+                    eng.left(_clip(name, width))
                 if show('rcpt_show_qty'):
-                    lines.append(pair('  Qty', str(qty_display), width))
+                    eng.two_col('  Qty', str(qty_display))
                 if show('rcpt_show_unit_price'):
-                    lines.append(pair('  Price', money(item.price, currency), width))
-                if show('rcpt_show_discount') and getattr(item, 'discount', 0):
-                    lines.append(pair('  Discount', f'-{money(item.discount, currency)}', width))
+                    eng.two_col('  Price', f'{_to_dec(item.price):,.2f}')
+                if show('rcpt_show_discount') and _to_dec(getattr(item, 'discount', 0)):
+                    eng.two_col('  Discount', f'-{_to_dec(item.discount):,.2f}')
                 if show('rcpt_show_line_total'):
-                    lines.append(pair('  Total', money(item.total, currency), width))
+                    eng.two_col('  Total', f'{_to_dec(item.total):,.2f}')
 
-        lines.append(rule(width))
+        eng.separator()
 
-        # ── Totals ────────────────────────────────────────────────────
-        subtotal    = to_decimal(getattr(sale, 'subtotal', 0))
-        discount    = to_decimal(getattr(sale, 'discount', 0))
-        tax         = to_decimal(getattr(sale, 'tax', 0))
-        grand_total = to_decimal(getattr(sale, 'total_amount', 0))
-        paid        = to_decimal(getattr(sale, 'tendered', 0))
-        change      = to_decimal(getattr(sale, 'change_amount', 0))
+        # ── Totals ─────────────────────────────────────────────────────────────
+        subtotal    = _to_dec(getattr(sale, 'subtotal', 0))
+        discount    = _to_dec(getattr(sale, 'discount', 0))
+        tax         = _to_dec(getattr(sale, 'tax', 0))
+        grand_total = _to_dec(getattr(sale, 'total_amount', 0))
+        paid        = _to_dec(getattr(sale, 'tendered', 0))
+        change      = _to_dec(getattr(sale, 'change_amount', 0))
 
         if show('rcpt_show_subtotal'):
-            lines.append(pair('Subtotal', money(subtotal, currency), width))
+            eng.two_col('Subtotal', f'{currency} {subtotal:,.2f}')
         if show('rcpt_show_discount_total') and discount:
-            lines.append(pair('Discount', f'-{money(discount, currency)}', width))
+            eng.two_col('Discount', f'-{currency} {discount:,.2f}')
         if show('rcpt_show_tax') and tax:
-            lines.append(pair('Tax', money(tax, currency), width))
+            eng.two_col('Tax', f'{currency} {tax:,.2f}')
         if show('rcpt_show_grand_total'):
-            # ── Grand Total — DOUBLE WIDTH + BOLD on thermal printer ──
-            lines.append(rule_heavy(width))
-            lines.append(ESCPOS_DW_ON)
-            lines.append(pair('TOTAL', money(grand_total, currency), width))
-            lines.append(ESCPOS_DW_OFF)
+            eng.grand_total_line('Grand Total', f'{currency} {grand_total:,.2f}')
         if show('rcpt_show_paid'):
-            lines.append(pair('PAID', money(paid, currency), width))
+            eng.two_col('PAID', f'{currency} {paid:,.2f}')
         if show('rcpt_show_change'):
-            lines.append(pair('CHANGE', money(change, currency), width))
+            eng.two_col('CHANGE', f'{currency} {change:,.2f}')
 
-        lines.append(rule_heavy(width))
+        eng.double_separator()
 
-        # ── Footer ────────────────────────────────────────────────────
-        footer_align = layout.get('rcpt_footer_align', 'center')
-
-        def _footer(text: str) -> str:
-            if footer_align == 'left':
-                return text
-            return center(text, width)
-
-        lines.append(_footer('* * * * *'))
+        # ── Footer ─────────────────────────────────────────────────────────────
+        footer_text = layout.get('rcpt_footer_text', 'Thank you for your business!')
         if show('rcpt_show_thankyou', True):
-            footer_text = layout.get('rcpt_footer_text', 'Thank you for shopping!')
-            for fline in wrap_text(footer_text, width):
-                lines.append(_footer(fline))
+            for fline in _wrap(footer_text, width):
+                if footer_align == 'center':
+                    eng.center(fline)
+                else:
+                    eng.left(fline)
         if show('rcpt_show_return_policy', False):
-            lines.append(_footer('For returns, keep this receipt.'))
+            for fline in _wrap('For returns / exchanges, keep this receipt.', width):
+                if footer_align == 'center':
+                    eng.center(fline)
+                else:
+                    eng.left(fline)
         if show('rcpt_show_powered_by', False):
-            lines.append(_footer('Powered by SuperMart POS'))
+            eng.center('Powered by Garage Management System')
 
-        lines.append('')
-        lines.append('')
-        return '\n'.join(lines)
+        # Barcode text line (invoice number)
+        enable_barcode = show('rcpt_enable_barcode', True)
+        show_barcode_text = show('rcpt_show_barcode_text', True)
+        invoice_no = getattr(sale, 'invoice_number', '') or ''
+        if enable_barcode and show_barcode_text and invoice_no:
+            eng.barcode_line(invoice_no)
+
+        eng.blank(2)
+
+        return eng.as_tagged_text()

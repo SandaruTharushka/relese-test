@@ -415,6 +415,7 @@ class Sale(db.Model):
     __tablename__ = 'sales'
     __table_args__ = (
         UniqueConstraint('invoice_number', name='uq_sale_invoice_number'),
+        Index('ix_sales_sale_date', 'sale_date'),
     )
     id                    = db.Column(db.Integer, primary_key=True)
     invoice_number        = db.Column(db.String(40), unique=True)
@@ -467,6 +468,9 @@ class Sale(db.Model):
 
 class SaleItem(db.Model):
     __tablename__ = 'sale_items'
+    __table_args__ = (
+        Index('ix_sale_items_sale_id', 'sale_id'),
+    )
     id                   = db.Column(db.Integer, primary_key=True)
     sale_id              = db.Column(db.Integer, db.ForeignKey('sales.id'))
     product_id           = db.Column(db.Integer, db.ForeignKey('products.id'))
@@ -507,6 +511,9 @@ class SaleItem(db.Model):
 
 class Payment(db.Model):
     __tablename__ = 'payments'
+    __table_args__ = (
+        Index('ix_payments_sale_id', 'sale_id'),
+    )
     id             = db.Column(db.Integer, primary_key=True)
     sale_id        = db.Column(db.Integer, db.ForeignKey('sales.id'))
     customer_id    = db.Column(db.Integer, db.ForeignKey('retail_customers.id'), nullable=True)
@@ -579,6 +586,9 @@ class UserLog(db.Model):
 
 class Purchase(db.Model):
     __tablename__ = 'purchases'
+    __table_args__ = (
+        Index('ix_purchases_purchase_date', 'purchase_date'),
+    )
     id             = db.Column(db.Integer, primary_key=True)
     grn_number     = db.Column(db.String(40), unique=True, nullable=False)
     supplier_id    = db.Column(db.Integer, db.ForeignKey('suppliers.id'), nullable=True)
@@ -1127,6 +1137,10 @@ class VehicleBrand(db.Model):
 
 class RepairJob(db.Model):
     __tablename__ = 'repair_jobs'
+    __table_args__ = (
+        Index('ix_repair_jobs_received_date', 'received_date'),
+        Index('ix_repair_jobs_completed_date', 'completed_date'),
+    )
     id             = db.Column(db.Integer, primary_key=True)
     job_number     = db.Column(db.String(40), unique=True, nullable=False)
     customer_id    = db.Column(db.Integer, db.ForeignKey('retail_customers.id'), nullable=True)

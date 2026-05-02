@@ -1,12 +1,26 @@
-"""Receipt print routes — direct thermal dispatch for both sales and service receipts.
+"""Receipt print routes — all paths delegate to ReceiptEngine.
 
-Provides:
-  POST /api/printing/receipt/print-sale   — NEW: direct thermal for sales
-  POST /api/printing/receipt/print-job    — service/job receipt thermal print
-  POST /api/printing/receipt/test         — test receipt print
-  GET  /api/printing/receipt/status       — receipt printer status
+Canonical endpoints:
+  POST /api/printing/receipt/print-sale        — sales receipt thermal print
+  POST /api/printing/receipt/print-job         — service/job receipt thermal print
+  POST /api/printing/receipt/test              — test receipt (uses real layout settings)
+  GET  /api/printing/receipt/status            — receipt printer status
+  GET  /api/printing/receipt/preview-sales     — test sales receipt preview
+  GET  /api/printing/receipt/preview-service   — test service receipt preview
+  GET  /api/printing/receipt/preview-job/<jid> — real job data preview (no print)
+  GET  /api/printing/receipt/preview-sale/<sid> — real sale data preview (no print)
+  GET  /api/printing/receipt/debug-layout      — full layout diagnostic
 
-Backward-compat aliases maintained temporarily.
+Backward-compat aliases:
+  POST /api/printer/print/receipt   — raw text dispatch for web-print fallback
+  POST /api/printer/test/receipt    — delegates to test endpoint
+  GET  /api/receipt-printer/status  — delegates to status endpoint
+
+RULE: No route builds receipt text directly.  All paths call ReceiptEngine.
+
+Structured log format:
+  [RECEIPT] type=<type> id=<id> width=<cpl> layout=DB chars=<n> route=<path>
+  [PRINT]   printer=<name> dispatch=<success|failed> copies=<n>
 """
 from __future__ import annotations
 
@@ -38,17 +52,26 @@ def register_receipt_print_routes(
             from flask import abort
             abort(403)
 
-    def _store_context() -> dict[str, str]:
-        return {
-            'store_name': str(StoreSettings.get('store_name', 'SuperMart POS') or 'SuperMart POS'),
-            'store_branch': str(StoreSettings.get('store_branch', '') or ''),
-            'store_address': str(StoreSettings.get('store_address', '') or ''),
-            'store_phone': str(StoreSettings.get('store_phone', '') or ''),
-            'store_email': str(StoreSettings.get('store_email', '') or ''),
-            'store_tax_number': str(StoreSettings.get('store_tax_number', '') or ''),
-        }
+    def _engine():
+        from services.printing.receipt.receipt_engine import ReceiptEngine
+        return ReceiptEngine(StoreSettings)
 
-    # ── Sales receipt direct thermal print ───────────────────────
+    def _log_receipt(receipt_type: str, id_val, result) -> None:
+        """Emit structured [RECEIPT] log line."""
+        app.logger.info(
+            '[RECEIPT] type=%s id=%s width=%s layout=DB chars=%s paper=%s',
+            receipt_type, id_val, result.cpl, result.char_count, result.paper_size,
+        )
+
+    def _log_print(printer_target: str, ok: bool, copies: int) -> None:
+        """Emit structured [PRINT] log line."""
+        app.logger.info(
+            '[PRINT] printer=%s dispatch=%s copies=%s',
+            printer_target, 'success' if ok else 'failed', copies,
+        )
+
+    # ── Sales receipt direct thermal print ────────────────────────────────────
+
     @app.route('/api/printing/receipt/print-sale', methods=['POST'])
     @login_required
     def api_printing_receipt_print_sale():
@@ -58,7 +81,6 @@ def register_receipt_print_routes(
 
         if not sale_id:
             return jsonify({'ok': False, 'code': 'MISSING_SALE_ID', 'msg': 'sale_id is required'}), 400
-
         try:
             sid = int(sale_id)
         except (TypeError, ValueError):
@@ -69,65 +91,56 @@ def register_receipt_print_routes(
             return jsonify({'ok': False, 'code': 'SALE_NOT_FOUND', 'msg': f'Sale {sid} not found'}), 404
 
         try:
-            from services.printing.receipt.sales_builder import SalesReceiptBuilder
-            from services.printing.domain.constants import RECEIPT_LAYOUT_DEFAULTS, RECEIPT_LAYOUT_KEYS
-
-            layout = {
-                k: str(StoreSettings.get(k, RECEIPT_LAYOUT_DEFAULTS.get(k, '')) or RECEIPT_LAYOUT_DEFAULTS.get(k, ''))
-                for k in RECEIPT_LAYOUT_KEYS
-            }
-
-            customer_name = ''
-            customer_phone = ''
-            if sale.customer:
-                customer_name = getattr(sale.customer, 'full_name', '') or ''
-                customer_phone = getattr(sale.customer, 'phone', '') or ''
-
-            cashier_name = getattr(current_user, 'full_name', '') or getattr(current_user, 'username', 'Staff')
-
-            payments = getattr(sale, 'payments', []) or []
-            payment_methods = list({p.method for p in payments if p.method})
-            payment_label = ', '.join(m.replace('_', ' ').title() for m in payment_methods) if payment_methods else ''
-
-            builder = SalesReceiptBuilder()
-            receipt_text = builder.build(
-                sale=sale,
-                store=_store_context(),
-                layout=layout,
-                cashier_name=cashier_name,
-                customer_name=customer_name,
-                customer_phone=customer_phone,
-                payment_method_label=payment_label,
+            cashier_name = (
+                getattr(current_user, 'full_name', '') or
+                getattr(current_user, 'username', 'Staff')
             )
+            engine = _engine()
+            result = engine.build_sales_receipt(
+                sale_id=sid,
+                actor_user_id=getattr(current_user, 'id', None),
+                cashier_name=cashier_name,
+            )
+            _log_receipt('sales_invoice', sid, result)
 
             copies = max(1, min(int(data.get('copies') or 1), 5))
             invoice_no = getattr(sale, 'invoice_number', '') or f'SALE-{sid}'
 
             ok, payload, status_code = print_domain.print_receipt(
-                receipt_text=receipt_text,
+                receipt_text=result.receipt_text,
                 title=f'Receipt {invoice_no}',
                 copies=copies,
                 actor_id=getattr(current_user, 'id', None),
             )
+            _log_print(payload.get('target', ''), ok, copies)
 
             if not ok:
-                app.logger.warning('Sales receipt print failed sale=%s code=%s msg=%s', sid, payload.get('code'), payload.get('msg'))
+                app.logger.warning(
+                    '[PRINT] sales_receipt_failed sale=%s code=%s msg=%s',
+                    sid, payload.get('code'), payload.get('msg'),
+                )
                 return jsonify({'ok': False, 'sale_id': sid, 'invoice': invoice_no, **payload}), status_code
 
             log_action(
                 'Sales receipt printed',
                 target_type='receipt_print_sale',
                 target_id=sid,
-                metadata={'invoice': invoice_no, 'target': payload.get('target'), 'copies': copies},
+                metadata={
+                    'invoice': invoice_no,
+                    'target': payload.get('target'),
+                    'copies': copies,
+                    'cpl': result.cpl,
+                    'chars': result.char_count,
+                },
             )
-            app.logger.info('Sales receipt dispatched sale=%s invoice=%s target=%s copies=%s', sid, invoice_no, payload.get('target'), copies)
             return jsonify({'ok': True, 'sale_id': sid, 'invoice': invoice_no, **payload}), status_code
 
         except Exception:
-            app.logger.exception('Sales receipt print unexpected failure sale=%s', sid)
+            app.logger.exception('[RECEIPT] sales_receipt_unexpected_failure sale=%s', sid)
             return jsonify({'ok': False, 'code': 'SALES_RECEIPT_ERROR', 'msg': 'Failed to print sales receipt'}), 500
 
-    # ── Service/job receipt direct thermal print ─────────────────
+    # ── Service/job receipt direct thermal print ───────────────────────────────
+
     @app.route('/api/printing/receipt/print-job', methods=['POST'])
     @login_required
     def api_printing_receipt_print_job():
@@ -137,12 +150,10 @@ def register_receipt_print_routes(
 
         if not raw_job_id:
             return jsonify({'ok': False, 'code': 'MISSING_JOB_ID', 'msg': 'job_id is required'}), 400
-
         try:
             jid = int(raw_job_id)
         except (TypeError, ValueError):
             return jsonify({'ok': False, 'code': 'INVALID_JOB_ID', 'msg': 'job_id must be an integer'}), 400
-
         if jid <= 0:
             return jsonify({'ok': False, 'code': 'INVALID_JOB_ID', 'msg': 'job_id must be greater than zero'}), 400
 
@@ -151,77 +162,84 @@ def register_receipt_print_routes(
             return jsonify({'ok': False, 'code': 'REPAIR_JOB_NOT_FOUND', 'msg': 'Repair job not found'}), 404
 
         try:
-            from services.printing.receipt.service_builder import ServiceReceiptBuilder
-            from services.printing.domain.constants import SERVICE_RECEIPT_LAYOUT_DEFAULTS, SERVICE_RECEIPT_LAYOUT_KEYS
-            from models import money_to_decimal, RepairPayment
-            from decimal import Decimal
-
-            # Build payment snapshot
-            payments = RepairPayment.query.filter_by(job_id=jid).order_by(RepairPayment.payment_date.asc()).all()
-            total_amount = money_to_decimal(job.total_amount)
-            advance_paid = money_to_decimal(job.advance_paid)
-            additional_paid = sum((money_to_decimal(p.amount) for p in payments), money_to_decimal(0))
-            final_paid = advance_paid + additional_paid
-            remaining = max(money_to_decimal(0), total_amount - final_paid)
-            parts_total = sum(money_to_decimal(p.total) for p in (job.parts or []))
-
-            payment_snapshot = {
-                'parts_total': Decimal(str(parts_total or 0)),
-                'labor_total': Decimal(str(money_to_decimal(job.labour_charge) or 0)),
-                'grand_total': Decimal(str(total_amount)),
-                'paid_total': Decimal(str(final_paid)),
-                'balance_total': Decimal(str(remaining)),
-            }
-
-            layout = {
-                k: str(StoreSettings.get(k, SERVICE_RECEIPT_LAYOUT_DEFAULTS.get(k, '')) or SERVICE_RECEIPT_LAYOUT_DEFAULTS.get(k, ''))
-                for k in SERVICE_RECEIPT_LAYOUT_KEYS
-            }
-
-            builder = ServiceReceiptBuilder()
-            receipt_text = builder.build(
-                job=job,
-                payment_snapshot=payment_snapshot,
-                store=_store_context(),
-                layout=layout,
+            engine = _engine()
+            result = engine.build_service_receipt(
+                job_id=jid,
+                actor_user_id=getattr(current_user, 'id', None),
             )
+            _log_receipt('service_job', jid, result)
 
             copies = max(1, min(int(data.get('copies') or 1), 5))
             job_number = job.job_number or f'JOB-{jid}'
 
             ok, payload, status_code = print_domain.print_receipt(
-                receipt_text=receipt_text,
+                receipt_text=result.receipt_text,
                 title=f'Service Job {job_number}',
                 copies=copies,
                 actor_id=getattr(current_user, 'id', None),
             )
+            _log_print(payload.get('target', ''), ok, copies)
 
             if not ok:
-                app.logger.warning('Service receipt print failed jid=%s code=%s msg=%s', jid, payload.get('code'), payload.get('msg'))
+                app.logger.warning(
+                    '[PRINT] service_receipt_failed jid=%s code=%s msg=%s',
+                    jid, payload.get('code'), payload.get('msg'),
+                )
                 return jsonify({'ok': False, 'job_id': jid, 'job_number': job_number, **payload}), status_code
 
             log_action(
                 'Service receipt printed',
                 target_type='receipt_print_job',
                 target_id=jid,
-                metadata={'job_number': job_number, 'target': payload.get('target'), 'copies': copies},
+                metadata={
+                    'job_number': job_number,
+                    'target': payload.get('target'),
+                    'copies': copies,
+                    'cpl': result.cpl,
+                    'chars': result.char_count,
+                },
             )
-            app.logger.info('Service receipt dispatched jid=%s job=%s target=%s copies=%s', jid, job_number, payload.get('target'), copies)
             return jsonify({'ok': True, 'job_id': jid, 'job_number': job_number, **payload}), status_code
 
         except Exception:
-            app.logger.exception('Service receipt print unexpected failure jid=%s', jid)
+            app.logger.exception('[RECEIPT] service_receipt_unexpected_failure jid=%s', jid)
             return jsonify({'ok': False, 'code': 'SERVICE_RECEIPT_ERROR', 'msg': 'Failed to print service receipt'}), 500
 
-    # ── Test receipt ─────────────────────────────────────────────
+    # ── Test receipt — uses real layout settings ───────────────────────────────
+
     @app.route('/api/printing/receipt/test', methods=['POST'])
     @login_required
     def api_printing_receipt_test():
         _require_admin()
-        ok, payload, status_code = print_domain.receipt_test()
-        return jsonify({'ok': ok, **payload}), status_code
+        data = request.get_json(silent=True) or {}
+        kind = str(data.get('kind') or 'sales').strip().lower()
+        if kind not in {'sales', 'service'}:
+            kind = 'sales'
 
-    # ── Receipt printer status ────────────────────────────────────
+        try:
+            engine = _engine()
+            result = engine.build_test_receipt(kind=kind)  # type: ignore[arg-type]
+        except Exception:
+            app.logger.exception('[RECEIPT] test_receipt_build_failed kind=%s', kind)
+            ok, payload, status_code = print_domain.receipt_test()
+            return jsonify({'ok': ok, **payload}), status_code
+
+        ok, payload, status_code = print_domain.print_receipt(
+            receipt_text=result.receipt_text,
+            title=f'Test Receipt ({kind})',
+            copies=1,
+            actor_id=getattr(current_user, 'id', None),
+        )
+        _log_print(payload.get('target', ''), ok, 1)
+        if ok:
+            app.logger.info(
+                '[RECEIPT] type=test_%s width=%s paper=%s chars=%s',
+                kind, result.cpl, result.paper_size, result.char_count,
+            )
+        return jsonify({'ok': ok, 'debug': result.debug, **payload}), status_code
+
+    # ── Receipt printer status ─────────────────────────────────────────────────
+
     @app.route('/api/printing/receipt/status', methods=['GET'])
     @login_required
     def api_printing_receipt_status():
@@ -229,14 +247,151 @@ def register_receipt_print_routes(
         status = print_domain.status()
         return jsonify({'ok': True, **status})
 
-    # ─────────────────────────────────────────────────────────────
+    # ── Live preview — test sales receipt (no real sale data) ─────────────────
+
+    @app.route('/api/printing/receipt/preview-sales', methods=['GET'])
+    @login_required
+    def api_printing_receipt_preview_sales():
+        """Return a test sales receipt preview using the current saved layout settings."""
+        _require_admin()
+        try:
+            engine = _engine()
+            result = engine.build_test_receipt(kind='sales')
+            return jsonify({
+                'ok': True,
+                'receipt_text': result.receipt_plain,
+                'receipt_tagged': result.receipt_text,
+                'layout': result.layout,
+                'paper_size': result.paper_size,
+                'cpl': result.cpl,
+                'char_count': result.char_count,
+                'debug': result.debug,
+            })
+        except Exception:
+            app.logger.exception('[RECEIPT] preview_sales_failed')
+            return jsonify({'ok': False, 'code': 'PREVIEW_ERROR', 'msg': 'Failed to generate preview'}), 500
+
+    # ── Live preview — test service receipt (no real job data) ────────────────
+
+    @app.route('/api/printing/receipt/preview-service', methods=['GET'])
+    @login_required
+    def api_printing_receipt_preview_service():
+        """Return a test service receipt preview using the current saved layout settings."""
+        _require_admin()
+        try:
+            engine = _engine()
+            result = engine.build_test_receipt(kind='service')
+            return jsonify({
+                'ok': True,
+                'receipt_text': result.receipt_plain,
+                'receipt_tagged': result.receipt_text,
+                'layout': result.layout,
+                'paper_size': result.paper_size,
+                'cpl': result.cpl,
+                'char_count': result.char_count,
+                'debug': result.debug,
+            })
+        except Exception:
+            app.logger.exception('[RECEIPT] preview_service_failed')
+            return jsonify({'ok': False, 'code': 'PREVIEW_ERROR', 'msg': 'Failed to generate preview'}), 500
+
+    # ── Live preview — real job data (no print) ───────────────────────────────
+
+    @app.route('/api/printing/receipt/preview-job/<int:jid>', methods=['GET'])
+    @login_required
+    def api_printing_receipt_preview_job(jid: int):
+        """Return a service receipt preview for a specific job — real data, no print."""
+        _require_print_access()
+        job = RepairJob.query.filter_by(id=jid).first()
+        if not job:
+            return jsonify({'ok': False, 'code': 'REPAIR_JOB_NOT_FOUND', 'msg': 'Repair job not found'}), 404
+        try:
+            engine = _engine()
+            result = engine.build_service_receipt(
+                job_id=jid,
+                actor_user_id=getattr(current_user, 'id', None),
+            )
+            app.logger.info(
+                '[RECEIPT] type=preview_job job_id=%s width=%s chars=%s route=preview-job',
+                jid, result.cpl, result.char_count,
+            )
+            return jsonify({
+                'ok': True,
+                'receipt_text': result.receipt_plain,
+                'receipt_tagged': result.receipt_text,
+                'layout': result.layout,
+                'paper_size': result.paper_size,
+                'cpl': result.cpl,
+                'char_count': result.char_count,
+                'job_id': jid,
+                'job_number': job.job_number or f'JOB-{jid}',
+            })
+        except Exception:
+            app.logger.exception('[RECEIPT] preview_job_failed jid=%s', jid)
+            return jsonify({'ok': False, 'code': 'PREVIEW_ERROR', 'msg': 'Failed to generate receipt preview'}), 500
+
+    # ── Live preview — real sale data (no print) ──────────────────────────────
+
+    @app.route('/api/printing/receipt/preview-sale/<int:sid>', methods=['GET'])
+    @login_required
+    def api_printing_receipt_preview_sale(sid: int):
+        """Return a sales receipt preview for a specific sale — real data, no print."""
+        _require_print_access()
+        sale = Sale.query.filter_by(id=sid).first()
+        if not sale:
+            return jsonify({'ok': False, 'code': 'SALE_NOT_FOUND', 'msg': 'Sale not found'}), 404
+        try:
+            cashier_name = (
+                getattr(current_user, 'full_name', '') or
+                getattr(current_user, 'username', 'Staff')
+            )
+            engine = _engine()
+            result = engine.build_sales_receipt(
+                sale_id=sid,
+                actor_user_id=getattr(current_user, 'id', None),
+                cashier_name=cashier_name,
+            )
+            app.logger.info(
+                '[RECEIPT] type=preview_sale sale_id=%s width=%s chars=%s route=preview-sale',
+                sid, result.cpl, result.char_count,
+            )
+            return jsonify({
+                'ok': True,
+                'receipt_text': result.receipt_plain,
+                'receipt_tagged': result.receipt_text,
+                'layout': result.layout,
+                'paper_size': result.paper_size,
+                'cpl': result.cpl,
+                'char_count': result.char_count,
+                'sale_id': sid,
+                'invoice': getattr(sale, 'invoice_number', '') or f'SALE-{sid}',
+            })
+        except Exception:
+            app.logger.exception('[RECEIPT] preview_sale_failed sid=%s', sid)
+            return jsonify({'ok': False, 'code': 'PREVIEW_ERROR', 'msg': 'Failed to generate receipt preview'}), 500
+
+    # ── Admin diagnostic — full layout state ──────────────────────────────────
+
+    @app.route('/api/printing/receipt/debug-layout', methods=['GET'])
+    @login_required
+    def api_printing_receipt_debug_layout():
+        _require_admin()
+        try:
+            engine = _engine()
+            data = engine.get_debug_layout()
+            return jsonify({'ok': True, **data})
+        except Exception:
+            app.logger.exception('[RECEIPT] debug_layout_failed')
+            return jsonify({'ok': False, 'code': 'DEBUG_ERROR', 'msg': 'Failed to load debug layout'}), 500
+
+    # ─────────────────────────────────────────────────────────────────────────
     # BACKWARD-COMPAT ALIASES
-    # ─────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────────────────
 
     @app.route('/api/printer/print/receipt', methods=['POST'])
     @login_required
     def api_printer_print_receipt_compat():
-        """Legacy: raw text dispatch — still supported for web-print fallback."""
+        """Legacy: raw text dispatch — delegates directly to print_domain."""
         _require_print_access()
         data = request.get_json(silent=True) or {}
         text = str(data.get('receipt_text') or '').strip()
@@ -252,11 +407,12 @@ def register_receipt_print_routes(
             copies=copies,
             actor_id=getattr(current_user, 'id', None),
         )
+        _log_print(payload.get('target', ''), ok, copies)
         return jsonify({'ok': ok, **payload}), status_code
 
-    # NOTE: /api/printer/print/job-receipt is owned by repair_routes.py
-    # which handles the full job lookup and dispatch. The canonical new path
-    # /api/printing/receipt/print-job (above) is the correct new endpoint.
+    # NOTE: /api/printer/print/job-receipt is owned by repair_routes.py and
+    # uses ReceiptEngine internally.  Canonical path is
+    # /api/printing/receipt/print-job (above).
 
     @app.route('/api/printer/test/receipt', methods=['POST'])
     @login_required
@@ -264,7 +420,7 @@ def register_receipt_print_routes(
         return api_printing_receipt_test()
 
     @app.route('/api/receipt-printer/status', methods=['GET'])
-    @login_required  
+    @login_required
     def api_receipt_printer_status_compat():
         _require_admin()
         status = print_domain.status()

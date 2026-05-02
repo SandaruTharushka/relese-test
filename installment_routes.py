@@ -614,7 +614,7 @@ def register_installment_routes(app, log_action=None):
         }
         title = title_map.get(doc_type, 'Installment Document')
         store = {
-            'name': StoreSettings.get('store_name', 'SuperMart POS'),
+            'name': StoreSettings.get('store_name', 'Garage Management System'),
             'branch': StoreSettings.get('store_branch', ''),
             'phone': StoreSettings.get('store_phone', ''),
             'address': StoreSettings.get('store_address', ''),

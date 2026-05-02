@@ -1,4 +1,4 @@
-"""Centralised file-based logging configuration for SuperMart POS.
+"""Centralised file-based logging configuration for Garage Management System.
 
 Call ``configure_app_logging(app)`` once, after ``RUNTIME_DATA_DIR`` has been
 set on ``app.config``, to attach rotating file handlers that survive across

@@ -11,7 +11,7 @@ from PySide6 import QtCore, QtWidgets
 
 from runtime_paths import ensure_persistent_app_structure, persistent_path
 
-APP_NAME = 'SuperMart Printer Manager'
+APP_NAME = 'Garage Printer Manager'
 SINGLE_INSTANCE_PORT = 53991
 SETTINGS_KEYS = [
     'label_printer_type',
@@ -93,10 +93,10 @@ def can_connect_network(ip: str, port: int) -> bool:
 def send_test_windows(printer_name: str) -> None:
     import win32print  # type: ignore
 
-    payload = b'SuperMart Printer Manager Test Label\n\n\n'
+    payload = b'Garage Printer Manager Test Label\n\n\n'
     handle = win32print.OpenPrinter(printer_name)
     try:
-        win32print.StartDocPrinter(handle, 1, ('SuperMart Label Test', None, 'RAW'))
+        win32print.StartDocPrinter(handle, 1, ('Garage Label Test', None, 'RAW'))
         win32print.StartPagePrinter(handle)
         win32print.WritePrinter(handle, payload)
         win32print.EndPagePrinter(handle)

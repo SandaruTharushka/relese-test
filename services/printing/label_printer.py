@@ -141,4 +141,3 @@ class LabelPrintExecutionService:
         if kwargs.get('show_footer') and kwargs.get('custom_footer'):
             _draw_text(str(kwargs.get('custom_footer')))
         return img
-

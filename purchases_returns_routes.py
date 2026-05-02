@@ -594,7 +594,7 @@ def register_purchases_returns_routes(
         try:
             r = ProductReturn.query.get_or_404(rid)
             store = {
-                'name': StoreSettings.get('store_name', 'SuperMart POS'),
+                'name': StoreSettings.get('store_name', 'Garage Management System'),
                 'phone': StoreSettings.get('store_phone', ''),
                 'address': StoreSettings.get('store_address', ''),
                 'email': StoreSettings.get('store_email', ''),
