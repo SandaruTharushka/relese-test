@@ -60,7 +60,12 @@ class User(UserMixin, db.Model):
 
     def set_password(self, pw):
         # Keep one canonical algorithm for all newly created/reset passwords.
-        self.password = generate_password_hash(pw)
+        # Prefer scrypt (memory-hard); fall back to pbkdf2:sha256 if the
+        # runtime libcrypto can't service scrypt (older Werkzeug / build envs).
+        try:
+            self.password = generate_password_hash(pw, method='scrypt')
+        except (ValueError, TypeError):
+            self.password = generate_password_hash(pw, method='pbkdf2:sha256:600000')
 
     def check_password(self, pw):
         """
@@ -838,8 +843,8 @@ class IMEIRecord(db.Model):
     storage = db.Column(db.String(50), nullable=True)
     supplier_id = db.Column(db.Integer, db.ForeignKey('suppliers.id'), nullable=True)
     purchase_id = db.Column(db.Integer, db.ForeignKey('purchases.id'), nullable=True)
-    cost_price = db.Column(db.Float, nullable=True)
-    sale_price = db.Column(db.Float, nullable=True)
+    cost_price = db.Column(MONEY, nullable=True)
+    sale_price = db.Column(MONEY, nullable=True)
     status = db.Column(db.String(20), default=STATUS_ACTIVE)
     item_condition = db.Column('condition', db.String(20), nullable=True)
     warranty_status = db.Column(db.String(20), nullable=True)

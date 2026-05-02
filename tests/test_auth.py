@@ -77,7 +77,26 @@ def test_reset_password_rejects_mismatch_identity(client):
     assert response.status_code == 400
     payload = response.get_json()
     assert payload['ok'] is False
-    assert payload['msg'] == 'Username and email do not match'
+    # The response intentionally does not disclose whether the email or
+    # username existed — both failure modes return the same generic message
+    # so attackers cannot enumerate accounts via the reset flow.
+    assert payload['msg'] == (
+        'Identity verification failed. Check your username and email and try again.'
+    )
+
+
+def test_reset_password_rejects_unknown_email_with_same_message(client):
+    """Unknown email must produce the same response as a mismatched pair."""
+    response = client.post(
+        '/forgot-password',
+        json={'email': 'noone@example.com', 'username': 'admin'},
+    )
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert payload['ok'] is False
+    assert payload['msg'] == (
+        'Identity verification failed. Check your username and email and try again.'
+    )
 
 
 def test_operator_cannot_create_admin_user(client, flask_app):

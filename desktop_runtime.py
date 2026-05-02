@@ -885,14 +885,48 @@ class DesktopLauncher:
         qt_app.exec()
 
     def _build_qt_webchannel_bridge(self, QtCore: Any, bridge: JsBridge) -> Any:
+        # Any uncaught Python exception escaping a @QtCore.Slot crashes the Qt
+        # event loop silently. Wrap every dispatch so JS gets a JSON error and
+        # the desktop window stays alive.
         class BridgeAdapter(QtCore.QObject):
             @QtCore.Slot(str, str, result=str)
             def invoke(self, method_name: str, args_json: str) -> str:
                 import json
-                args = json.loads(args_json)
-                method = getattr(bridge, method_name)
-                result = method(*args)
-                return json.dumps(result)
+                try:
+                    try:
+                        args = json.loads(args_json) if args_json else []
+                    except (TypeError, ValueError) as parse_exc:
+                        logger.warning(
+                            'BridgeAdapter received invalid JSON for %s: %s',
+                            method_name, parse_exc,
+                        )
+                        return json.dumps({
+                            'ok': False,
+                            'msg': 'Invalid bridge arguments.',
+                            'error': 'invalid_json',
+                        })
+                    method = getattr(bridge, method_name, None)
+                    if method is None or not callable(method):
+                        logger.warning('BridgeAdapter unknown method %s', method_name)
+                        return json.dumps({
+                            'ok': False,
+                            'msg': f'Unknown bridge method: {method_name}',
+                            'error': 'unknown_method',
+                        })
+                    if not isinstance(args, (list, tuple)):
+                        args = [args]
+                    result = method(*args)
+                    try:
+                        return json.dumps(result, default=str)
+                    except (TypeError, ValueError):
+                        return json.dumps({'ok': True, 'value': str(result)})
+                except Exception as exc:  # noqa: BLE001 — must catch all to protect Qt loop
+                    logger.exception('BridgeAdapter call failed: %s', method_name)
+                    return json.dumps({
+                        'ok': False,
+                        'msg': f'Bridge call failed: {exc}',
+                        'error': 'bridge_exception',
+                    })
 
         return BridgeAdapter()
 

@@ -67,8 +67,10 @@ a = Analysis(
 
         # ── Route / blueprint modules ────────────────────────────────────────────
         'customer_routes',
+        'customer_linking',           # imported by customer_routes/repair_routes/sales_routes
         'imei_routes',
         'variant_routes',
+        'vehicle_routes',
         'repair_routes',
         'tradein_routes',
         'installment_routes',
@@ -79,6 +81,9 @@ a = Analysis(
         'suppliers_wholesale_routes',
         'purchases_returns_routes',
         'sales_routes',
+        'broker_routes',
+        'expense_routes',
+        'service_analytics_routes',
 
         # ── New canonical printing route modules (domain rewrite) ─────────────────
         'routes',
@@ -110,6 +115,10 @@ a = Analysis(
         'services.barcode_scanner_service',
         'services.print_templates',           # build_escpos_payload — imported by receipt_printer.py
         'services.receipt_renderer',          # imported by sales_routes.py
+        'services.settings_service',          # loaded inside app.py post-Talisman init
+        'services.card_terminal_service',     # auto-connect on startup
+        'services.atomic_sequence',           # used by sales/repair number generators
+        'services.migrations',                # versioned migration runner
         'services.printing',
         'services.printing.models',
         'services.printing.printer_config',

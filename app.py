@@ -468,6 +468,63 @@ _db_ok = False
 _active_sessions: dict = {}
 _active_sessions_lock = threading.Lock()
 
+# In-memory brute-force throttle. Stops password spraying without needing an
+# external rate limiter; the desktop app has a single Flask instance.
+LOGIN_LOCKOUT_THRESHOLD = int(os.getenv('LOGIN_LOCKOUT_THRESHOLD', '5'))
+LOGIN_LOCKOUT_WINDOW_SECONDS = int(os.getenv('LOGIN_LOCKOUT_WINDOW_SECONDS', '300'))
+LOGIN_LOCKOUT_DURATION_SECONDS = int(os.getenv('LOGIN_LOCKOUT_DURATION_SECONDS', '900'))
+_login_attempts: dict = {}
+_login_attempts_lock = threading.Lock()
+
+
+def _login_throttle_key() -> str:
+    ident = (request.form.get('username') or '').strip().lower() if request else ''
+    if not ident and request:
+        try:
+            data = request.get_json(silent=True) or {}
+            ident = (data.get('username') or '').strip().lower()
+        except Exception:
+            ident = ''
+    ip = (request.remote_addr if request else '') or ''
+    return f"{ident}|{ip}"
+
+
+def login_lockout_status(key: str | None = None):
+    """Return (locked, retry_seconds) for the current login attempt key."""
+    key = key if key is not None else _login_throttle_key()
+    now = time.time()
+    with _login_attempts_lock:
+        record = _login_attempts.get(key)
+        if not record:
+            return False, 0
+        if record.get('locked_until', 0) > now:
+            return True, int(record['locked_until'] - now)
+        # Drop expired attempts that fell outside the rolling window.
+        attempts = [t for t in record.get('attempts', []) if now - t <= LOGIN_LOCKOUT_WINDOW_SECONDS]
+        if not attempts:
+            _login_attempts.pop(key, None)
+        else:
+            record['attempts'] = attempts
+        return False, 0
+
+
+def register_login_failure(key: str | None = None) -> None:
+    key = key if key is not None else _login_throttle_key()
+    now = time.time()
+    with _login_attempts_lock:
+        record = _login_attempts.setdefault(key, {'attempts': [], 'locked_until': 0})
+        record['attempts'] = [t for t in record['attempts'] if now - t <= LOGIN_LOCKOUT_WINDOW_SECONDS]
+        record['attempts'].append(now)
+        if len(record['attempts']) >= LOGIN_LOCKOUT_THRESHOLD:
+            record['locked_until'] = now + LOGIN_LOCKOUT_DURATION_SECONDS
+            record['attempts'] = []
+
+
+def clear_login_failures(key: str | None = None) -> None:
+    key = key if key is not None else _login_throttle_key()
+    with _login_attempts_lock:
+        _login_attempts.pop(key, None)
+
 @app.route('/health')
 def health():
     return 'ok'
@@ -1294,6 +1351,26 @@ def login():
         try:
             username = (data.get('username') or '').strip()
             password = data.get('password', '')
+            throttle_key = f"{username.lower()}|{request.remote_addr or ''}"
+            locked, retry_after = login_lockout_status(throttle_key)
+            if locked:
+                app.logger.warning(
+                    'Login lockout active identity=%s ip=%s retry_in=%ss',
+                    username or '<blank>', request.remote_addr, retry_after,
+                )
+                message = (
+                    f'Too many failed sign-in attempts. Try again in '
+                    f'{max(1, retry_after // 60)} minute(s).'
+                )
+                if request.is_json:
+                    return jsonify({
+                        'ok': False,
+                        'msg': message,
+                        'code': 'LOGIN_LOCKED_OUT',
+                        'retry_after': retry_after,
+                    }), 429
+                flash(message, 'error')
+                return render_template('login.html', first_run_setup_required=False), 429
             if first_run_setup_required:
                 app.logger.info(
                     'Login blocked during first-run setup username=%s ip=%s',
@@ -1314,6 +1391,7 @@ def login():
             user = _find_user_for_login(username)
             password_ok = bool(user and user.check_password(password))
             if user and password_ok and user.status == 'active':
+                clear_login_failures(throttle_key)
                 user.role = normalize_role(user.role)
                 user.is_admin = is_admin(user)
                 _ensure_primary_admin_assignment_for_authenticated_user(user)
@@ -1353,6 +1431,7 @@ def login():
                     return jsonify({'ok': True, 'role': user.role, 'name': user.full_name,
                                     'force_password_change': bool(force_change)})
                 return redirect(url_for('dashboard'))
+            register_login_failure(throttle_key)
             app.logger.info('Invalid login attempt identity=%s ip=%s', username or '<blank>', request.remote_addr)
             if request.is_json:
                 return jsonify({
@@ -1776,12 +1855,24 @@ def forgot_password():
         return jsonify({'ok': False, 'msg': 'Please fill in all required fields.'}), 400
 
     user_for_email = User.query.filter(func.lower(User.email) == email).first()
-    if not user_for_email:
-        return jsonify({'ok': False, 'msg': 'Email not found'}), 404
+    user_for_username = _find_user_for_login(username) if user_for_email else None
+    identity_verified = bool(
+        user_for_email
+        and user_for_username
+        and user_for_username.id == user_for_email.id
+    )
 
-    user_for_username = _find_user_for_login(username)
-    if not user_for_username or user_for_username.id != user_for_email.id:
-        return jsonify({'ok': False, 'msg': 'Username and email do not match'}), 400
+    if not identity_verified:
+        # Single uniform response — never disclose whether the email or
+        # username existed. This blocks account-enumeration probes.
+        app.logger.info(
+            'Password reset identity check failed email=%s username=%s ip=%s',
+            email or '<blank>', username or '<blank>', request.remote_addr,
+        )
+        return jsonify({
+            'ok': False,
+            'msg': 'Identity verification failed. Check your username and email and try again.',
+        }), 400
 
     session['password_reset_user_id'] = user_for_email.id
     session['password_reset_email'] = email

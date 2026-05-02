@@ -42,8 +42,39 @@ ACTIVATION_FILE = os.path.join(LICENSE_DIR, 'activation.json')
 
 
 # ── License secret (set LICENSE_SECRET in .env) ────────────────────────────────
-LICENSE_SECRET = os.getenv('LICENSE_SECRET', 'supermart-license-secret-change-this')
-ACTIVATION_SECRET = os.getenv('OFFLINE_ACTIVATION_SECRET', LICENSE_SECRET)
+# The previous build shipped a hard-coded default, which let anyone forge keys
+# against an unconfigured deployment. The default is now a per-install random
+# secret persisted alongside the license metadata, so a missing .env still fails
+# closed instead of trusting a publicly known constant.
+def _resolve_license_secret() -> str:
+    explicit = (os.getenv('LICENSE_SECRET') or '').strip()
+    if explicit and explicit.lower() not in {
+        'change-me', 'changeme', 'supermart-license-secret-change-this'
+    }:
+        return explicit
+    secret_path = os.path.join(LICENSE_DIR, '.license_secret')
+    try:
+        if os.path.exists(secret_path):
+            with open(secret_path, 'r', encoding='utf-8') as fh:
+                stored = fh.read().strip()
+                if stored:
+                    return stored
+        generated = hashlib.sha256(os.urandom(48)).hexdigest()
+        with open(secret_path, 'w', encoding='utf-8') as fh:
+            fh.write(generated)
+        try:
+            os.chmod(secret_path, 0o600)
+        except OSError:
+            pass
+        return generated
+    except OSError:
+        # Last-resort ephemeral secret — still random per-process, never the
+        # documented default. Operators must set LICENSE_SECRET for stability.
+        return hashlib.sha256(os.urandom(48)).hexdigest()
+
+
+LICENSE_SECRET = _resolve_license_secret()
+ACTIVATION_SECRET = os.getenv('OFFLINE_ACTIVATION_SECRET') or LICENSE_SECRET
 TRIAL_DAYS = 7
 OWNER_CONTACT = {
     'email': 'sandarutharushka044@gmail.com',
