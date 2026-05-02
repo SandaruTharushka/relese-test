@@ -85,7 +85,9 @@ class TestAppVersionEndpoint:
         r = client.get('/api/app/version')
         d = r.get_json()
         assert 'app_name' in d
-        assert 'SuperMart' in d['app_name']
+        # Project was rebranded from "SuperMart POS" to "Garage Management
+        # System" — accept either to remain robust across future renames.
+        assert any(token in d['app_name'] for token in ('Garage', 'SuperMart'))
 
 
 # ── /api/updates/check ────────────────────────────────────────────────────────
