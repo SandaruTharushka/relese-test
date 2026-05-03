@@ -251,6 +251,10 @@ MIGRATIONS: list[Migration] = [
     Migration(18, 'v6.7 wholesale retail link backfill marker', [
         "CREATE INDEX IF NOT EXISTS idx_wholesale_customers_retail_customer_id ON wholesale_customers(retail_customer_id)",
     ]),
+    Migration(19, 'v8.1 add retail_customer_id to wholesale_customers', [
+        "ALTER TABLE wholesale_customers ADD COLUMN retail_customer_id INTEGER NULL",
+        "CREATE INDEX IF NOT EXISTS idx_wholesale_customers_retail_customer_id ON wholesale_customers(retail_customer_id)",
+    ]),
 ]
 
 
