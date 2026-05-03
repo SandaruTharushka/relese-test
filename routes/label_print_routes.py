@@ -128,10 +128,11 @@ def register_label_print_routes(
         # Normalize nested product dict format used by barcode scanner page
         if 'product' in data:
             product_data = data.get('product') or {}
-            return print_domain.print_label(
+            ok, payload, status_code = print_domain.print_label(
                 product=product_data,
                 copies=int(data.get('copies') or 1),
             )
+            return jsonify({'ok': ok, **payload}), status_code
         return api_printing_label_print()
 
     @app.route('/api/barcode-label/sample', methods=['POST'])
