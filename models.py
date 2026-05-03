@@ -245,19 +245,20 @@ class Product(db.Model):
 
 class WholesaleCustomer(db.Model):
     __tablename__ = 'wholesale_customers'
-    id           = db.Column(db.Integer, primary_key=True)
-    name         = db.Column(db.String(150), nullable=False)
-    business     = db.Column(db.String(200))
-    phone        = db.Column(db.String(20))
-    email        = db.Column(db.String(120))
-    address      = db.Column(db.Text)
-    credit_limit = db.Column(MONEY, default=0)
-    balance      = db.Column(MONEY, default=0)
-    on_hold      = db.Column(db.Integer, default=0)   # 1 = account on hold, no new sales
-    status       = db.Column(db.String(10), default='active')
-    created_at   = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
-    sales        = db.relationship('Sale', backref='wholesale_customer', lazy=True)
-    transactions = db.relationship('WholesaleTransaction', backref='customer', lazy=True)
+    id                 = db.Column(db.Integer, primary_key=True)
+    name               = db.Column(db.String(150), nullable=False)
+    business           = db.Column(db.String(200))
+    phone              = db.Column(db.String(20))
+    email              = db.Column(db.String(120))
+    address            = db.Column(db.Text)
+    credit_limit       = db.Column(MONEY, default=0)
+    balance            = db.Column(MONEY, default=0)
+    on_hold            = db.Column(db.Integer, default=0)   # 1 = account on hold, no new sales
+    status             = db.Column(db.String(10), default='active')
+    created_at         = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    retail_customer_id = db.Column(db.Integer, db.ForeignKey('retail_customers.id'), nullable=True)
+    sales              = db.relationship('Sale', backref='wholesale_customer', lazy=True)
+    transactions       = db.relationship('WholesaleTransaction', backref='customer', lazy=True)
 
     def to_dict(self):
         return {
@@ -268,6 +269,7 @@ class WholesaleCustomer(db.Model):
             'balance': money_to_float(self.balance),
             'on_hold': self.on_hold or 0,
             'status': self.status,
+            'retail_customer_id': self.retail_customer_id,
         }
 
 

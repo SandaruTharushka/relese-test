@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from models import (
     Product,
     Purchase,
+    RetailCustomer,
     Sale,
     Supplier,
     SupplierTransaction,
@@ -15,7 +16,8 @@ from models import (
     db,
 )
 from validators import parse_positive_float
-from shared_helpers import user_has_any_role
+from shared_helpers import user_has_any_role, normalize_phone
+from customer_linking import ensure_customer_profile
 
 
 def register_suppliers_wholesale_routes(app, *, log_action):
@@ -267,15 +269,34 @@ def register_suppliers_wholesale_routes(app, *, log_action):
                 credit_limit = float(d.get('credit_limit', 0))
             except (TypeError, ValueError):
                 credit_limit = 0.0
+            phone = (d.get('phone') or '').strip() or None
             c = WholesaleCustomer(
                 name=d['name'],
                 business=d.get('business', ''),
-                phone=d.get('phone', ''),
+                phone=phone,
                 email=d.get('email', ''),
                 address=d.get('address', ''),
                 credit_limit=credit_limit,
             )
             db.session.add(c)
+            db.session.flush()
+
+            # Sync to canonical RetailCustomer table
+            retail_cust, outcome = ensure_customer_profile(
+                name=d['name'],
+                phone=phone,
+                email=d.get('email') or None,
+                address=d.get('address') or None,
+                allow_create=True,
+            )
+            if retail_cust:
+                c.retail_customer_id = retail_cust.id
+                app.logger.info(
+                    '[CUSTOMER SYNC] source=api_wholesale_create endpoint=/api/wholesale-customers '
+                    'outcome=%s retail_customer_id=%s wholesale_id=%s phone=%s',
+                    outcome, retail_cust.id, c.id, phone,
+                )
+
             db.session.commit()
             log_action(f'Added wholesale customer: {c.name}')
             return jsonify(c.to_dict()), 201
@@ -285,7 +306,7 @@ def register_suppliers_wholesale_routes(app, *, log_action):
     @login_required
     def add_wholesale_customer():
         name = (request.form.get('name') or '').strip()
-        phone = (request.form.get('phone') or '').strip()
+        phone = (request.form.get('phone') or '').strip() or None
 
         if not name or not phone:
             return jsonify({'error': 'Name and phone required'}), 400
@@ -296,16 +317,49 @@ def register_suppliers_wholesale_routes(app, *, log_action):
             if existing:
                 return jsonify({'error': 'A wholesale customer with this email already exists'}), 409
 
+        # Avoid duplicate wholesale customers by phone
+        phone_norm = normalize_phone(phone)
+        if phone_norm:
+            dup = WholesaleCustomer.query.filter_by(status='active').all()
+            for d in dup:
+                if normalize_phone(d.phone) == phone_norm:
+                    return jsonify({'error': 'A wholesale customer with this phone number already exists'}), 409
+
+        address = (request.form.get('address') or '').strip() or None
         customer = WholesaleCustomer(
             name=name,
             phone=phone,
             business=(request.form.get('business') or '').strip(),
-            email=email,
+            email=email or None,
             credit_limit=float(request.form.get('credit_limit') or 0),
-            address=(request.form.get('address') or '').strip(),
+            address=address,
         )
 
         db.session.add(customer)
+        try:
+            db.session.flush()
+        except IntegrityError as exc:
+            db.session.rollback()
+            if 'wholesale_customers.email' in str(exc):
+                return jsonify({'error': 'A wholesale customer with this email already exists'}), 409
+            raise
+
+        # Sync to canonical RetailCustomer table (upsert by phone)
+        retail_cust, outcome = ensure_customer_profile(
+            name=name,
+            phone=phone,
+            email=email or None,
+            address=address,
+            allow_create=True,
+        )
+        if retail_cust:
+            customer.retail_customer_id = retail_cust.id
+            app.logger.info(
+                '[CUSTOMER SYNC] source=wholesale_form_add endpoint=/wholesale/customers/add '
+                'outcome=%s retail_customer_id=%s wholesale_id=%s phone=%s',
+                outcome, retail_cust.id, customer.id, phone,
+            )
+
         try:
             db.session.commit()
         except IntegrityError as exc:
@@ -339,6 +393,39 @@ def register_suppliers_wholesale_routes(app, *, log_action):
         for k in ['name', 'business', 'phone', 'email', 'address', 'credit_limit', 'on_hold']:
             if k in d:
                 setattr(c, k, d[k])
+
+        # Sync name/phone changes to linked RetailCustomer (or create link if missing)
+        if 'name' in d or 'phone' in d:
+            new_phone = (d.get('phone') or c.phone or '').strip() or None
+            new_name = (d.get('name') or c.name or '').strip()
+            if c.retail_customer_id:
+                rc = db.session.get(RetailCustomer, c.retail_customer_id)
+                if rc:
+                    if 'name' in d:
+                        rc.name = new_name
+                    if 'phone' in d:
+                        rc.phone = new_phone
+                        rc.phone_normalized = normalize_phone(new_phone) or None
+                    app.logger.info(
+                        '[CUSTOMER SYNC] source=wholesale_update endpoint=/api/wholesale-customers/%s '
+                        'retail_customer_id=%s phone=%s',
+                        cid, rc.id, new_phone,
+                    )
+            elif new_phone:
+                # No link yet — try to create/match in RetailCustomer by phone
+                retail_cust, outcome = ensure_customer_profile(
+                    name=new_name,
+                    phone=new_phone,
+                    allow_create=True,
+                )
+                if retail_cust:
+                    c.retail_customer_id = retail_cust.id
+                    app.logger.info(
+                        '[CUSTOMER SYNC] source=wholesale_update_link endpoint=/api/wholesale-customers/%s '
+                        'outcome=%s retail_customer_id=%s phone=%s',
+                        cid, outcome, retail_cust.id, new_phone,
+                    )
+
         db.session.commit()
         return jsonify(c.to_dict())
 
