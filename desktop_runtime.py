@@ -897,8 +897,34 @@ class DesktopLauncher:
         return BridgeAdapter()
 
 
+def _log_startup_diagnostics() -> None:
+    """Emit structured diagnostics immediately after logging is ready.
+
+    Shows: app root, bundle path, DB path, DB exists flag, user count.
+    All information appears in the log file even before Flask initialises.
+    """
+    from runtime_paths import bundle_root, persistent_app_dir
+    from database import inspect_sqlite_database
+
+    _bundle = getattr(sys, '_MEIPASS', None)
+    _pdir = persistent_app_dir()
+    diag = inspect_sqlite_database()
+
+    logger.info('[STARTUP] ── Garage Management System %s ──', APP_VERSION)
+    logger.info('[STARTUP] app_root        = %s', _pdir)
+    logger.info('[STARTUP] bundle_path     = %s', _bundle if _bundle else 'dev-mode (not frozen)')
+    logger.info('[STARTUP] frozen          = %s', bool(_bundle))
+    logger.info('[STARTUP] db_path         = %s', diag['database_path'])
+    logger.info('[STARTUP] db_exists       = %s', diag['database_exists'])
+    logger.info('[STARTUP] db_parent_ok    = %s (writable=%s)', diag['parent_exists'], diag['parent_writable'])
+    logger.info('[STARTUP] users_count     = %s', diag.get('users_count', 'n/a (db not yet created)'))
+    if diag.get('connect_error'):
+        logger.warning('[STARTUP] db_connect_err = %s', diag['connect_error'])
+
+
 def main() -> None:
     setup_runtime_logging()
+    _log_startup_diagnostics()
     launcher = DesktopLauncher()
     logger.info('Starting %s desktop runtime version %s.', APP_NAME, APP_VERSION)
     launcher.run()

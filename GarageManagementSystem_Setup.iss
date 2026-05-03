@@ -68,20 +68,21 @@ Name: "{localappdata}\Garage Management System"; Permissions: users-modify
 Source: "{#MyAppDistRoot}\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#MyAppDistRoot}\{#MyPrinterManagerExeName}"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 #else
-; CRITICAL: supermart.db is explicitly excluded — customer databases must NEVER
-; be overwritten by the installer.  All persistent data lives in AppData (see
-; [Dirs] above).  The only DB that may ship is the optional empty seed DB below.
+; Full onedir bundle — includes GarageManagementSystem.exe, _internal\, static\, templates\.
+;
+; SAFETY NOTES:
+;   - supermart.db is intentionally NOT in the Excludes list here.
+;     The file at _internal\supermart.db is the READ-ONLY bundled seed database.
+;     It lives in {app}\_internal\ (Program Files — not writable by users) and is
+;     NEVER the live customer database.  The live database always lives in
+;     {localappdata}\Garage Management System\supermart.db (see [Dirs] above).
+;     The application copies the seed to LocalAppData ONLY on first run when
+;     no customer DB exists there; it never overwrites an existing database.
+;   - *.sql and other dev/test artefacts are still excluded.
 Source: "{#MyAppDistRoot}\{#MyAppOneDirFolder}\*"; DestDir: "{app}"; \
   Flags: ignoreversion recursesubdirs createallsubdirs; \
-  Excludes: "*.sql,*.bat,*.md,.env,.env.*,docs\*,tests\*,reset_admin_password.py,supermart.db"
+  Excludes: "*.sql,*.bat,*.md,.env,.env.*,docs\*,tests\*,reset_admin_password.py"
 #endif
-
-; Optional empty seed database — shipped inside _internal\seed\ so it is
-; never confused with a live customer DB.  The application copies it to AppData
-; only on first run when no DB already exists there.
-Source: "{#MyAppDistRoot}\{#MyAppOneDirFolder}\_internal\seed\supermart_seed.db"; \
-  DestDir: "{app}\_internal\seed"; \
-  Flags: ignoreversion skipifsourcedoesntexist
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{localappdata}\Garage Management System"
