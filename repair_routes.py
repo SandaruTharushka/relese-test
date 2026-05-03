@@ -983,8 +983,10 @@ def register_repair_routes(app, log_action=None, print_domain=None):
                         note=f'Availability-only used in job {job.job_number}',
                     ))
                 else:
+                    if float(product.stock_qty or 0) < qty_int:
+                        return jsonify({'error': f'Not enough stock for "{product.name}".'}), 400
                     result = db.session.execute(
-                        text("UPDATE products SET stock_qty = MAX(0, stock_qty - :qty) WHERE id = :pid"),
+                        text("UPDATE products SET stock_qty = stock_qty - :qty WHERE id = :pid AND stock_qty >= :qty"),
                         {'qty': qty_int, 'pid': product_id},
                     )
                     if result.rowcount > 0:
@@ -995,6 +997,10 @@ def register_repair_routes(app, log_action=None, print_domain=None):
                         ))
                     else:
                         return jsonify({'error': f'Not enough stock for "{product.name}".'}), 400
+            app.logger.debug(
+                '[JOB PART ADD] product_id=%s qty=%s cost=%s sell=%s',
+                product_id, qty, unit_cost, sell_price
+            )
             part = RepairJobPart(
                 job_id=jid, product_id=product_id, part_name=part_name,
                 quantity=qty, unit_cost=unit_cost, sell_price=sell_price, total=total,
