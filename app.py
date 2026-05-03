@@ -4233,6 +4233,8 @@ def auto_migrate():
         ('repair_jobs', 'broker_commission_value',  "ALTER TABLE repair_jobs ADD COLUMN broker_commission_value NUMERIC(14,2) DEFAULT 0"),
         ('repair_jobs', 'broker_commission_amount', "ALTER TABLE repair_jobs ADD COLUMN broker_commission_amount NUMERIC(14,2) DEFAULT 0"),
         ('repair_jobs', 'broker_cash_price',        "ALTER TABLE repair_jobs ADD COLUMN broker_cash_price NUMERIC(14,2) DEFAULT 0"),
+        # v8.1 — wholesale-retail customer sync: link wholesale_customers to canonical retail_customers
+        ('wholesale_customers', 'retail_customer_id', "ALTER TABLE wholesale_customers ADD COLUMN retail_customer_id INTEGER NULL"),
     ]
     money_type_migrations = [
         ('sales', 'total_amount'),
