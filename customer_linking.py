@@ -4,6 +4,7 @@ import re
 from typing import Optional
 
 from models import RetailCustomer, db
+from models import WholesaleCustomer
 from shared_helpers import normalize_phone
 
 
@@ -35,6 +36,10 @@ def ensure_customer_profile(*, name: str | None, phone: str | None, email: str |
             existing.phone_normalized = normalized_phone
         if name and (not existing.name or existing.name.lower().startswith('walk-in')):
             existing.name = name.strip()
+        if email and not existing.email:
+            existing.email = (email or '').strip() or None
+        if address and not existing.address:
+            existing.address = (address or '').strip() or None
         return existing, 'matched_by_phone'
 
     if not allow_create:
@@ -58,3 +63,30 @@ def ensure_customer_profile(*, name: str | None, phone: str | None, email: str |
     db.session.flush()
     customer.customer_code = customer_code_from_id(customer.id)
     return customer, 'created'
+
+
+def backfill_wholesale_retail_links(logger=None) -> int:
+    updated = 0
+    rows = (
+        WholesaleCustomer.query
+        .filter(WholesaleCustomer.status == 'active', WholesaleCustomer.retail_customer_id.is_(None))
+        .all()
+    )
+    for wholesale in rows:
+        retail, _ = ensure_customer_profile(
+            name=wholesale.name,
+            phone=wholesale.phone,
+            email=wholesale.email,
+            address=wholesale.address,
+            allow_create=True,
+        )
+        if not retail:
+            continue
+        wholesale.retail_customer_id = retail.id
+        updated += 1
+        if logger:
+            logger.info(
+                '[CUSTOMER SYNC] source=wholesale_backfill wholesale_id=%s retail_id=%s phone=%s',
+                wholesale.id, retail.id, wholesale.phone,
+            )
+    return updated

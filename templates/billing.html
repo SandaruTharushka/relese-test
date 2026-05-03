@@ -691,16 +691,10 @@ try {
 let _retailSearchCache = [];
 let _retailSearchTimer = null;
 let _selectedRetailCustomer = null;
+let _wsSearchReqSeq = 0;
 
-function searchWsCustomers(q) {
+function renderWsCustomers(matches) {
   const dd = document.getElementById('wsDropdown');
-  q = q.trim().toLowerCase();
-  if (!q) { dd.style.display = 'none'; return; }
-  const matches = _wsCustomerData.filter(c =>
-    c.name.toLowerCase().includes(q) ||
-    c.phone.toLowerCase().includes(q) ||
-    String(c.id).includes(q)
-  ).slice(0, 12);
   if (!matches.length) {
     dd.innerHTML = '<div style="padding:12px 14px;color:var(--muted);font-size:13px;text-align:center">No customers found</div>';
     dd.style.display = 'block';
@@ -722,6 +716,33 @@ function searchWsCustomers(q) {
       </div>
     </div>`).join('');
   dd.style.display = 'block';
+}
+
+async function searchWsCustomers(q) {
+  const dd = document.getElementById('wsDropdown');
+  const rawQ = (q || '').trim();
+  const needle = rawQ.toLowerCase();
+  if (!rawQ) { dd.style.display = 'none'; return; }
+  const reqId = ++_wsSearchReqSeq;
+  try {
+    const res = await fetch('/api/wholesale-customers/search?q=' + encodeURIComponent(rawQ));
+    if (!res.ok) throw new Error('search failed');
+    const payload = await res.json();
+    if (reqId !== _wsSearchReqSeq) return;
+    const matches = Array.isArray(payload.customers) ? payload.customers : [];
+    renderWsCustomers(matches.slice(0, 12));
+    return;
+  } catch (e) {
+    console.warn('WS live search failed, using cache fallback', e);
+  }
+  if (reqId !== _wsSearchReqSeq) return;
+  const fallbackMatches = _wsCustomerData.filter(c =>
+    (c.name || '').toLowerCase().includes(needle) ||
+    (c.phone || '').toLowerCase().includes(needle) ||
+    (c.business || '').toLowerCase().includes(needle) ||
+    String(c.id).includes(needle)
+  ).slice(0, 12);
+  renderWsCustomers(fallbackMatches);
 }
 
 function selectWsFromSearch(id, name) {
