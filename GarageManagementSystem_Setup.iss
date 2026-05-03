@@ -1,5 +1,5 @@
 #define MyAppName "Garage Management System"
-#define MyAppVersion "3.3.0"
+#define MyAppVersion "3.3.1"
 #define MyAppPublisher "Cloud Crafters"
 #define MyAppExeName "GarageManagementSystem.exe"
 #define MyPrinterManagerExeName "SuperMartPrinterManager.exe"
@@ -7,7 +7,7 @@
 #define MyAppSupportEmail "support@cloudcrafters.example"
 #define MyAppDistRoot "dist"
 #define MyAppOneDirFolder "GarageManagementSystem"
-#define MyInstallerBaseName "GarageManagementSystem_Setup_v3.3.0"
+#define MyInstallerBaseName "GarageManagementSystem_Setup_v3.3.1"
 #define MyAppId "{{A8AB1C36-4C3F-4E7A-8A5E-4EEA0D4D1B33}}"
 
 #if FileExists(MyAppDistRoot + "\\" + MyAppExeName)
@@ -43,7 +43,7 @@ OutputDir=release
 OutputBaseFilename={#MyInstallerBaseName}
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-VersionInfoVersion=3.3.0.0
+VersionInfoVersion=3.3.1.0
 VersionInfoProductName={#MyAppName}
 VersionInfoDescription={#MyAppName} Setup
 VersionInfoCompany={#MyAppPublisher}

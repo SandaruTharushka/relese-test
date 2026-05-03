@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-# Garage Management System v3.3.0 — PyInstaller spec for Python 3.11
+# Garage Management System v3.3.1 — PyInstaller spec for Python 3.11
 #
 # Build command (from project root):
 #   python -m PyInstaller --clean --noconfirm SuperMartPOS.spec
