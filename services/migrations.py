@@ -248,6 +248,9 @@ MIGRATIONS: list[Migration] = [
         "CREATE INDEX IF NOT EXISTS idx_vehicle_history_reg_no ON vehicle_history(reg_no)",
         "CREATE INDEX IF NOT EXISTS idx_vehicle_history_job_id ON vehicle_history(job_id)",
     ]),
+    Migration(18, 'v6.7 wholesale retail link backfill marker', [
+        "CREATE INDEX IF NOT EXISTS idx_wholesale_customers_retail_customer_id ON wholesale_customers(retail_customer_id)",
+    ]),
 ]
 
 
@@ -441,6 +444,15 @@ def run_migrations(session) -> list[int]:
 
     if newly_applied:
         logger.info('[MIGRATE] Applied %d migration(s): %s', len(newly_applied), newly_applied)
+    if 18 in newly_applied:
+        try:
+            from customer_linking import backfill_wholesale_retail_links
+            updated = backfill_wholesale_retail_links(logger=logger)
+            session.commit()
+            logger.info('[MIGRATE] wholesale->retail link backfill completed updated=%s', updated)
+        except Exception as exc:
+            session.rollback()
+            logger.warning('[MIGRATE] wholesale->retail link backfill failed: %s', exc)
 
     return newly_applied
 

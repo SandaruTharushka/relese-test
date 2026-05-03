@@ -1,7 +1,7 @@
 from flask import abort, jsonify, render_template, request
 from flask_login import current_user, login_required
 import re
-from sqlalchemy import func
+from sqlalchemy import String, cast, func, or_
 from sqlalchemy.exc import IntegrityError
 
 from models import (
@@ -302,6 +302,32 @@ def register_suppliers_wholesale_routes(app, *, log_action):
             return jsonify(c.to_dict()), 201
         return jsonify([c.to_dict() for c in WholesaleCustomer.query.filter_by(status='active').all()])
 
+    @app.route('/api/wholesale-customers/search', methods=['GET'])
+    @login_required
+    def api_wholesale_customers_search():
+        q = (request.args.get('q') or '').strip()
+        if not q:
+            app.logger.info('[WS SEARCH] q=%s results=%s', q, 0)
+            return jsonify({'customers': []})
+        term = f"%{q}%"
+        customers = (
+            WholesaleCustomer.query
+            .filter(WholesaleCustomer.status == 'active')
+            .filter(
+                or_(
+                    WholesaleCustomer.name.ilike(term, escape='\\'),
+                    WholesaleCustomer.phone.ilike(term, escape='\\'),
+                    WholesaleCustomer.business.ilike(term, escape='\\'),
+                    cast(WholesaleCustomer.id, String).ilike(term, escape='\\'),
+                )
+            )
+            .order_by(WholesaleCustomer.id.desc())
+            .limit(20)
+            .all()
+        )
+        app.logger.info('[WS SEARCH] q=%s results=%s', q, len(customers))
+        return jsonify({'customers': [c.to_dict() for c in customers]})
+
     @app.route('/wholesale/customers/add', methods=['POST'])
     @login_required
     def add_wholesale_customer():
@@ -394,10 +420,12 @@ def register_suppliers_wholesale_routes(app, *, log_action):
             if k in d:
                 setattr(c, k, d[k])
 
-        # Sync name/phone changes to linked RetailCustomer (or create link if missing)
-        if 'name' in d or 'phone' in d:
+        # Sync wholesale profile changes to linked RetailCustomer (or create link if missing)
+        if any(k in d for k in ['name', 'phone', 'email', 'address']):
             new_phone = (d.get('phone') or c.phone or '').strip() or None
             new_name = (d.get('name') or c.name or '').strip()
+            new_email = (d.get('email') or c.email or '').strip() or None
+            new_address = (d.get('address') or c.address or '').strip() or None
             if c.retail_customer_id:
                 rc = db.session.get(RetailCustomer, c.retail_customer_id)
                 if rc:
@@ -406,6 +434,10 @@ def register_suppliers_wholesale_routes(app, *, log_action):
                     if 'phone' in d:
                         rc.phone = new_phone
                         rc.phone_normalized = normalize_phone(new_phone) or None
+                    if 'email' in d and new_email:
+                        rc.email = new_email
+                    if 'address' in d and new_address:
+                        rc.address = new_address
                     app.logger.info(
                         '[CUSTOMER SYNC] source=wholesale_update endpoint=/api/wholesale-customers/%s '
                         'retail_customer_id=%s phone=%s',
@@ -416,6 +448,8 @@ def register_suppliers_wholesale_routes(app, *, log_action):
                 retail_cust, outcome = ensure_customer_profile(
                     name=new_name,
                     phone=new_phone,
+                    email=new_email,
+                    address=new_address,
                     allow_create=True,
                 )
                 if retail_cust:
