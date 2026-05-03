@@ -1,3 +1,4 @@
+import datetime
 import logging
 import os
 import shutil
@@ -17,6 +18,17 @@ DEFAULT_DATABASE_FILE = 'supermart.db'
 # A bundled seed DB that already has rows in any of these tables is rejected.
 _SEED_REJECT_TABLES = ('users', 'sales', 'sale_items', 'products', 'repair_jobs')
 _SEED_MAX_ROWS = 1  # allow at most 1 row (e.g. a single default admin)
+
+_SQLITE_MAGIC = b'SQLite format 3\x00'
+
+
+def _is_valid_sqlite_file(path: Path) -> bool:
+    """Return True only if *path* starts with the SQLite file-format magic bytes."""
+    try:
+        with path.open('rb') as fh:
+            return fh.read(16) == _SQLITE_MAGIC
+    except OSError:
+        return False
 
 
 def _validate_seed_database(bundled_db: Path) -> bool:
@@ -60,21 +72,48 @@ def _validate_seed_database(bundled_db: Path) -> bool:
 def _seed_bundled_database(writable_db_path: Path) -> None:
     """Copy the bundled supermart.db into the writable persistent location on first run.
 
-    Only runs when packaged as a PyInstaller EXE. Never overwrites an existing
-    database, so customer data is never lost across restarts or updates.
+    Only runs when packaged as a PyInstaller EXE. Never overwrites a valid
+    existing database, so customer data is never lost across restarts or updates.
     Validates the bundled DB before copying — if it contains customer rows the
     copy is skipped and a warning is logged.
+
+    If the existing file at writable_db_path is not a valid SQLite database
+    (e.g. a zero-byte placeholder or a corrupt file), it is renamed as a dated
+    backup and the fresh seed copy proceeds so the app can start cleanly.
     """
     if not is_frozen():
         return
     if writable_db_path.exists():
-        return
+        if _is_valid_sqlite_file(writable_db_path):
+            return  # healthy DB — never overwrite
+        # The file exists but is not a valid SQLite database.  Rename it so the
+        # operator can inspect it, then fall through to seed a fresh copy.
+        stamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        bad_path = writable_db_path.with_name(
+            f'{writable_db_path.stem}_corrupt_{stamp}{writable_db_path.suffix}'
+        )
+        try:
+            writable_db_path.rename(bad_path)
+            _startup_logger.warning(
+                'Existing DB at %s is not a valid SQLite file — renamed to %s. '
+                'A fresh database will be seeded.',
+                writable_db_path,
+                bad_path,
+            )
+        except OSError as exc:
+            _startup_logger.error(
+                'Cannot rename corrupt DB at %s (%s); seeding skipped.',
+                writable_db_path,
+                exc,
+            )
+            return
     bundled = bundle_root() / DEFAULT_DATABASE_FILE
     if not bundled.exists():
         return
     if not _validate_seed_database(bundled):
         _startup_logger.warning(
-            'Bundled seed DB at %s was not copied — it contains customer data. '
+            'Bundled seed DB at %s was not copied — it failed validation '
+            '(either not a valid SQLite file, or it contains customer data). '
             'A fresh empty DB will be created instead.',
             bundled,
         )
@@ -114,7 +153,11 @@ def resolve_database_path(database_file: str | None = None) -> str:
 
     When running as a packaged EXE and the writable database does not yet exist,
     the bundled supermart.db is copied here first (first-run seeding).
-    Existing databases are never overwritten.
+    Valid existing databases are never overwritten.
+
+    If the resolved path points to a file that is not a valid SQLite database
+    (regardless of frozen/dev mode), the corrupt file is renamed as a backup so
+    that SQLAlchemy can create a fresh schema instead of crashing.
     """
     db_name = (database_file or os.getenv('DATABASE_FILE', DEFAULT_DATABASE_FILE) or DEFAULT_DATABASE_FILE).strip()
     db_path = Path(db_name)
@@ -122,6 +165,28 @@ def resolve_database_path(database_file: str | None = None) -> str:
         db_path = persistent_app_dir() / db_path
     db_path.parent.mkdir(parents=True, exist_ok=True)
     _seed_bundled_database(db_path)
+    # Guard for dev mode (or any mode where seeding is skipped): if a file exists
+    # at the target path but is not a valid SQLite database, rename it so the app
+    # can initialise a fresh schema rather than failing on every request.
+    if db_path.exists() and not _is_valid_sqlite_file(db_path):
+        stamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        bad_path = db_path.with_name(
+            f'{db_path.stem}_corrupt_{stamp}{db_path.suffix}'
+        )
+        try:
+            db_path.rename(bad_path)
+            _startup_logger.warning(
+                'DB file at %s is not a valid SQLite database — renamed to %s. '
+                'A fresh schema will be initialised on next startup.',
+                db_path,
+                bad_path,
+            )
+        except OSError as exc:
+            _startup_logger.error(
+                'Cannot rename corrupt DB at %s (%s); the app will likely fail to start.',
+                db_path,
+                exc,
+            )
     return str(db_path.resolve())
 
 
