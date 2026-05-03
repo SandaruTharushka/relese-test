@@ -50,7 +50,7 @@ a = Analysis(
         ('static',          'static'),
         ('version.py',      '.'),
         ('update_config.py', '.'),   # GitHub update configuration constants
-        ('supermart.db',    '.'),    # bundled seed DB — copied to writable dir on first run
+        ('supermart.db',    '.'),    # bundled seed DB — copied to writable dir on first run; never overwrites existing
     ],
     hiddenimports=[
         # ── Core application modules ────────────────────────────────────────────
@@ -241,10 +241,9 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
-    name='SuperMartPOS',
+    exclude_binaries=True,          # onedir: binaries collected separately
+    name='GarageManagementSystem',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -252,8 +251,6 @@ exe = EXE(
     # PySide6/Qt WebEngine DLLs are PE-mapped by Qt's loader and will crash
     # silently if UPX re-compresses them. Do NOT enable UPX here.
     upx=False,
-    upx_exclude=[],
-    runtime_tmpdir=None,
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
@@ -261,4 +258,14 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon='static/icons/icon.ico',
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    name='GarageManagementSystem',  # produces dist\GarageManagementSystem\
 )

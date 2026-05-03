@@ -18,7 +18,7 @@ from models import (
     money_to_decimal,
 )
 from datetime import datetime, timedelta, timezone
-from sqlalchemy import func, case
+from sqlalchemy import func, case, text
 from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy.exc import IntegrityError, OperationalError
 import re

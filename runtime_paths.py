@@ -193,6 +193,33 @@ def persistent_data_path(filename: str) -> str:
     return persistent_path(filename)
 
 
+def database_path() -> Path:
+    """Return the persistent path for the active SQLite database."""
+    return persistent_app_dir() / 'supermart.db'
+
+
+def settings_path() -> Path:
+    """Return the persistent path for global application settings (if JSON based)."""
+    return persistent_app_dir() / 'config' / 'settings.json'
+
+
+def license_path() -> Path:
+    """Return the persistent path for the activation.json file."""
+    return persistent_app_dir() / 'license' / 'activation.json'
+
+
+def logs_dir() -> Path:
+    """Return (and create if needed) the persistent logs sub-directory."""
+    d = persistent_app_dir() / 'logs'
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def backup_dir() -> Path:
+    """Alias for backups_dir() as requested."""
+    return backups_dir()
+
+
 def backups_dir() -> Path:
     """Return (and create if needed) the persistent backups sub-directory."""
     d = persistent_app_dir() / 'backups'

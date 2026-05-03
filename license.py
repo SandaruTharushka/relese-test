@@ -8,37 +8,9 @@ from runtime_paths import persistent_app_dir
 
 _log = logging.getLogger(__name__)
 
-# ── Storage location (with fallback) ─────────────────────────────────────────
-def _get_license_dir():
-    """Get license directory — tries ProgramData first, falls back to Documents."""
-    primary = os.path.join(os.environ.get('PROGRAMDATA', r'C:\ProgramData'), 'GarageManagementSystem')
-    try:
-        os.makedirs(primary, exist_ok=True)
-        # Test if we can write
-        test_file = os.path.join(primary, '.write_test')
-        with open(test_file, 'w') as f:
-            f.write('test')
-        os.remove(test_file)
-        return primary
-    except (PermissionError, OSError):
-        pass
-
-    # Fallback to user's Documents folder
-    fallback = os.path.join(str(Path.home()), 'Documents', 'GarageManagementSystem')
-    try:
-        os.makedirs(fallback, exist_ok=True)
-        return fallback
-    except Exception:
-        pass
-
-    # Last resort: same directory as the script
-    local = os.path.join(str(persistent_app_dir()), '.license')
-    os.makedirs(local, exist_ok=True)
-    return local
-
-
-LICENSE_DIR  = _get_license_dir()
-ACTIVATION_FILE = os.path.join(LICENSE_DIR, 'activation.json')
+# ── Storage location ─────────────────────────────────────────
+LICENSE_DIR = persistent_app_dir() / "license"
+ACTIVATION_FILE = LICENSE_DIR / "activation.json"
 
 
 # ── License secret (set LICENSE_SECRET in .env) ────────────────────────────────

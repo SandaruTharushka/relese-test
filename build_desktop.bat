@@ -61,7 +61,7 @@ if errorlevel 1 (
 
 :: ── Validate required spec and source files ──────────────────────────────────
 for %%F in (
-    GarageManagementSystem.spec
+    SuperMartPOS.spec
     SuperMartPrinterManager.spec
     main.py
     desktop_runtime.py
@@ -126,18 +126,18 @@ if exist "dist" (
 
 :: ── Build GarageManagementSystem.exe ────────────────────────────────────────────────────
 echo.
-echo  [1/2] Running PyInstaller for GarageManagementSystem...
-python -m PyInstaller --clean --noconfirm GarageManagementSystem.spec
+echo  [1/2] Running PyInstaller for GarageManagementSystem (onedir)...
+python -m PyInstaller --clean --noconfirm SuperMartPOS.spec
 if errorlevel 1 (
     echo.
-    echo  [ERROR] PyInstaller failed for GarageManagementSystem.spec.
+    echo  [ERROR] PyInstaller failed for SuperMartPOS.spec.
     echo  Common causes:
     echo    - Missing Python package  ^(re-run: pip install -r requirements.txt^)
     echo    - Syntax error in spec file
     echo    - Build path is on OneDrive ^(see warning above^)
     exit /b 1
 )
-echo  [OK] GarageManagementSystem.exe built successfully
+echo  [OK] GarageManagementSystem folder built successfully  (dist\GarageManagementSystem\)
 
 :: ── Build SuperMartPrinterManager.exe ────────────────────────────────────────
 echo.
@@ -151,20 +151,20 @@ if errorlevel 1 (
 echo  [OK] SuperMartPrinterManager.exe built successfully
 
 :: ── Verify outputs exist ──────────────────────────────────────────────────────
-if not exist "dist\GarageManagementSystem.exe" (
-    echo  [ERROR] Build reported success but dist\GarageManagementSystem.exe was not found.
+if not exist "dist\GarageManagementSystem\GarageManagementSystem.exe" (
+    echo  [ERROR] Build reported success but dist\GarageManagementSystem\GarageManagementSystem.exe was not found.
     exit /b 1
 )
 
-:: ── Copy to release\ ──────────────────────────────────────────────────────────
-copy /y "dist\GarageManagementSystem.exe" "release\GarageManagementSystem.exe" >nul
+:: ── Copy EXE stub to release\ for reference ─────────────────────────────────────
+copy /y "dist\GarageManagementSystem\GarageManagementSystem.exe" "release\GarageManagementSystem.exe" >nul
 if exist "dist\SuperMartPrinterManager.exe" (
     copy /y "dist\SuperMartPrinterManager.exe" "release\SuperMartPrinterManager.exe" >nul
 )
 
 echo.
 echo  [DONE] Desktop executables ready:
-echo    dist\GarageManagementSystem.exe
+echo    dist\GarageManagementSystem\    ^(onedir — Inno Setup will package this folder^)
 if exist "dist\SuperMartPrinterManager.exe" echo    dist\SuperMartPrinterManager.exe
 echo.
 exit /b 0
