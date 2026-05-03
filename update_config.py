@@ -8,7 +8,7 @@ the Flask routes, and the desktop runtime all read from this module.
 # ── GitHub repository coordinates ────────────────────────────────────────────
 # Must match the GitHub account/repo where releases are published.
 GITHUB_OWNER = "SandaruTharushka"
-GITHUB_REPO  = "Garage-Management-System-relees-update-version-3.1.0"
+GITHUB_REPO  = "Garage-Management-System-relees-update-version-3.3.0"
 
 # ── Network tunables ──────────────────────────────────────────────────────────
 # Seconds to wait for the GitHub API response before giving up.
