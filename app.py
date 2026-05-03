@@ -1991,8 +1991,12 @@ def api_barcode_validate():
 @app.route('/api/products/barcode/<barcode>')
 @login_required
 def api_product_barcode(barcode):
-    # Check primary product.barcode first, then product_barcodes alias table
+    # 1. Primary barcode field
     p = Product.query.filter_by(barcode=barcode, status='active').first()
+    # 2. SKU (covers QR codes whose value equals the product SKU)
+    if not p:
+        p = Product.query.filter_by(sku=barcode, status='active').first()
+    # 3. Alias barcode table
     if not p:
         pb = ProductBarcode.query.filter_by(barcode=barcode).first()
         if pb:

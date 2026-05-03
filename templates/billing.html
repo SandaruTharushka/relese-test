@@ -657,6 +657,8 @@ let _currentReceiptUrl = '';
 let _autoPrintArmed = false;
 let scanBuffer = '';
 let scanTimer = null;
+let scanLock = false;
+let barcodeDebounceTimer = null;
 let selectedCartIdx = -1;
 window.getSelectedCartIndex = () => selectedCartIdx;
 window.getCartLength = () => cart.length;
@@ -1390,12 +1392,28 @@ function recalc() {
   const hb = document.getElementById('holdBtn'); if(hb) hb.disabled = cart.length === 0;
 }
 
+function handleScannerInput(value, source) {
+  value = (value || '').trim();
+  if (!value || scanLock) return;
+
+  scanLock = true;
+  scanBuffer = '';
+  clearTimeout(scanTimer);
+  clearTimeout(barcodeDebounceTimer);
+  console.log('[SCANNER] scanned:', value, 'source:', source);
+
+  handleBarcodeValue(value).finally(() => {
+    setTimeout(() => { scanLock = false; }, 250);
+  });
+}
+
 async function handleBarcodeValue(barcode) {
   const clean = (barcode || '').trim();
   if (!clean) return;
   const input = document.getElementById('barcodeInput');
   if (input) input.value = '';
 
+  console.log('[SCANNER] search endpoint: /api/products/barcode/' + encodeURIComponent(clean));
   try {
     const res = await fetch(`/api/products/barcode/${encodeURIComponent(clean)}`);
     // Session expired can come back either as HTTP 401 JSON or a redirect/login HTML.
@@ -1408,11 +1426,14 @@ async function handleBarcodeValue(barcode) {
 
     if (res.ok && data.success && data.product) {
       const p = data.product;
+      console.log('[SCANNER] product found:', p.name, '(id=' + p.id + ')');
       if (!allProducts.find(x => x.id == p.id)) allProducts.push(p);
       addToCart(p.id);
+      console.log('[SCANNER] added to cart:', p.name);
       return;
     }
 
+    console.log('[SCANNER] product not found for code:', clean);
     openMissingProductModal(clean);
   } catch (_) {
     toast('Scan error', 'error');
@@ -2688,6 +2709,34 @@ function anyVisibleModalOpen() {
 }
 
 function initGlobalScannerCapture() {
+  // Direct listeners on barcodeInput handle QR scanners that send the entire
+  // scan value via paste / programmatic input (no per-character keydown events).
+  const barcodeInput = document.getElementById('barcodeInput');
+  if (barcodeInput) {
+    // Sync scanBuffer on any programmatic or paste input, then debounce-fire
+    // for scanners that do not send an Enter key after the scan.
+    barcodeInput.addEventListener('input', function() {
+      scanBuffer = barcodeInput.value;
+      clearTimeout(barcodeDebounceTimer);
+      const val = barcodeInput.value.trim();
+      if (val.length >= 4) {
+        barcodeDebounceTimer = setTimeout(() => {
+          handleScannerInput(barcodeInput.value, 'debounce');
+        }, 350);
+      }
+    });
+
+    // Catch Enter pressed while barcodeInput is focused (scanner with suffix).
+    barcodeInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        clearTimeout(barcodeDebounceTimer);
+        const val = barcodeInput.value.trim() || scanBuffer.trim();
+        if (val) handleScannerInput(val, 'enter-direct');
+      }
+    });
+  }
+
   document.addEventListener('keydown', (e) => {
     const modalOpen = isModalVisible('missingProductModal');
     if (modalOpen) return;
@@ -2697,12 +2746,15 @@ function initGlobalScannerCapture() {
     if (isEditable) return;
 
     if (e.key === 'Enter') {
-      if (scanBuffer.trim()) {
-        const scanned = scanBuffer;
-        scanBuffer = '';
-        clearTimeout(scanTimer);
-        handleBarcodeValue(scanned);
+      // Prefer scanBuffer; fall back to whatever is visible in the input field
+      // (covers paste/programmatic input that bypasses per-character keydown).
+      const val = scanBuffer.trim() || (document.getElementById('barcodeInput')?.value || '').trim();
+      if (val) {
+        clearTimeout(barcodeDebounceTimer);
+        handleScannerInput(val, 'enter-global');
       }
+      scanBuffer = '';
+      clearTimeout(scanTimer);
       return;
     }
 
