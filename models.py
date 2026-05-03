@@ -196,6 +196,10 @@ class Product(db.Model):
     __table_args__ = (
         CheckConstraint('stock_qty >= 0', name='ck_products_stock_qty_non_negative'),
     )
+    STOCK_TRACKING_QUANTITY = 'QUANTITY_TRACKED'
+    STOCK_TRACKING_AVAILABILITY = 'AVAILABILITY_ONLY'
+    AVAILABILITY_IN_STOCK = 'IN_STOCK'
+    AVAILABILITY_OUT_OF_STOCK = 'OUT_OF_STOCK'
     id              = db.Column(db.Integer, primary_key=True)
     barcode         = db.Column(db.String(50), unique=True)
     sku             = db.Column(db.String(60), unique=True, nullable=True, index=True)
@@ -211,6 +215,9 @@ class Product(db.Model):
     section_number  = db.Column(db.String(20), default='')
     stock_qty       = db.Column(db.Float, default=0)
     low_stock_lvl   = db.Column(db.Float, default=10)
+    stock_tracking_type = db.Column(db.String(30), default=STOCK_TRACKING_QUANTITY, nullable=False)
+    availability_status = db.Column(db.String(20), default=AVAILABILITY_IN_STOCK, nullable=False)
+    stock_note      = db.Column(db.String(200))
     warranty_period  = db.Column(db.String(50), default='none')
     is_imei_tracked  = db.Column(db.Integer, default=0)
     product_type     = db.Column(db.String(20), default='normal')
@@ -234,12 +241,18 @@ class Product(db.Model):
             'rack_number': self.rack_number or '',
             'section_number': self.section_number or '',
             'stock_qty': self.stock_qty, 'low_stock_lvl': self.low_stock_lvl,
+            'stock_tracking_type': self.stock_tracking_type or self.STOCK_TRACKING_QUANTITY,
+            'availability_status': self.availability_status or self.AVAILABILITY_IN_STOCK,
+            'stock_note': self.stock_note or '',
             'warranty_period': self.warranty_period or 'none',
             'is_imei_tracked': bool(self.is_imei_tracked),
             'product_type': self.product_type or ('imei' if self.is_imei_tracked else 'normal'),
             'brand_id': self.brand_id,
             'status': self.status,
-            'is_low': self.stock_qty <= self.low_stock_lvl
+            'is_low': (
+                (self.stock_tracking_type == self.STOCK_TRACKING_AVAILABILITY and self.availability_status == self.AVAILABILITY_OUT_OF_STOCK)
+                or (self.stock_tracking_type != self.STOCK_TRACKING_AVAILABILITY and self.stock_qty <= self.low_stock_lvl)
+            )
         }
 
 

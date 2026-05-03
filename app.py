@@ -1902,7 +1902,7 @@ def products_page():
 @login_required
 def inventory():
     prods     = Product.query.filter_by(status='active').all()
-    low       = [p for p in prods if p.stock_qty <= p.low_stock_lvl]
+    low       = [p for p in prods if (p.stock_tracking_type == 'AVAILABILITY_ONLY' and p.availability_status == 'OUT_OF_STOCK') or (p.stock_tracking_type != 'AVAILABILITY_ONLY' and p.stock_qty <= p.low_stock_lvl)]
     total_val = sum(float(p.sell_price or 0) * float(p.stock_qty or 0) for p in prods)
     movements = StockMovement.query.order_by(StockMovement.date.desc()).limit(30).all()
     return render_template('inventory.html',
@@ -1966,6 +1966,8 @@ def api_products_search():
             'name': p.name,
             'price': float(p.sell_price or 0),
             'stock_qty': p.stock_qty,
+            'stock_tracking_type': p.stock_tracking_type or 'QUANTITY_TRACKED',
+            'availability_status': p.availability_status or 'IN_STOCK',
             'barcode': p.barcode or '',
             'rack_number': p.rack_number or '',
             'section_number': p.section_number or '',
@@ -2095,6 +2097,15 @@ def api_add_product():
         return jsonify({'error': f'SKU "{sku}" is already used by another product'}), 409
     product_type = normalize_product_type(d.get('product_type'), fallback='normal')
 
+    stock_tracking_type = str(d.get('stock_tracking_type') or 'QUANTITY_TRACKED').strip().upper()
+    if stock_tracking_type not in {'QUANTITY_TRACKED', 'AVAILABILITY_ONLY'}:
+        return jsonify({'error': 'Invalid stock tracking type'}), 400
+    availability_status = str(d.get('availability_status') or 'IN_STOCK').strip().upper()
+    if availability_status not in {'IN_STOCK', 'OUT_OF_STOCK'}:
+        return jsonify({'error': 'Invalid availability status'}), 400
+    stock_note = (d.get('stock_note') or '').strip() or None
+    if stock_tracking_type == 'QUANTITY_TRACKED' and d.get('stock_qty') in (None, ''):
+        return jsonify({'error': 'Stock quantity is required for quantity-tracked products'}), 400
     try:
         p = Product(
             barcode=barcode, name=name,
@@ -2111,6 +2122,9 @@ def api_add_product():
             warranty_period=d.get('warranty_period', 'none'),
             product_type=product_type,
             is_imei_tracked=0,
+            stock_tracking_type=stock_tracking_type,
+            availability_status=availability_status,
+            stock_note=stock_note,
         )
         db.session.add(p)
         db.session.flush()
@@ -2202,6 +2216,12 @@ def api_update_product(pid):
         return jsonify({'error': f'SKU "{sku}" is already used by another product'}), 409
     product_type = normalize_product_type(d.get('product_type', p.product_type), fallback='normal')
 
+    stock_tracking_type = str(d.get('stock_tracking_type', p.stock_tracking_type or 'QUANTITY_TRACKED')).strip().upper()
+    if stock_tracking_type not in {'QUANTITY_TRACKED', 'AVAILABILITY_ONLY'}:
+        return jsonify({'error': 'Invalid stock tracking type'}), 400
+    availability_status = str(d.get('availability_status', p.availability_status or 'IN_STOCK')).strip().upper()
+    if availability_status not in {'IN_STOCK', 'OUT_OF_STOCK'}:
+        return jsonify({'error': 'Invalid availability status'}), 400
     try:
         p.name    = name
         p.barcode = barcode
@@ -2212,6 +2232,9 @@ def api_update_product(pid):
                 setattr(p, k, d[k])
         p.product_type = product_type
         p.is_imei_tracked = 0
+        p.stock_tracking_type = stock_tracking_type
+        p.availability_status = availability_status
+        p.stock_note = (d.get('stock_note') or '').strip() or None
         db.session.commit()
         if 'stock_qty' in d:
             _invalidate_low_stock_cache()
