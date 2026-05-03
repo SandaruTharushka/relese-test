@@ -2376,12 +2376,50 @@ def api_user(uid):
 @login_required
 def api_stats():
     today = datetime.now().date()
-    q     = Sale.query.filter(func.date(Sale.sale_date) == today, Sale.status == 'completed')
-    rev   = q.with_entities(func.sum(Sale.total_amount)).scalar() or 0
-    count = q.count()
-    low   = Product.query.filter(Product.stock_qty <= Product.low_stock_lvl).count()
-    return jsonify({'today_revenue': float(rev), 'today_count': count,
-                    'avg_basket': float(rev / count) if count else 0, 'low_stock': low})
+    stats = {
+        'revenue': 0.0,
+        'transactions': 0,
+        'products': 0,
+        'avg_basket': 0.0,
+        'today_revenue': 0.0,
+        'today_count': 0,
+        'low_stock': 0,
+    }
+
+    def _log_stats_failure(section: str, exc: Exception):
+        app.logger.exception(
+            'Stats API failure endpoint=%s section=%s exception_type=%s',
+            request.path,
+            section,
+            type(exc).__name__,
+        )
+
+    try:
+        sale_query = Sale.query.filter(func.date(Sale.sale_date) == today, Sale.status == 'completed')
+        revenue_value = sale_query.with_entities(func.sum(Sale.total_amount)).scalar() or 0
+        transaction_count = sale_query.count()
+        stats['revenue'] = float(revenue_value)
+        stats['transactions'] = int(transaction_count)
+        stats['today_revenue'] = stats['revenue']
+        stats['today_count'] = stats['transactions']
+        stats['avg_basket'] = float(revenue_value / transaction_count) if transaction_count else 0.0
+    except Exception as exc:
+        _log_stats_failure('sales_totals', exc)
+
+    try:
+        stats['products'] = Product.query.filter_by(status='active').count()
+    except Exception as exc:
+        _log_stats_failure('product_count', exc)
+
+    try:
+        stats['low_stock'] = Product.query.filter(
+            Product.stock_qty <= Product.low_stock_lvl,
+            Product.status == 'active'
+        ).count()
+    except Exception as exc:
+        _log_stats_failure('low_stock_count', exc)
+
+    return jsonify(stats)
 
 # ── API: PRINTER / DRAWER ─────────────────────────────────────────────────────
 def _printing_error(message: str, *, code: str, status: int, extra: dict[str, Any] | None = None):
