@@ -204,7 +204,20 @@ def register_printing_settings_routes(
             StoreSettings.set_many(payload)
             db.session.commit()
             log_action('Printer settings updated (compat)', target_type='printer_settings', metadata={'keys': sorted(payload.keys())})
-            return jsonify({'ok': True, 'saved': len(payload)})
+            from services.printing.settings_service import PrintSettingsService
+            settings_svc = PrintSettingsService(StoreSettings)
+            receipt_cfg = printer_service.normalize_receipt_config(settings_svc.load_receipt())
+            label_cfg = printer_service.normalize_label_config(settings_svc.load_label())
+            receipt_status = printer_service.build_receipt_status(receipt_cfg)
+            label_status = printer_service.build_label_status(label_cfg)
+            validation_ok = bool(receipt_status.get('connected'))
+            return jsonify({
+                'ok': True,
+                'saved': len(payload),
+                'validation_ok': validation_ok,
+                'receipt': receipt_status,
+                'label': label_status,
+            })
         except Exception as exc:
             db.session.rollback()
             return jsonify({'ok': False, 'msg': f'Failed to save: {exc}'}), 500
