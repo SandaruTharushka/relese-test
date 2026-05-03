@@ -4586,6 +4586,32 @@ try:
         else:
             print("  [STARTUP] Existing database found — verifying schema ...")
 
+        # ── Phase 3: startup log ──────────────────────────────────────────────
+        try:
+            from database import log_startup_info
+            _si = log_startup_info()
+            print(
+                f"  [STARTUP] DB: {_si['db_path']}\n"
+                f"  [STARTUP] DB exists={_si['db_exists']}  "
+                f"users={_si['users_count']}  "
+                f"version={_si['app_version']}  "
+                f"frozen={_si['frozen']}"
+            )
+        except Exception as _log_err:
+            print(f"  [STARTUP] startup log error (non-fatal): {_log_err}")
+
+        # ── Phase 4: startup backup ───────────────────────────────────────────
+        if _db_path and os.path.exists(_db_path):
+            try:
+                from startup_backup import run_startup_backup
+                _bk = run_startup_backup(
+                    Path(_db_path),
+                    persistent_app_dir(),
+                )
+                print(f"  {_bk['msg']}")
+            except Exception as _bk_err:
+                print(f"  [STARTUP-BACKUP] Error (non-fatal): {_bk_err}")
+
         db.create_all()
         try:
             from services.migrations import run_migrations

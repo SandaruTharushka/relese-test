@@ -182,3 +182,19 @@ def ensure_persistent_app_structure() -> Path:
 
 def persistent_path(*parts: str) -> str:
     return str(persistent_app_dir().joinpath(*parts))
+
+
+def persistent_data_path(filename: str) -> str:
+    """Return the full path to *filename* inside the persistent app directory.
+
+    Convenience alias for ``persistent_path(filename)`` used by Phase 6/7
+    settings and activation helpers that store a single named file.
+    """
+    return persistent_path(filename)
+
+
+def backups_dir() -> Path:
+    """Return (and create if needed) the persistent backups sub-directory."""
+    d = persistent_app_dir() / 'backups'
+    d.mkdir(parents=True, exist_ok=True)
+    return d

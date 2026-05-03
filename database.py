@@ -1,3 +1,4 @@
+import logging
 import os
 import shutil
 import sqlite3
@@ -8,8 +9,52 @@ from sqlalchemy.engine import Engine
 
 from runtime_paths import bundle_root, is_frozen, persistent_app_dir
 
+_startup_logger = logging.getLogger('garage.database')
 
 DEFAULT_DATABASE_FILE = 'supermart.db'
+
+# Tables that indicate a DB contains real customer/operational data.
+# A bundled seed DB that already has rows in any of these tables is rejected.
+_SEED_REJECT_TABLES = ('users', 'sales', 'sale_items', 'products', 'repair_jobs')
+_SEED_MAX_ROWS = 1  # allow at most 1 row (e.g. a single default admin)
+
+
+def _validate_seed_database(bundled_db: Path) -> bool:
+    """Return True only if the bundled seed DB is safe to copy as a starter DB.
+
+    Rejects the seed when any checked table has more rows than _SEED_MAX_ROWS,
+    which would indicate a customer-populated DB was accidentally packaged.
+    """
+    try:
+        conn = sqlite3.connect(str(bundled_db), timeout=2)
+        try:
+            cur = conn.cursor()
+            for table in _SEED_REJECT_TABLES:
+                cur.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                    (table,),
+                )
+                if cur.fetchone() is None:
+                    continue  # table doesn't exist yet — seed DB is empty
+                cur.execute(f'SELECT COUNT(*) FROM {table}')  # noqa: S608
+                row_count = cur.fetchone()[0]
+                if row_count > _SEED_MAX_ROWS:
+                    _startup_logger.warning(
+                        'SEED-DB REJECTED: bundled %s has %d row(s) in table "%s" '
+                        '— customer data detected; AppData DB will NOT be seeded.',
+                        bundled_db.name,
+                        row_count,
+                        table,
+                    )
+                    return False
+            return True
+        finally:
+            conn.close()
+    except Exception as exc:
+        _startup_logger.warning(
+            'Seed-DB validation check failed (%s); proceeding cautiously.', exc
+        )
+        return False  # fail-safe: do not copy if we cannot validate
 
 
 def _seed_bundled_database(writable_db_path: Path) -> None:
@@ -17,6 +62,8 @@ def _seed_bundled_database(writable_db_path: Path) -> None:
 
     Only runs when packaged as a PyInstaller EXE. Never overwrites an existing
     database, so customer data is never lost across restarts or updates.
+    Validates the bundled DB before copying — if it contains customer rows the
+    copy is skipped and a warning is logged.
     """
     if not is_frozen():
         return
@@ -25,8 +72,16 @@ def _seed_bundled_database(writable_db_path: Path) -> None:
     bundled = bundle_root() / DEFAULT_DATABASE_FILE
     if not bundled.exists():
         return
+    if not _validate_seed_database(bundled):
+        _startup_logger.warning(
+            'Bundled seed DB at %s was not copied — it contains customer data. '
+            'A fresh empty DB will be created instead.',
+            bundled,
+        )
+        return
     writable_db_path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(str(bundled), str(writable_db_path))
+    _startup_logger.info('Seeded fresh AppData DB from bundle: %s', writable_db_path)
 
 
 _VALID_SYNC_MODES = {'OFF', 'NORMAL', 'FULL', 'EXTRA'}
@@ -80,6 +135,37 @@ def configure_sqlite_app(app) -> str:
     app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     return db_path
+
+
+def log_startup_info(database_file: str | None = None) -> dict:
+    """Log a structured startup summary and return it as a dict.
+
+    Emits one INFO line with: db_path, db_exists, user_count, app_version,
+    frozen.  Call this immediately after configure_sqlite_app() so that every
+    startup produces an auditable record.
+    """
+    try:
+        from version import APP_VERSION  # local import to avoid circular dep
+    except Exception:
+        APP_VERSION = 'unknown'
+
+    diag = inspect_sqlite_database(database_file)
+    info = {
+        'db_path': diag['database_path'],
+        'db_exists': diag['database_exists'],
+        'users_count': diag.get('users_count'),
+        'app_version': APP_VERSION,
+        'frozen': is_frozen(),
+    }
+    _startup_logger.info(
+        '[STARTUP] db_path=%s db_exists=%s users=%s version=%s frozen=%s',
+        info['db_path'],
+        info['db_exists'],
+        info['users_count'],
+        info['app_version'],
+        info['frozen'],
+    )
+    return info
 
 
 def inspect_sqlite_database(database_file: str | None = None) -> dict:
