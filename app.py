@@ -1976,6 +1976,44 @@ def api_products_search():
     ])
 
 
+@app.route('/api/inventory/parts/search')
+@login_required
+def api_inventory_parts_search():
+    q = (request.args.get('q') or '').strip()
+    try:
+        limit = min(max(int(request.args.get('limit', 10)), 1), 100)
+    except (TypeError, ValueError):
+        limit = 10
+    if len(q) < 1:
+        return jsonify([])
+
+    term = contains_sql_like(q)
+    results = Product.query.outerjoin(Category, Category.id == Product.category_id).filter(
+        Product.status == 'active',
+        db.or_(
+            Product.name.ilike(term, escape='\\'),
+            Product.sku.ilike(term, escape='\\'),
+            Product.barcode.ilike(term, escape='\\'),
+            Category.name.ilike(term, escape='\\'),
+        )
+    ).order_by(Product.name.asc()).limit(limit).all()
+    app.logger.debug('[JOB PART SEARCH] q=%s results=%s', q, len(results))
+    return jsonify([
+        {
+            'id': p.id,
+            'name': p.name,
+            'sku': p.sku or '',
+            'barcode': p.barcode or '',
+            'cost_price': float(p.buy_price or 0),
+            'selling_price': float(p.sell_price or 0),
+            'quantity': float(p.stock_qty or 0),
+            'stock_tracking_type': p.stock_tracking_type or 'QUANTITY_TRACKED',
+            'availability_status': p.availability_status or 'IN_STOCK',
+        }
+        for p in results
+    ])
+
+
 @app.route('/api/barcode/validate')
 @login_required
 def api_barcode_validate():

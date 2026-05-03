@@ -535,6 +535,7 @@
           <small style="color:var(--muted);margin-top:4px;display:block">
             Matches from inventory auto-fill cost &amp; price. Or enter any custom part name.
           </small>
+          <small id="partStockStatus" style="color:var(--muted);margin-top:2px;display:block"></small>
         </div>
         <div class="grid-3">
           <div><label class="label">Qty</label>
@@ -1524,11 +1525,13 @@ async function deliverJob(id){
 // ── Parts ─────────────────────────────────────────────────────────────────────
 function openAddPartModal(id){
   currentJobId=id;
+  _selectedInventoryPart=null;
   document.getElementById('partName').value='';
   document.getElementById('partQty').value=1;
   document.getElementById('partCost').value='';
   document.getElementById('partSell').value='';
   document.getElementById('partProductId').value='';
+  _setPartStockStatus(null);
   _hidePartSuggestions();
   openModal('addPartModal');
   setTimeout(()=>document.getElementById('partName')?.focus(), 80);
@@ -1538,9 +1541,12 @@ function openAddPartModal(id){
 let _partSearchTimer=null;
 let _partSuggestResults=[];
 let _partSuggestIndex=-1;
+let _selectedInventoryPart=null;
 
 function _partNameInput(val){
   document.getElementById('partProductId').value=''; // clear prior link on new typing
+  _selectedInventoryPart=null;
+  _setPartStockStatus(null);
   _partSuggestIndex=-1;
   clearTimeout(_partSearchTimer);
   const q=(val||'').trim();
@@ -1550,7 +1556,7 @@ function _partNameInput(val){
 
 async function _doPartSearch(q){
   try{
-    const r=await fetch('/api/products/search?q='+encodeURIComponent(q)+'&limit=8');
+    const r=await fetch('/api/inventory/parts/search?q='+encodeURIComponent(q)+'&limit=8');
     const rows=await r.json();
     _partSuggestResults=Array.isArray(rows)?rows:[];
     _renderPartSuggestions();
@@ -1562,16 +1568,20 @@ function _renderPartSuggestions(){
   if(!box) return;
   if(!_partSuggestResults.length){ _hidePartSuggestions(); return; }
   box.innerHTML=_partSuggestResults.map((p,i)=>{
-    const stock=p.stock_qty!=null?` · Stock: ${p.stock_qty}`:'';
-    const price=p.sell_price!=null?` · LKR ${parseFloat(p.sell_price).toFixed(2)}`:'';
+    const isQty=(p.stock_tracking_type||'QUANTITY_TRACKED')==='QUANTITY_TRACKED';
+    const isInStock=(p.availability_status||'IN_STOCK')==='IN_STOCK';
+    const stock=isQty?`Qty: ${parseFloat(p.quantity||0).toFixed(2)}`:(isInStock?'Available':'Out of Stock');
+    const cost=`Cost LKR ${parseFloat(p.cost_price||0).toFixed(2)}`;
+    const sell=`Sell LKR ${parseFloat(p.selling_price||0).toFixed(2)}`;
+    const sku=(p.sku||p.barcode)?` (${p.sku||p.barcode})`:'';
     return `<div data-idx="${i}" onmousedown="event.preventDefault()" onclick="_selectPartSuggest(${i})"
       style="padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border,#f1f5f9);
       display:flex;justify-content:space-between;align-items:center;gap:8px;
       background:${i===_partSuggestIndex?'var(--primary-light,#ede9fe)':'transparent'}"
       onmouseenter="this.style.background='var(--hover,#f8fafc)';"
       onmouseleave="this.style.background='${i===_partSuggestIndex?'var(--primary-light,#ede9fe)':'transparent'}';">
-        <span style="font-weight:500">${p.name}</span>
-        <span style="color:var(--muted);font-size:11px;white-space:nowrap">${stock}${price}</span>
+        <span style="font-weight:500">${p.name}${sku}</span>
+        <span style="color:var(--muted);font-size:11px;white-space:nowrap">${stock} · ${cost} · ${sell}</span>
       </div>`;
   }).join('');
   box.style.display='block';
@@ -1582,10 +1592,25 @@ function _selectPartSuggest(idx){
   if(!p) return;
   document.getElementById('partName').value=p.name;
   document.getElementById('partProductId').value=p.id;
-  document.getElementById('partCost').value=parseFloat(p.buy_price||0).toFixed(2);
-  document.getElementById('partSell').value=parseFloat(p.sell_price||0).toFixed(2);
+  document.getElementById('partCost').value=parseFloat(p.cost_price||0).toFixed(2);
+  document.getElementById('partSell').value=parseFloat(p.selling_price||0).toFixed(2);
+  document.getElementById('partQty').value=1;
+  _selectedInventoryPart=p;
+  _setPartStockStatus(p);
+  console.debug('[JOB PART SELECT]', {product_id:p.id,name:p.name,cost:p.cost_price,sell:p.selling_price});
   _hidePartSuggestions();
   document.getElementById('partQty')?.focus();
+}
+
+function _setPartStockStatus(p){
+  const el=document.getElementById('partStockStatus');
+  if(!el) return;
+  if(!p){ el.textContent=''; return; }
+  if((p.stock_tracking_type||'QUANTITY_TRACKED')==='AVAILABILITY_ONLY'){
+    el.textContent=(p.availability_status||'IN_STOCK')==='IN_STOCK'?'Availability: Available':'Availability: Out of Stock';
+    return;
+  }
+  el.textContent=`Available qty: ${parseFloat(p.quantity||0).toFixed(2)}`;
 }
 
 function _hidePartSuggestions(){
@@ -1625,6 +1650,14 @@ async function addPart(){
     sell_price: parseFloat(document.getElementById('partSell').value)||0,
     product_id: document.getElementById('partProductId').value||null,
   };
+  const selected=_selectedInventoryPart;
+  if(payload.product_id && selected){
+    const isQty=(selected.stock_tracking_type||'QUANTITY_TRACKED')==='QUANTITY_TRACKED';
+    const isInStock=(selected.availability_status||'IN_STOCK')==='IN_STOCK';
+    if(!isInStock){ alert('Selected inventory item is out of stock.'); return; }
+    if(isQty && payload.quantity>parseFloat(selected.quantity||0)){ alert('Requested quantity exceeds available stock.'); return; }
+  }
+  console.debug('[JOB PART ADD]', {product_id:payload.product_id,qty:payload.quantity,cost:payload.unit_cost,sell:payload.sell_price});
   const r=await fetch('/api/repairs/'+currentJobId+'/parts',{method:'POST',headers:csrfHeaders({'Content-Type':'application/json'}),body:JSON.stringify(payload)});
   const d=await r.json();
   if(r.ok){ closeModal('addPartModal'); viewJob(currentJobId); }
