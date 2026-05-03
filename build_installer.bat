@@ -23,11 +23,9 @@ echo.
 echo  [build_installer] Building Windows installer...
 echo.
 
-:: ── Validate dist\GarageManagementSystem (onedir output) ──────────────────────────────
-:: The spec produces a onedir build: dist\GarageManagementSystem\GarageManagementSystem.exe
-:: NOT a single onefile EXE at dist\GarageManagementSystem.exe.
-if not exist "dist\GarageManagementSystem\GarageManagementSystem.exe" (
-    echo  [INFO] dist\GarageManagementSystem\GarageManagementSystem.exe not found — building desktop EXE first...
+:: ── Validate dist\GarageManagementSystem.exe ───────────────────────────────────────────
+if not exist "dist\GarageManagementSystem.exe" (
+    echo  [INFO] dist\GarageManagementSystem.exe not found — building desktop EXE first...
     echo.
     call build_desktop.bat
     if errorlevel 1 (
@@ -36,11 +34,11 @@ if not exist "dist\GarageManagementSystem\GarageManagementSystem.exe" (
     )
 )
 
-if not exist "dist\GarageManagementSystem\GarageManagementSystem.exe" (
-    echo  [ERROR] dist\GarageManagementSystem\GarageManagementSystem.exe still missing after desktop build attempt.
+if not exist "dist\GarageManagementSystem.exe" (
+    echo  [ERROR] dist\GarageManagementSystem.exe still missing after desktop build attempt.
     exit /b 1
 )
-echo  [OK] dist\GarageManagementSystem\ (onedir) found
+echo  [OK] dist\GarageManagementSystem.exe found
 
 :: ── Validate installer source files ──────────────────────────────────────────
 if not exist "GarageManagementSystem_Setup.iss" (

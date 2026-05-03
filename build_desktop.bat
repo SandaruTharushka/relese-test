@@ -126,7 +126,7 @@ if exist "dist" (
 
 :: ── Build GarageManagementSystem.exe ────────────────────────────────────────────────────
 echo.
-echo  [1/2] Running PyInstaller for GarageManagementSystem (onedir)...
+echo  [1/2] Running PyInstaller for GarageManagementSystem (onefile)...
 python -m PyInstaller --clean --noconfirm SuperMartPOS.spec
 if errorlevel 1 (
     echo.
@@ -137,7 +137,7 @@ if errorlevel 1 (
     echo    - Build path is on OneDrive ^(see warning above^)
     exit /b 1
 )
-echo  [OK] GarageManagementSystem folder built successfully  (dist\GarageManagementSystem\)
+echo  [OK] GarageManagementSystem.exe built successfully
 
 :: ── Build SuperMartPrinterManager.exe ────────────────────────────────────────
 echo.
@@ -151,20 +151,20 @@ if errorlevel 1 (
 echo  [OK] SuperMartPrinterManager.exe built successfully
 
 :: ── Verify outputs exist ──────────────────────────────────────────────────────
-if not exist "dist\GarageManagementSystem\GarageManagementSystem.exe" (
-    echo  [ERROR] Build reported success but dist\GarageManagementSystem\GarageManagementSystem.exe was not found.
+if not exist "dist\GarageManagementSystem.exe" (
+    echo  [ERROR] Build reported success but dist\GarageManagementSystem.exe was not found.
     exit /b 1
 )
 
 :: ── Copy EXE stub to release\ for reference ─────────────────────────────────────
-copy /y "dist\GarageManagementSystem\GarageManagementSystem.exe" "release\GarageManagementSystem.exe" >nul
+copy /y "dist\GarageManagementSystem.exe" "release\GarageManagementSystem.exe" >nul
 if exist "dist\SuperMartPrinterManager.exe" (
     copy /y "dist\SuperMartPrinterManager.exe" "release\SuperMartPrinterManager.exe" >nul
 )
 
 echo.
 echo  [DONE] Desktop executables ready:
-echo    dist\GarageManagementSystem\    ^(onedir — Inno Setup will package this folder^)
+echo    dist\GarageManagementSystem.exe
 if exist "dist\SuperMartPrinterManager.exe" echo    dist\SuperMartPrinterManager.exe
 echo.
 exit /b 0

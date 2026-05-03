@@ -217,6 +217,29 @@ class LocalServer:
         try:
             app_module = importlib.import_module('app')
             flask_app = app_module.app
+
+            # Diagnostic logging (Requirement 7)
+            try:
+                app_root = persistent_app_dir()
+                meipass = getattr(sys, '_MEIPASS', 'Not a PyInstaller build')
+                db_path = flask_app.config.get('DATABASE_FILE', 'Unknown')
+                db_exists = Path(db_path).exists() if db_path != 'Unknown' else False
+                with flask_app.app_context():
+                    from models import User
+                    try:
+                        user_count = User.query.count()
+                    except Exception:
+                        user_count = -1
+                logger.info('--- STARTUP DIAGNOSTICS ---')
+                logger.info('App Root Path    : %s', app_root)
+                logger.info('Bundle MEIPASS   : %s', meipass)
+                logger.info('LocalAppData DB  : %s', db_path)
+                logger.info('DB Exists        : %s', db_exists)
+                logger.info('User Count       : %s', user_count)
+                logger.info('---------------------------')
+            except Exception as e:
+                logger.warning('Diagnostic logging failed: %s', e)
+
             if module_available('waitress'):
                 waitress = importlib.import_module('waitress')
                 self._server = waitress.create_server(flask_app, host=FLASK_HOST, port=FLASK_PORT, threads=8)

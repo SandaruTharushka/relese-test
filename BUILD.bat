@@ -200,10 +200,10 @@ echo.
 echo  =====================================================
 echo    BUILD SUMMARY
 echo  =====================================================
-if exist "dist\GarageManagementSystem\GarageManagementSystem.exe" (
-    echo  [PASS] dist\GarageManagementSystem\GarageManagementSystem.exe
+if exist "dist\GarageManagementSystem.exe" (
+    echo  [PASS] dist\GarageManagementSystem.exe
 ) else (
-    echo  [FAIL] dist\GarageManagementSystem\GarageManagementSystem.exe  NOT FOUND
+    echo  [FAIL] dist\GarageManagementSystem.exe  NOT FOUND
 )
 if exist "dist\SuperMartPrinterManager.exe" (
     echo  [PASS] dist\SuperMartPrinterManager.exe
@@ -218,7 +218,7 @@ for %%I in (release\GarageManagementSystem_Setup_*.exe) do (
 )
 echo.
 
-if not exist "dist\GarageManagementSystem\GarageManagementSystem.exe" goto :fail
+if not exist "dist\GarageManagementSystem.exe" goto :fail
 
 echo  BUILD COMPLETE
 echo.
