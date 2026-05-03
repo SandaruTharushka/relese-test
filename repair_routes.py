@@ -971,16 +971,30 @@ def register_repair_routes(app, log_action=None, print_domain=None):
             product_id = data.get('product_id') or None
             if product_id:
                 qty_int = float(qty)
-                result = db.session.execute(
-                    text("UPDATE products SET stock_qty = MAX(0, stock_qty - :qty) WHERE id = :pid"),
-                    {'qty': qty_int, 'pid': product_id},
-                )
-                if result.rowcount > 0:
+                product = db.session.get(Product, product_id)
+                if not product:
+                    return jsonify({'error': 'Selected product not found.'}), 404
+                if product.stock_tracking_type == 'AVAILABILITY_ONLY':
+                    if (product.availability_status or 'IN_STOCK') != 'IN_STOCK':
+                        return jsonify({'error': f'"{product.name}" is out of stock.'}), 400
                     db.session.add(StockMovement(
                         product_id=product_id, movement_type='repair_use',
-                        quantity=-qty_int, reference=job.job_number,
-                        note=f'Used in job {job.job_number}',
+                        quantity=0, reference=job.job_number,
+                        note=f'Availability-only used in job {job.job_number}',
                     ))
+                else:
+                    result = db.session.execute(
+                        text("UPDATE products SET stock_qty = MAX(0, stock_qty - :qty) WHERE id = :pid"),
+                        {'qty': qty_int, 'pid': product_id},
+                    )
+                    if result.rowcount > 0:
+                        db.session.add(StockMovement(
+                            product_id=product_id, movement_type='repair_use',
+                            quantity=-qty_int, reference=job.job_number,
+                            note=f'Used in job {job.job_number}',
+                        ))
+                    else:
+                        return jsonify({'error': f'Not enough stock for "{product.name}".'}), 400
             part = RepairJobPart(
                 job_id=jid, product_id=product_id, part_name=part_name,
                 quantity=qty, unit_cost=unit_cost, sell_price=sell_price, total=total,
@@ -1009,15 +1023,17 @@ def register_repair_routes(app, log_action=None, print_domain=None):
             if part.product_id:
                 qty_restore = float(part.quantity or 0)
                 if qty_restore > 0:
-                    db.session.execute(
-                        text("UPDATE products SET stock_qty = stock_qty + :qty WHERE id = :pid"),
-                        {'qty': qty_restore, 'pid': part.product_id},
-                    )
-                    db.session.add(StockMovement(
-                        product_id=part.product_id, movement_type='repair_return',
-                        quantity=qty_restore, reference=job.job_number,
-                        note=f'Returned from job {job.job_number}',
-                    ))
+                    product = db.session.get(Product, part.product_id)
+                    if not product or product.stock_tracking_type != 'AVAILABILITY_ONLY':
+                        db.session.execute(
+                            text("UPDATE products SET stock_qty = stock_qty + :qty WHERE id = :pid"),
+                            {'qty': qty_restore, 'pid': part.product_id},
+                        )
+                        db.session.add(StockMovement(
+                            product_id=part.product_id, movement_type='repair_return',
+                            quantity=qty_restore, reference=job.job_number,
+                            note=f'Returned from job {job.job_number}',
+                        ))
             db.session.delete(part)
             db.session.flush()
             parts_total = sum(money_to_decimal(p.total) for p in job.parts if p.id != part_id)

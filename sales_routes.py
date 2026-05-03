@@ -602,23 +602,25 @@ def register_sales_routes(
                         line_total = price * float(item.get('qty', 1)) - item_disc
 
                         # Atomic stock deduction — rowcount 0 means stock ran out
-                        result = db.session.execute(
-                            text("""
-                                UPDATE products
-                                SET stock_qty = stock_qty - :qty
-                                WHERE id = :pid AND stock_qty >= :qty
-                            """),
-                            {'qty': qty_needed, 'pid': item['product_id']},
-                        )
-                        if result.rowcount == 0:
-                            p = db.session.get(Product, item['product_id'])
-                            name = p.name if p else f"Product #{item['product_id']}"
-                            raise ValueError(f'Not enough stock for "{name}". Try again.')
-
                         p = db.session.get(Product, item['product_id'])
                         if not p:
                             raise ValueError(f"Product #{item['product_id']} not found.")
-                        db.session.expire(p)  # refresh after raw UPDATE
+                        is_availability_only = (p.stock_tracking_type == 'AVAILABILITY_ONLY')
+                        if is_availability_only:
+                            if (p.availability_status or 'IN_STOCK') != 'IN_STOCK':
+                                raise ValueError(f'"{p.name}" is currently out of stock.')
+                        else:
+                            result = db.session.execute(
+                                text("""
+                                    UPDATE products
+                                    SET stock_qty = stock_qty - :qty
+                                    WHERE id = :pid AND stock_qty >= :qty
+                                """),
+                                {'qty': qty_needed, 'pid': item['product_id']},
+                            )
+                            if result.rowcount == 0:
+                                raise ValueError(f'Not enough stock for "{p.name}". Try again.')
+                            db.session.expire(p)  # refresh after raw UPDATE
 
                         wp = item.get('warranty_period') or p.warranty_period or 'none'
                         expiry_date = None
@@ -641,8 +643,8 @@ def register_sales_routes(
                         db.session.flush()
                         db.session.add(StockMovement(
                             product_id=p.id,
-                            movement_type='sale',
-                            quantity=-float(item.get('qty', 1)),
+                            movement_type='availability_only_used' if is_availability_only else 'sale',
+                            quantity=0 if is_availability_only else -float(item.get('qty', 1)),
                             reference=sale.invoice_number,
                         ))
 

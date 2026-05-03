@@ -335,8 +335,17 @@ def register_reports_routes(
             Product.query
             .options(joinedload(Product.cat), joinedload(Product.supplier_obj))
             .filter(
-                Product.stock_qty <= Product.low_stock_lvl,
                 Product.status == 'active',
+                or_(
+                    db.and_(
+                        Product.stock_tracking_type == 'QUANTITY_TRACKED',
+                        Product.stock_qty <= Product.low_stock_lvl,
+                    ),
+                    db.and_(
+                        Product.stock_tracking_type == 'AVAILABILITY_ONLY',
+                        Product.availability_status == 'OUT_OF_STOCK',
+                    ),
+                ),
             )
             .order_by(Product.stock_qty.asc())
             .all()

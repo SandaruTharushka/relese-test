@@ -255,6 +255,11 @@ MIGRATIONS: list[Migration] = [
         "ALTER TABLE wholesale_customers ADD COLUMN retail_customer_id INTEGER NULL",
         "CREATE INDEX IF NOT EXISTS idx_wholesale_customers_retail_customer_id ON wholesale_customers(retail_customer_id)",
     ]),
+    Migration(20, 'v8.2 stock tracking mode for products', [
+        "ALTER TABLE products ADD COLUMN stock_tracking_type VARCHAR(30) NOT NULL DEFAULT 'QUANTITY_TRACKED'",
+        "ALTER TABLE products ADD COLUMN availability_status VARCHAR(20) NOT NULL DEFAULT 'IN_STOCK'",
+        "ALTER TABLE products ADD COLUMN stock_note VARCHAR(200)",
+    ]),
 ]
 
 
