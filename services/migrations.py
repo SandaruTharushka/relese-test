@@ -14,7 +14,10 @@ Migrations are applied in version order and never re-applied.
 from __future__ import annotations
 
 import logging
+import shutil
+import sqlite3
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import NamedTuple
 
 from sqlalchemy import text
@@ -248,6 +251,65 @@ MIGRATIONS: list[Migration] = [
 ]
 
 
+# ── Pre-migration backup ───────────────────────────────────────────────────────
+
+def _backup_db_before_migration() -> str | None:
+    """Create a timestamped backup of the live DB before any migrations run.
+
+    Returns the backup file path (str) on success, or None on failure.
+    Never raises — a backup failure is logged as a warning, not a crash.
+    """
+    try:
+        from database import resolve_database_path  # local import — avoids circularity
+        from runtime_paths import persistent_app_dir
+
+        db_path = Path(resolve_database_path())
+        if not db_path.exists() or db_path.stat().st_size == 0:
+            return None
+
+        backups_dir = persistent_app_dir() / 'backups'
+        backups_dir.mkdir(parents=True, exist_ok=True)
+
+        stamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+        backup_path = backups_dir / f'supermart_premigration_{stamp}.db'
+
+        src_conn = sqlite3.connect(str(db_path), timeout=5)
+        dst_conn = sqlite3.connect(str(backup_path), timeout=5)
+        try:
+            src_conn.backup(dst_conn, pages=200)
+        finally:
+            dst_conn.close()
+            src_conn.close()
+
+        logger.info('[MIGRATE] Pre-migration backup created: %s', backup_path.name)
+        return str(backup_path)
+    except Exception as exc:
+        logger.warning('[MIGRATE] Pre-migration backup failed (continuing): %s', exc)
+        return None
+
+
+def _restore_from_backup(backup_path: str) -> bool:
+    """Overwrite the live DB with *backup_path* to roll back a failed migration.
+
+    Returns True on success, False on failure.
+    """
+    try:
+        from database import resolve_database_path
+        db_path = Path(resolve_database_path())
+        src_conn = sqlite3.connect(backup_path, timeout=5)
+        dst_conn = sqlite3.connect(str(db_path), timeout=5)
+        try:
+            src_conn.backup(dst_conn, pages=200)
+        finally:
+            dst_conn.close()
+            src_conn.close()
+        logger.info('[MIGRATE] DB restored from backup: %s', backup_path)
+        return True
+    except Exception as exc:
+        logger.error('[MIGRATE] DB restore FAILED: %s', exc)
+        return False
+
+
 # ── Runner ─────────────────────────────────────────────────────────────────────
 
 def _ensure_migration_table(session) -> None:
@@ -255,9 +317,18 @@ def _ensure_migration_table(session) -> None:
         CREATE TABLE IF NOT EXISTS schema_migrations (
             version      INTEGER  PRIMARY KEY,
             description  TEXT     NOT NULL,
-            applied_at   TEXT     NOT NULL
+            applied_at   TEXT     NOT NULL,
+            status       TEXT     NOT NULL DEFAULT 'applied'
         )
     """))
+    # Add status column on existing installations that pre-date this schema.
+    try:
+        session.execute(text(
+            "ALTER TABLE schema_migrations ADD COLUMN status TEXT NOT NULL DEFAULT 'applied'"
+        ))
+        session.commit()
+    except Exception:
+        pass  # column already exists — idempotent
 
 
 def _applied_versions(session) -> set[int]:
@@ -285,46 +356,91 @@ def _run_statement(session, sql: str) -> None:
 def run_migrations(session) -> list[int]:
     """Run any pending migrations inside *session*.
 
-    Returns a list of version numbers that were applied.
+    Before the first migration is applied a timestamped backup is created in
+    <persistent_app_dir>/backups/supermart_premigration_*.db.  If a migration
+    fails hard the DB is restored from that backup and a RuntimeError is raised
+    so the caller can surface a clear error to the operator.
+
+    Returns a list of version numbers that were successfully applied.
     """
     _ensure_migration_table(session)
     applied = _applied_versions(session)
+    pending = [m for m in sorted(MIGRATIONS, key=lambda m: m.version) if m.version not in applied]
+
+    if not pending:
+        return []
+
+    # Take a single pre-migration backup before touching anything.
+    premig_backup: str | None = _backup_db_before_migration()
+
     newly_applied: list[int] = []
 
-    for migration in sorted(MIGRATIONS, key=lambda m: m.version):
-        if migration.version in applied:
-            continue
-
+    for migration in pending:
         logger.info(
-            'Applying migration v%d: %s',
+            '[MIGRATE] Applying v%d: %s',
             migration.version,
             migration.description,
         )
+
+        applied_at = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        migration_ok = True
 
         for sql in migration.statements:
             try:
                 _run_statement(session, sql)
             except Exception as exc:
                 logger.warning(
-                    'Migration v%d statement failed (continuing): %s — %s',
+                    '[MIGRATE] v%d statement failed (continuing): %.120s — %s',
                     migration.version,
-                    sql[:120],
+                    sql,
                     exc,
                 )
+                # Statement-level failures are non-fatal (e.g. duplicate column).
+                # A hard failure at the session level would bubble up below.
 
-        applied_at = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-        session.execute(
-            text("""
-                INSERT OR IGNORE INTO schema_migrations (version, description, applied_at)
-                VALUES (:v, :d, :a)
-            """),
-            {'v': migration.version, 'd': migration.description, 'a': applied_at},
-        )
-        newly_applied.append(migration.version)
+        # Record outcome in schema_migrations.
+        try:
+            session.execute(
+                text("""
+                    INSERT OR IGNORE INTO schema_migrations
+                        (version, description, applied_at, status)
+                    VALUES (:v, :d, :a, :s)
+                """),
+                {
+                    'v': migration.version,
+                    'd': migration.description,
+                    'a': applied_at,
+                    's': 'applied' if migration_ok else 'failed',
+                },
+            )
+            session.commit()
+            newly_applied.append(migration.version)
+        except Exception as exc:
+            logger.error(
+                '[MIGRATE] Failed to record migration v%d: %s', migration.version, exc
+            )
+            try:
+                session.rollback()
+            except Exception:
+                pass
+
+            if premig_backup:
+                logger.error(
+                    '[MIGRATE] Attempting DB restore from pre-migration backup: %s',
+                    premig_backup,
+                )
+                _restore_from_backup(premig_backup)
+            raise RuntimeError(
+                f'Migration v{migration.version} ("{migration.description}") failed: {exc}. '
+                + (
+                    f'DB has been restored from {premig_backup}.'
+                    if premig_backup
+                    else 'No pre-migration backup was available for rollback.'
+                )
+            ) from exc
 
     if newly_applied:
-        session.commit()
-        logger.info('Applied %d migration(s): %s', len(newly_applied), newly_applied)
+        logger.info('[MIGRATE] Applied %d migration(s): %s', len(newly_applied), newly_applied)
 
     return newly_applied
 

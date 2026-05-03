@@ -68,8 +68,20 @@ Name: "{localappdata}\SuperMart POS"; Permissions: users-modify
 Source: "{#MyAppDistRoot}\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#MyAppDistRoot}\{#MyPrinterManagerExeName}"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 #else
-Source: "{#MyAppDistRoot}\{#MyAppOneDirFolder}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "*.sql,*.bat,*.md,.env,.env.*,docs\*,tests\*,reset_admin_password.py"
+; CRITICAL: supermart.db is explicitly excluded — customer databases must NEVER
+; be overwritten by the installer.  All persistent data lives in AppData (see
+; [Dirs] above).  The only DB that may ship is the optional empty seed DB below.
+Source: "{#MyAppDistRoot}\{#MyAppOneDirFolder}\*"; DestDir: "{app}"; \
+  Flags: ignoreversion recursesubdirs createallsubdirs; \
+  Excludes: "*.sql,*.bat,*.md,.env,.env.*,docs\*,tests\*,reset_admin_password.py,supermart.db"
 #endif
+
+; Optional empty seed database — shipped inside _internal\seed\ so it is
+; never confused with a live customer DB.  The application copies it to AppData
+; only on first run when no DB already exists there.
+Source: "{#MyAppDistRoot}\{#MyAppOneDirFolder}\_internal\seed\supermart_seed.db"; \
+  DestDir: "{app}\_internal\seed"; \
+  Flags: ignoreversion skipifsourcedoesntexist
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{localappdata}\SuperMart POS"
@@ -80,15 +92,33 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDi
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent; Tasks: launchapp
 
 [UninstallDelete]
+; Only the application install folder is removed on uninstall.
+; Customer data in {localappdata}\SuperMart POS is NEVER deleted automatically.
 Type: filesandordirs; Name: "{app}"
 
 [Code]
 procedure InitializeWizard();
 begin
   MsgBox(
-    '{#MyAppName} stores your business data in ' + ExpandConstant('{localappdata}\SuperMart POS') + #13#10 +
-    'Data is preserved by default when uninstalling so backup/restore remains safe after reinstall.',
+    '{#MyAppName} stores your business data in:' + #13#10 +
+    ExpandConstant('{localappdata}\SuperMart POS') + #13#10#13#10 +
+    'This folder is NOT deleted during uninstall or reinstall.' + #13#10 +
+    'Your database, activation key, settings and backups are always preserved.',
     mbInformation,
     MB_OK
   );
+end;
+
+function InitializeUninstall(): Boolean;
+begin
+  MsgBox(
+    'Uninstalling {#MyAppName}.' + #13#10#13#10 +
+    'Your business data in:' + #13#10 +
+    ExpandConstant('{localappdata}\SuperMart POS') + #13#10 +
+    'will NOT be deleted.' + #13#10#13#10 +
+    'You may safely reinstall at any time and all data will be restored.',
+    mbInformation,
+    MB_OK
+  );
+  Result := True;
 end;
