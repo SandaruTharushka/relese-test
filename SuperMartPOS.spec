@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-# SuperMart POS v3.1 — PyInstaller spec for Python 3.11
+# Garage Management System v3.3.0 — PyInstaller spec for Python 3.11
 #
 # Build command (from project root):
 #   python -m PyInstaller --clean --noconfirm SuperMartPOS.spec
@@ -39,19 +39,27 @@
 #  produces silent crashes or "application failed to initialize" errors on the
 #  end-user machine. Do NOT re-enable UPX for this project.
 
+import os as _os
+
 block_cipher = None
+
+# Bundle the seed DB only if it exists in the project root.
+# If absent, the app creates a fresh schema via SQLAlchemy on first run.
+# The bundled file is installed as _internal\supermart.db (read-only resource)
+# and copied to %LOCALAPPDATA%\Garage Management System\ only when no live DB
+# exists there.  It NEVER overwrites an existing customer database.
+_seed_db_datas = [('supermart.db', '.')] if _os.path.exists('supermart.db') else []
 
 a = Analysis(
     ['main.py'],
     pathex=['.'],
     binaries=[],
     datas=[
-        ('templates',       'templates'),
-        ('static',          'static'),
-        ('version.py',      '.'),
+        ('templates',        'templates'),
+        ('static',           'static'),
+        ('version.py',       '.'),
         ('update_config.py', '.'),   # GitHub update configuration constants
-        ('supermart.db',    '.'),    # bundled seed DB — copied to writable dir on first run; never overwrites existing
-    ],
+    ] + _seed_db_datas,
     hiddenimports=[
         # ── Core application modules ────────────────────────────────────────────
         # app is the primary Flask application; it is loaded via
@@ -67,18 +75,25 @@ a = Analysis(
 
         # ── Route / blueprint modules ────────────────────────────────────────────
         'customer_routes',
+        'customer_linking',           # customer de-dup / linking helpers
         'imei_routes',
         'variant_routes',
         'repair_routes',
+        'vehicle_routes',             # vehicle inspection / history routes
         'tradein_routes',
         'installment_routes',
         'backup',
         'printer_routes',
         'settings_routes',
         'reports_routes',
+        'service_analytics_routes',   # service analytics dashboard
         'suppliers_wholesale_routes',
         'purchases_returns_routes',
         'sales_routes',
+        'broker_routes',              # broker commission routes
+        'expense_routes',             # expense tracking routes
+        'startup_backup',             # pre-start backup helper
+        'validators',                 # shared validation helpers
 
         # ── New canonical printing route modules (domain rewrite) ─────────────────
         'routes',
@@ -93,14 +108,12 @@ a = Analysis(
         # registration at runtime; PyInstaller cannot detect them statically.
         'update_config',
         'update_routes',
-        'services.updater',
 
         # ── Shared helpers ────────────────────────────────────────────────────────
         'shared_helpers',
         'startup_checks',
         'reset_utils',
         'input_helpers',          # imported by reports_routes.py
-        'validators',             # imported by sales/repair/installment/wholesale routes
         'license',                # project module (license.py) — NOT stdlib
         'payhere',
 
@@ -110,15 +123,30 @@ a = Analysis(
         'services.barcode_scanner_service',
         'services.print_templates',           # build_escpos_payload — imported by receipt_printer.py
         'services.receipt_renderer',          # imported by sales_routes.py
+        'services.settings_service',          # module-level import in app.py after Flask init
+        'services.card_terminal_service',     # module-level import in app.py after Flask init
+        'services.escpos_layout_engine',      # ESC/POS layout helpers
+        'services.atomic_sequence',           # function-body import for invoice number gen
+        'services.migrations',                # function-body import in DB health-check recovery
+        'services.updater',
         'services.printing',
         'services.printing.models',
         'services.printing.printer_config',
+        'services.printing.printer_config_validator',
         'services.printing.printer_discovery',
+        'services.printing.printer_settings_repository',
         'services.printing.printer_status',
         'services.printing.spooler',
         'services.printing.receipt_printer',
+        'services.printing.receipt_layout_repository',
+        'services.printing.receipt_layout_validator',
         'services.printing.label_printer',
+        'services.printing.label_layout_repository',
+        'services.printing.label_layout_validator',
+        'services.printing.barcode_settings_repository',
+        'services.printing.barcode_validator',
         'services.printing.domain_service',
+        'services.printing.domain_models',
         'services.printing.settings_service',
 
         # ── New printing domain architecture ──────────────────────────────────────
@@ -127,13 +155,19 @@ a = Analysis(
         'services.printing.receipt',
         'services.printing.receipt.sales_builder',
         'services.printing.receipt.service_builder',
+        'services.printing.receipt.formatter',
+        'services.printing.receipt.receipt_engine',
         'services.printing.label',
         'services.printing.label.engine',
         'services.printing.label.renderer',
         'services.printing.label.validator',
+        'services.printing.label.zpl_builder',
         'services.printing.barcode',
         'services.printing.barcode.generator',
+        'services.printing.diagnostics',
+        'services.printing.diagnostics.diagnostics_service',
         'services.printing.logging',
+        'services.printing.logging.print_log',
         'services.printing.config',
         'services.printing.config.receipt_settings',
         'services.printing.config.label_settings',
