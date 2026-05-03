@@ -413,11 +413,21 @@ def register_sales_routes(
     @app.route('/billing')
     @login_required
     def billing():
-        ws_customers = WholesaleCustomer.query.filter_by(status='active').all()
-        held = HeldOrder.query.filter_by(cashier_id=current_user.id).order_by(HeldOrder.created_at.desc()).all()
+        try:
+            ws_customers = WholesaleCustomer.query.filter_by(status='active').all()
+        except Exception:
+            ws_customers = []
+        try:
+            held = HeldOrder.query.filter_by(cashier_id=current_user.id).order_by(HeldOrder.created_at.desc()).all()
+        except Exception:
+            held = []
+        try:
+            categories = Category.query.all()
+        except Exception:
+            categories = []
         return render_template(
             'billing.html',
-            categories=Category.query.all(),
+            categories=categories,
             wholesale_customers=[c.to_dict() for c in ws_customers],
             held_orders=[h.to_dict() for h in held],
         )
