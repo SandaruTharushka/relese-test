@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from services.printing.label_printer import LabelPrintExecutionService
+from services.printing.label.engine import LabelPrintEngine
 from services.printing.receipt_printer import ReceiptPrintExecutionService
 from services.printing.spooler import PrintSpooler
 
@@ -83,7 +83,7 @@ class PrintingDomainService:
         if not resolved.connected:
             reason = resolved.reason or 'Label printer is not connected.'
             return False, {'code': self.printer_service.map_resolution_error(reason), 'msg': reason}, 400
-        svc = LabelPrintExecutionService(self.logger)
+        svc = LabelPrintEngine(self.logger)
         out = svc.execute(
             label_cfg=cfg,
             resolved=resolved,

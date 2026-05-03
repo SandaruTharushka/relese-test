@@ -1,17 +1,24 @@
-"""Label print engine — validates, renders, and dispatches label jobs.
+"""Label print engine — validates, builds ZPL, and dispatches via RAW mode.
 
-Replaces LabelPrintExecutionService.execute() in label_printer.py.
-Uses the canonical validator from label/validator.py.
+For BIXOLON XD3-40t (BPL-Z) and any ZPL/BPL-compatible thermal label printer.
+No GDI / StartDoc — all label printing uses raw ZPL command streams.
+
+USB path : win32print.StartDocPrinter with 'RAW' datatype (not GDI).
+Network  : plain TCP socket to port 9100.
 """
 from __future__ import annotations
 
+import logging
 import os
+import socket
 from dataclasses import dataclass
 from typing import Any
 
-from services.printing.label.renderer import LabelRenderer
 from services.printing.label.validator import validate_barcode_or_fallback
+from services.printing.label.zpl_builder import build_label_zpl
 from services.printing.models import ResolvedPrinter
+
+_log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -23,17 +30,10 @@ class LabelPrintOutcome:
 
 
 class LabelPrintEngine:
-    """Full label print pipeline: validate → render → dispatch."""
+    """Full label print pipeline: validate → build ZPL → dispatch RAW."""
 
     def __init__(self, logger: Any = None):
-        self.logger = logger
-        self.renderer = LabelRenderer(logger)
-
-    @staticmethod
-    def _as_bool(value: Any) -> bool:
-        if isinstance(value, bool):
-            return value
-        return str(value).strip().lower() in {'1', 'true', 'yes', 'on'}
+        self.logger = logger or _log
 
     def execute(
         self,
@@ -53,65 +53,44 @@ class LabelPrintEngine:
 
         copies = max(1, min(int(copies or 1), 50))
 
+        self.logger.info('[PRINT] Label job started')
+        self.logger.info('[PRINT] Printer: %s', resolved.name)
+        self.logger.info('[PRINT] Mode: RAW ZPL')
+
+        cfg = dict(label_cfg)
+        cfg['label_barcode_type'] = resolved_type
+
         try:
-            image = self.renderer.render(
-                barcode_value=barcode_value,
-                product_name=str(product.get('name') or '').strip(),
-                price=str(product.get('sell_price') or '0.00'),
-                sku=str(product.get('sku') or ''),
-                company_name=company_name,
-                custom_footer=str(label_cfg.get('label_custom_footer') or ''),
-                width_mm=float(label_cfg.get('label_width_mm', 30.0)),
-                height_mm=float(label_cfg.get('label_height_mm', 20.0)),
-                dpi=int(label_cfg.get('label_dpi', 203)),
-                barcode_type=resolved_type,
-                barcode_width_mm=float(label_cfg.get('label_barcode_width_mm', 24.0)),
-                barcode_height_mm=float(label_cfg.get('label_barcode_height_mm', 8.0)),
-                font_size=int(label_cfg.get('label_font_size', 9)),
-                text_align=str(label_cfg.get('label_text_align', 'center')),
-                margin_top_mm=float(label_cfg.get('label_margin_top', 2.0)),
-                margin_left_mm=float(label_cfg.get('label_margin_left', 2.0)),
-                margin_right_mm=float(label_cfg.get('label_margin_right', 2.0)),
-                margin_bottom_mm=float(label_cfg.get('label_margin_bottom', 2.0)),
-                show_name=self._as_bool(label_cfg.get('label_show_name', True)),
-                show_price=self._as_bool(label_cfg.get('label_show_price', True)),
-                show_barcode=self._as_bool(label_cfg.get('label_show_barcode', True)),
-                show_sku=self._as_bool(label_cfg.get('label_show_sku', False)),
-                show_company=self._as_bool(label_cfg.get('label_show_company', False)),
-                show_footer=self._as_bool(label_cfg.get('label_show_footer', False)),
-            )
+            zpl = build_label_zpl(product, cfg, copies=copies)
         except Exception as exc:
-            if self.logger:
-                self.logger.exception('Label render failed')
-            return LabelPrintOutcome(ok=False, code='RENDER_FAILED', message=f'Label render failed: {exc}')
+            self.logger.exception('[PRINT] ZPL build failed')
+            return LabelPrintOutcome(ok=False, code='ZPL_BUILD_FAILED', message=f'ZPL build failed: {exc}')
+
+        payload = zpl.encode('utf-8')
+        self.logger.info('[PRINT] Data length: %d bytes', len(payload))
 
         try:
             if resolved.mode == 'network':
-                self._print_network(
-                    ip=str(label_cfg.get('label_printer_ip') or ''),
-                    port=int(label_cfg.get('label_printer_port') or 9100),
-                    img=image,
-                    copies=copies,
-                    gap_mm=float(label_cfg.get('label_gap_mm', 3.0)),
-                )
+                ip = str(label_cfg.get('label_printer_ip') or '')
+                port = int(label_cfg.get('label_printer_port') or 9100)
+                self._print_raw_network(ip=ip, port=port, payload=payload)
             else:
                 if os.name != 'nt':
                     return LabelPrintOutcome(
                         ok=False,
                         code='UNSUPPORTED_HOST',
-                        message='Windows GDI label printing is only supported on Windows hosts.',
+                        message='Windows RAW label printing requires a Windows host.',
                     )
-                self._print_windows(
-                    printer_name=resolved.name,
-                    img=image,
-                    copies=copies,
-                    doc_name=f'Label: {product.get("name", "Barcode Label")}',
-                )
+                self._print_raw_usb(printer_name=resolved.name, payload=payload)
         except Exception as exc:
-            if self.logger:
-                self.logger.exception('Label dispatch failed')
-            return LabelPrintOutcome(ok=False, code='SPOOLER_FAILURE', message=f'Label print dispatch failed: {exc}')
+            self.logger.exception('[PRINT] Label dispatch failed')
+            return LabelPrintOutcome(
+                ok=False,
+                code='SPOOLER_FAILURE',
+                message=f'Label print failed: {exc}',
+            )
 
+        self.logger.info('[PRINT] SUCCESS — %d label(s) on %s', copies, resolved.name)
         return LabelPrintOutcome(
             ok=True,
             code='PRINT_DISPATCHED',
@@ -123,37 +102,38 @@ class LabelPrintEngine:
             },
         )
 
-    def _print_windows(self, *, printer_name: str, img, copies: int, doc_name: str) -> None:
-        import win32con
-        import win32ui
-        from PIL import ImageWin
+    def _print_raw_usb(self, *, printer_name: str, payload: bytes) -> None:
+        """Send raw ZPL bytes to a Windows-installed printer via the spooler in RAW mode.
 
-        for _ in range(copies):
-            hdc = win32ui.CreateDC()
-            hdc.CreatePrinterDC(printer_name)
-            printable_w = hdc.GetDeviceCaps(win32con.HORZRES)
-            printable_h = hdc.GetDeviceCaps(win32con.VERTRES)
-            img_w, img_h = img.size
-            scale = min(printable_w / max(1, img_w), printable_h / max(1, img_h))
-            draw_w = max(1, round(img_w * scale))
-            draw_h = max(1, round(img_h * scale))
-            hdc.StartDoc(doc_name)
-            hdc.StartPage()
+        Uses win32print.StartDocPrinter with datatype='RAW' — NOT GDI/StartDoc.
+        This is the correct path for BIXOLON XD3-40t and other ZPL label printers.
+        """
+        import win32print
+
+        self.logger.info('[PRINT] USB RAW dispatch → %s (%d bytes)', printer_name, len(payload))
+        handle = win32print.OpenPrinter(printer_name)
+        try:
+            win32print.StartDocPrinter(handle, 1, ('Label', None, 'RAW'))
             try:
-                dib = ImageWin.Dib(img.convert('RGB'))
-                dib.draw(hdc.GetHandleOutput(), (0, 0, draw_w, draw_h))
+                win32print.StartPagePrinter(handle)
+                written = int(win32print.WritePrinter(handle, payload))
+                if written < len(payload):
+                    raise RuntimeError(
+                        f'Spooler wrote {written}/{len(payload)} bytes — label data truncated'
+                    )
             finally:
-                hdc.EndPage()
-                hdc.EndDoc()
-                hdc.DeleteDC()
+                win32print.EndPagePrinter(handle)
+        finally:
+            win32print.EndDocPrinter(handle)
+            win32print.ClosePrinter(handle)
 
-    def _print_network(self, *, ip: str, port: int, img, copies: int, gap_mm: float) -> None:
-        from escpos.printer import Network
-
-        printer = Network(ip, port=port, timeout=5)
-        gap_lines = max(1, int(round(float(gap_mm) / 0.5)))
-        for _ in range(copies):
-            printer.set(align='center')
-            printer.image(img.convert('RGB'), impl='bitImageRaster')
-            printer.text('\n' * gap_lines)
-        printer.cut()
+    def _print_raw_network(self, *, ip: str, port: int, payload: bytes) -> None:
+        """Send raw ZPL bytes over TCP to a network-attached label printer (port 9100)."""
+        self.logger.info('[PRINT] Network RAW dispatch → %s:%d (%d bytes)', ip, port, len(payload))
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(10)
+        try:
+            sock.connect((ip, port))
+            sock.sendall(payload)
+        finally:
+            sock.close()
