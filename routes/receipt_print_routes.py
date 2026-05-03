@@ -58,6 +58,11 @@ def register_receipt_print_routes(
 
     def _log_receipt(receipt_type: str, id_val, result) -> None:
         """Emit structured [RECEIPT] log line."""
+        app.logger.info('[RECEIPT SETTINGS LOADED] type=%s id=%s source=StoreSettings', receipt_type, id_val)
+        app.logger.info('[RECEIPT RENDER MODE] type=%s mode=%s', receipt_type, result.debug.get('layout_type', 'thermal'))
+        app.logger.info('[RECEIPT WIDTH] type=%s cpl=%s paper=%s', receipt_type, result.cpl, result.paper_size)
+        sample = (result.receipt_plain or '').replace('\n', ' | ')[:180]
+        app.logger.info('[PRINT OUTPUT SAMPLE] type=%s sample="%s"', receipt_type, sample)
         app.logger.info(
             '[RECEIPT] type=%s id=%s width=%s layout=DB chars=%s paper=%s',
             receipt_type, id_val, result.cpl, result.char_count, result.paper_size,
@@ -138,6 +143,47 @@ def register_receipt_print_routes(
         except Exception:
             app.logger.exception('[RECEIPT] sales_receipt_unexpected_failure sale=%s', sid)
             return jsonify({'ok': False, 'code': 'SALES_RECEIPT_ERROR', 'msg': 'Failed to print sales receipt'}), 500
+
+    @app.route('/api/printing/receipt/print-return', methods=['POST'])
+    @login_required
+    def api_printing_receipt_print_return():
+        _require_print_access()
+        data = request.get_json(silent=True) or {}
+        sale_id = data.get('sale_id') or data.get('sid')
+        if not sale_id:
+            return jsonify({'ok': False, 'code': 'MISSING_SALE_ID', 'msg': 'sale_id is required'}), 400
+        try:
+            sid = int(sale_id)
+        except (TypeError, ValueError):
+            return jsonify({'ok': False, 'code': 'INVALID_SALE_ID', 'msg': 'sale_id must be an integer'}), 400
+        sale = Sale.query.filter_by(id=sid).first()
+        if not sale:
+            return jsonify({'ok': False, 'code': 'SALE_NOT_FOUND', 'msg': f'Sale {sid} not found'}), 404
+        try:
+            cashier_name = (
+                getattr(current_user, 'full_name', '') or
+                getattr(current_user, 'username', 'Staff')
+            )
+            engine = _engine()
+            result = engine.build_return_receipt(
+                sale_id=sid,
+                actor_user_id=getattr(current_user, 'id', None),
+                cashier_name=cashier_name,
+            )
+            _log_receipt('return_receipt', sid, result)
+            copies = max(1, min(int(data.get('copies') or 1), 5))
+            invoice_no = getattr(sale, 'invoice_number', '') or f'SALE-{sid}'
+            ok, payload, status_code = print_domain.print_receipt(
+                receipt_text=result.receipt_text,
+                title=f'Return Receipt {invoice_no}',
+                copies=copies,
+                actor_id=getattr(current_user, 'id', None),
+            )
+            _log_print(payload.get('target', ''), ok, copies)
+            return jsonify({'ok': ok, 'sale_id': sid, 'invoice': invoice_no, **payload}), status_code
+        except Exception:
+            app.logger.exception('[RECEIPT] return_receipt_unexpected_failure sale=%s', sid)
+            return jsonify({'ok': False, 'code': 'RETURN_RECEIPT_ERROR', 'msg': 'Failed to print return receipt'}), 500
 
     # ── Service/job receipt direct thermal print ───────────────────────────────
 
