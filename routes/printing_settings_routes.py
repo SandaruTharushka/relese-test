@@ -90,7 +90,33 @@ def register_printing_settings_routes(
         if request.method == 'GET':
             from services.printing.domain.constants import RECEIPT_PRINTER_DEFAULTS
             return jsonify({'ok': True, 'settings': _load(RECEIPT_PRINTER_KEYS, RECEIPT_PRINTER_DEFAULTS)})
-        return _save_keys(request.get_json(silent=True), RECEIPT_PRINTER_KEYS, 'receipt printer settings')
+
+        data = request.get_json(silent=True) or {}
+        payload = {k: v for k, v in data.items() if k in set(RECEIPT_PRINTER_KEYS)}
+        if not payload:
+            return jsonify({'ok': False, 'msg': 'No recognized receipt printer settings keys provided'}), 400
+        try:
+            StoreSettings.set_many(payload)
+            db.session.commit()
+            log_action('receipt printer settings updated', target_type='printer_settings', metadata={'keys': sorted(payload.keys())})
+            from services.printing.settings_service import PrintSettingsService
+            settings_svc = PrintSettingsService(StoreSettings)
+            receipt_cfg = printer_service.normalize_receipt_config(settings_svc.load_receipt())
+            label_cfg_raw = settings_svc.load_label()
+            label_cfg = printer_service.normalize_label_config(label_cfg_raw) | label_cfg_raw
+            receipt_status = printer_service.build_receipt_status(receipt_cfg)
+            label_status = printer_service.build_label_status(label_cfg)
+            validation_ok = bool(receipt_status.get('connected'))
+            return jsonify({
+                'ok': True,
+                'saved': len(payload),
+                'validation_ok': validation_ok,
+                'receipt': receipt_status,
+                'label': label_status,
+            })
+        except Exception as exc:
+            db.session.rollback()
+            return jsonify({'ok': False, 'msg': f'Failed to save receipt printer settings: {exc}'}), 500
 
     # ── Receipt layout settings (sales receipts) ─────────────────
     @app.route('/api/printing/settings/receipt-layout', methods=['GET', 'POST'])
