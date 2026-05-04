@@ -2023,7 +2023,8 @@ def api_create_product_quick():
     d = request.get_json(silent=True) or {}
     barcode = (d.get('barcode') or '').strip()
     name = (d.get('name') or '').strip()
-    category_name = (d.get('category') or '').strip()
+    category_name = ' '.join((d.get('category') or d.get('category_name') or '').strip().split())
+    incoming_category_id = d.get('category_id')
 
     if not barcode:
         return jsonify({'success': False, 'error': 'Barcode is required'}), 400
@@ -2041,9 +2042,21 @@ def api_create_product_quick():
         return jsonify({'success': False, 'error': f'Barcode "{barcode}" already exists'}), 409
 
     category_id = None
-    if category_name:
-        cat = Category.query.filter(func.lower(Category.name) == category_name.lower()).first()
-        category_id = cat.id if cat else None
+    if incoming_category_id:
+        try:
+            category_id = int(incoming_category_id)
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'error': 'Invalid category id'}), 400
+        if not Category.query.get(category_id):
+            return jsonify({'success': False, 'error': 'Category not found'}), 404
+    elif category_name:
+        normalized = category_name.lower()
+        cat = Category.query.filter(func.lower(func.trim(Category.name)) == normalized).first()
+        if not cat:
+            cat = Category(name=category_name)
+            db.session.add(cat)
+            db.session.flush()
+        category_id = cat.id
     product_type = normalize_product_type(d.get('product_type'), fallback='normal')
 
     try:
@@ -2066,6 +2079,23 @@ def api_create_product_quick():
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': f'Failed to create product: {str(e)}'}), 500
+
+@app.route('/api/categories/search')
+@login_required
+def api_categories_search():
+    query = ' '.join((request.args.get('q') or '').strip().split())
+    if not query:
+        return jsonify({'ok': True, 'categories': []})
+    term = f"%{query.replace('%', '\\%').replace('_', '\\_')}%"
+    cats = (Category.query
+            .filter(Category.name.ilike(term, escape='\\'))
+            .order_by(Category.name.asc())
+            .limit(15)
+            .all())
+    return jsonify({
+        'ok': True,
+        'categories': [{'id': c.id, 'name': c.name} for c in cats]
+    })
 
 @app.route('/api/products', methods=['POST'])
 @login_required
