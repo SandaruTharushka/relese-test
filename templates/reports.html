@@ -60,6 +60,7 @@
         <div class="chip-group" id="periodChips">
           <div class="chip active" data-value="7d">7 Days</div>
           <div class="chip" data-value="today">Today</div>
+          <div class="chip" data-value="daily">Daily Report</div>
           <div class="chip" data-value="30d">30 Days</div>
           <div class="chip" data-value="90d">90 Days</div>
           <div class="chip" data-value="1y">1 Year</div>
@@ -121,6 +122,22 @@
           <div class="stat-card">
             <div class="text-muted text-xs mb-2">TOTAL DISCOUNTS</div>
             <div class="text-xl font-800 text-danger" id="rDiscount">LKR {{ "%.0f"|format(total_discount) }}</div>
+          </div>
+        </div>
+
+
+        <div class="card mb-6" id="todayDailyCard" style="display:none">
+          <div style="font-weight:700;margin-bottom:12px">🗓 Daily Report (Today)</div>
+          <div class="grid-4">
+            <div class="stat-card"><div class="text-muted text-xs">Today Sales Count</div><div id="tdSalesCount" class="text-xl font-800">0</div></div>
+            <div class="stat-card"><div class="text-muted text-xs">Today Total Sales</div><div id="tdTotalSales" class="text-xl font-800">LKR 0</div></div>
+            <div class="stat-card"><div class="text-muted text-xs">Today Discount</div><div id="tdDiscount" class="text-xl font-800">LKR 0</div></div>
+            <div class="stat-card"><div class="text-muted text-xs">Today Returns</div><div id="tdReturns" class="text-xl font-800">LKR 0</div></div>
+            <div class="stat-card"><div class="text-muted text-xs">Service / Job Income</div><div id="tdSvcIncome" class="text-xl font-800">LKR 0</div></div>
+            <div class="stat-card"><div class="text-muted text-xs">Cash</div><div id="tdCash" class="text-xl font-800">LKR 0</div></div>
+            <div class="stat-card"><div class="text-muted text-xs">Card</div><div id="tdCard" class="text-xl font-800">LKR 0</div></div>
+            <div class="stat-card"><div class="text-muted text-xs">Bank</div><div id="tdBank" class="text-xl font-800">LKR 0</div></div>
+            <div class="stat-card"><div class="text-muted text-xs">Credit</div><div id="tdCredit" class="text-xl font-800">LKR 0</div></div>
           </div>
         </div>
 
@@ -458,7 +475,7 @@ const _rptLoading = (() => {
 const _weekly  = {{ weekly|safe }};
 const _monthly = {{ monthly|safe }};
 function fmtLKR(v){ return 'LKR ' + Number(v||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0}); }
-function today(){ return new Date().toISOString().split('T')[0]; }
+function today(){ const d=new Date(); const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; }
 function monthStart(){ return today().substring(0,8)+'01'; }
 
 // ── Section toggle ────────────────────────────────────────────────────────────
@@ -510,7 +527,10 @@ document.querySelectorAll('#periodChips .chip').forEach(chip => {
 async function loadReport(period) {
   if (!_rptLoading.show('Sales Report')) return;
   let url = `/api/reports/summary?period=${period}`;
-  if (period==='custom') {
+  const todayRange = `/api/reports/summary?from=${today()}&to=${today()}`;
+  if (period==='daily') {
+    url = todayRange;
+  } else if (period==='custom') {
     const f=document.getElementById('dateFrom').value, t=document.getElementById('dateTo').value;
     if (!f||!t) { _rptLoading.hide(); toast('Select date range','error'); return; }
     url = `/api/reports/summary?from=${f}&to=${t}`;
@@ -535,6 +555,20 @@ async function loadReport(period) {
       <td>${Math.round(p.sold)}</td>
       <td style="color:var(--accent);font-weight:700">${fmtLKR(p.revenue)}</td>
     </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:16px">No data</td></tr>';
+    const showDaily = (period==='today' || period==='daily');
+    document.getElementById('todayDailyCard').style.display = showDaily ? '' : 'none';
+    if (showDaily) {
+      document.getElementById('tdSalesCount').textContent = data.total_orders || 0;
+      document.getElementById('tdTotalSales').textContent = fmtLKR(data.total_revenue || 0);
+      document.getElementById('tdDiscount').textContent = fmtLKR(data.total_discount || 0);
+      document.getElementById('tdReturns').textContent = fmtLKR(data.returns_total || 0);
+      document.getElementById('tdSvcIncome').textContent = fmtLKR(data.service_income || 0);
+      const pb = data.payment_breakdown || {};
+      document.getElementById('tdCash').textContent = fmtLKR(pb.cash || 0);
+      document.getElementById('tdCard').textContent = fmtLKR(pb.card || 0);
+      document.getElementById('tdBank').textContent = fmtLKR(pb.bank || 0);
+      document.getElementById('tdCredit').textContent = fmtLKR(pb.credit || 0);
+    }
     toast(`Report updated (${data.start} → ${data.end})`,'info');
   } catch(e) {
     if (e?.name === 'AbortError') {
