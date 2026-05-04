@@ -492,6 +492,9 @@ class SaleItem(db.Model):
     quantity             = db.Column(db.Float, nullable=False)   # quantity, not money
     price                = db.Column(MONEY, nullable=False)
     discount             = db.Column(MONEY, default=0)
+    discount_type        = db.Column(db.String(20), default='amount')
+    discount_value       = db.Column(MONEY, default=0)
+    discount_amount      = db.Column(MONEY, default=0)
     discount_percent     = db.Column(_Numeric(5, 2, asdecimal=True), default=0)
     discount_source      = db.Column(db.String(20), default='none')
     auto_discount_rule_id = db.Column(db.Integer, db.ForeignKey('auto_discount_rules.id'), nullable=True)
@@ -517,6 +520,10 @@ class SaleItem(db.Model):
             'quantity': self.quantity,
             'price': money_to_float(self.price),
             'discount': money_to_float(self.discount),
+            'discount_type': self.discount_type or 'amount',
+            'discount_value': money_to_float(self.discount_value),
+            'discount_amount': money_to_float(self.discount_amount),
+            'line_total': money_to_float(self.total),
             'discount_percent': money_to_float(self.discount_percent),
             'discount_source': self.discount_source or 'none',
             'auto_discount_rule_id': self.auto_discount_rule_id,

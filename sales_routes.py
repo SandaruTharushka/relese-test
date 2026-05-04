@@ -543,8 +543,18 @@ def register_sales_routes(
             for i in items_data:
                 price = parse_positive_float(i.get('price'), 'Price')
                 qty   = parse_positive_float(i.get('qty'),   'Quantity')
-                disc  = parse_positive_float(i.get('discount', 0), 'Item discount')
-                subtotal += price * qty - disc
+                gross = price * qty
+                disc_type = str(i.get('discount_type') or 'amount').strip().lower()
+                disc_value = parse_positive_float(i.get('discount_value', i.get('discount', 0)), 'Item discount value')
+                if disc_type == 'percent':
+                    if disc_value > 100:
+                        raise ValueError('Item discount percent cannot exceed 100.')
+                    disc = round(gross * disc_value / 100.0, 2)
+                else:
+                    if disc_value > gross:
+                        raise ValueError('Item discount amount cannot exceed line total.')
+                    disc = round(disc_value, 2)
+                subtotal += gross - disc
 
             discount_flat    = parse_positive_float(d.get('discount', 0),         'Discount')
             discount_percent = parse_positive_float(d.get('discount_percent', 0), 'Discount percent')
@@ -669,7 +679,9 @@ def register_sales_routes(
                     for idx, item in enumerate(items_data):
                         qty_needed = parse_positive_float(item.get('qty'), 'Quantity')
                         price      = parse_positive_float(item.get('price'), 'Price')
-                        item_disc  = parse_positive_float(item.get('discount', 0), 'Item discount')
+                        item_disc_type = str(item.get('discount_type') or 'amount').strip().lower()
+                        item_disc_value = parse_positive_float(item.get('discount_value', item.get('discount', 0)), 'Item discount value')
+                        item_disc  = parse_positive_float(item.get('discount_amount', item.get('discount', 0)), 'Item discount')
                         item_disc_pct = money_decimal(item.get('discount_percent', 0), 'Item discount percent')
                         item_disc_source = str(item.get('discount_source') or 'none').strip().lower()
                         item_rule_id = item.get('auto_discount_rule_id')
@@ -714,6 +726,9 @@ def register_sales_routes(
                             quantity=float(item.get('qty', 1)),
                             price=price,
                             discount=item_disc,
+                            discount_type=item_disc_type if item_disc_type in ('amount','percent') else 'amount',
+                            discount_value=item_disc_value,
+                            discount_amount=item_disc,
                             discount_percent=item_disc_pct,
                             discount_source=item_disc_source if item_disc_source in ('auto', 'manual', 'none') else 'none',
                             auto_discount_rule_id=item_rule_id,
