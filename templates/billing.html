@@ -975,6 +975,17 @@ function boolSetting(v, def=false) {
   return ['1','true','yes','on', true].includes(v);
 }
 
+function syncAutoDiscountToggle(enabled = true) {
+  const toggle = document.getElementById('autoDiscountToggle');
+  const normalized = !!enabled;
+  window._autoDiscountEnabled = normalized;
+  if (toggle) toggle.checked = normalized;
+  const stateEl = document.getElementById('autoDiscountState');
+  if (stateEl) stateEl.textContent = normalized ? 'ON' : 'OFF';
+}
+
+syncAutoDiscountToggle(true);
+
 function syncTaxVisibility() {
   const taxRow = document.getElementById('taxRow');
   const taxLabel = document.getElementById('taxLabel');
@@ -994,6 +1005,7 @@ async function loadStoreSettings() {
     storeSettings.tax_enabled = storeSettings.tax_enabled ?? storeSettings.pref_taxEnabled ?? false;
     storeSettings.tax_name = storeSettings.tax_name || storeSettings.pref_taxName || 'Tax';
     storeSettings.payhere_sandbox = storeSettings.payhere_sandbox === true || storeSettings.payhere_sandbox === 'true' || storeSettings.payhere_sandbox === '1';
+    syncAutoDiscountToggle(boolSetting(storeSettings.pref_auto_discount_enabled, true));
     cardSettings = {
       enabled: boolSetting(storeSettings.pref_card_enable_card_payments, true),
       terminal_type: storeSettings.pref_card_terminal_type || 'manual_record_only',
@@ -1012,6 +1024,7 @@ async function loadStoreSettings() {
     recalc();
   } catch(e) {
     storeSettings = { store_name:'Garage', store_phone:'+94 11 234 5678', store_branch:'Main Branch', receipt_footer:'', tax_rate: '0', tax_enabled: false, tax_name: 'Tax', payhere_sandbox: false };
+    syncAutoDiscountToggle(true);
     cardSettings = { enabled: true, terminal_type: 'manual_record_only', wait_for_response: true, auto_send_amount: true, allow_manual_fallback: true, require_approval_code: true, require_last4: true, require_rrn_reference: true, show_on_receipt: true };
     syncTaxVisibility();
     document.documentElement.style.setProperty('--print-width', '80mm');
