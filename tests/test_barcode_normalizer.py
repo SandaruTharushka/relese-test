@@ -93,6 +93,45 @@ class TestNormalizeScannedCode:
     def test_prefix_underscore_separator(self):
         assert normalize_scanned_code('BAR_12345') == '12345'
 
+    # ── Doubled-character corruption recovery ────────────────────────────────
+
+    def test_doubled_real_barcode(self):
+        # Each digit of 8887191411868 appears twice → 88888877119911441111886688
+        assert normalize_scanned_code('88888877119911441111886688') == '8887191411868'
+
+    def test_doubled_short_barcode(self):
+        assert normalize_scanned_code('1122334455') == '12345'
+
+    def test_non_doubled_odd_length_unchanged(self):
+        # Odd length cannot be doubled pattern — return as-is
+        assert normalize_scanned_code('12345') == '12345'
+
+    def test_non_doubled_even_length_unchanged(self):
+        # Even length but not all paired — must NOT be modified
+        assert normalize_scanned_code('12345678') == '12345678'
+
+
+# ── Task-specified regression scenarios ──────────────────────────────────────
+
+class TestBillingBarcodeRegressions:
+    """Exact scenarios from the bug report task requirements."""
+
+    TARGET = '8887191411868'
+
+    def test_plain_barcode_exact(self):
+        assert normalize_scanned_code(self.TARGET) == self.TARGET
+
+    def test_barcode_with_trailing_newline(self):
+        assert normalize_scanned_code(self.TARGET + '\n') == self.TARGET
+
+    def test_barcode_with_surrounding_spaces(self):
+        assert normalize_scanned_code('  ' + self.TARGET + '  ') == self.TARGET
+
+    def test_doubled_corrupted_barcode(self):
+        # 88888877119911441111886688 should recover to 8887191411868
+        corrupted = '88888877119911441111886688'
+        assert normalize_scanned_code(corrupted) == self.TARGET
+
 
 # ── Integration tests for /api/products/barcode/<barcode> ─────────────────────
 
@@ -180,3 +219,74 @@ class TestBillingBarcodeScanAPI:
         assert data['success'] is False
         assert data['normalized_code'] == 'NOITEM'
         assert 'NOITEM' in data['message']
+
+
+# ── Integration: real barcode 8887191411868 scan scenarios ───────────────────
+
+@pytest.fixture()
+def real_product_client(auth_client, flask_app):
+    """Seed a product with the exact barcode from the bug report."""
+    from models import Category, Product, db
+
+    with flask_app.app_context():
+        cat = Category(name='RealTestCat')
+        db.session.add(cat)
+        db.session.flush()
+
+        p = Product(
+            barcode='8887191411868',
+            name='Real Test Product',
+            sell_price=100.0,
+            status='active',
+            category_id=cat.id,
+        )
+        db.session.add(p)
+        db.session.commit()
+
+    return auth_client
+
+
+class TestRealBarcodeScenarios:
+    """Proves barcode 8887191411868 is found under all scan conditions."""
+
+    def test_exact_scan(self, real_product_client):
+        res = real_product_client.get('/api/products/barcode/8887191411868')
+        assert res.status_code == 200
+        data = res.get_json()
+        assert data['success'] is True
+        assert data['product']['barcode'] == '8887191411868'
+
+    def test_scan_with_newline(self, real_product_client):
+        import urllib.parse
+        encoded = urllib.parse.quote('8887191411868\n')
+        res = real_product_client.get(f'/api/products/barcode/{encoded}')
+        assert res.status_code == 200
+        assert res.get_json()['success'] is True
+
+    def test_scan_with_spaces(self, real_product_client):
+        import urllib.parse
+        encoded = urllib.parse.quote('  8887191411868  ')
+        res = real_product_client.get(f'/api/products/barcode/{encoded}')
+        assert res.status_code == 200
+        assert res.get_json()['success'] is True
+
+    def test_doubled_corrupted_scan_finds_product(self, real_product_client):
+        # 88888877119911441111886688 is the doubled corruption of 8887191411868.
+        # After normalization it must match the product.
+        import urllib.parse
+        encoded = urllib.parse.quote('88888877119911441111886688')
+        res = real_product_client.get(f'/api/products/barcode/{encoded}')
+        assert res.status_code == 200
+        data = res.get_json()
+        assert data['success'] is True
+        assert data['product']['barcode'] == '8887191411868'
+
+    def test_doubled_corrupted_scan_does_not_create_wrong_product(self, real_product_client):
+        # Verify that the corrupted code resolves to the CORRECT product, not
+        # a phantom product with the doubled string as its barcode.
+        import urllib.parse
+        encoded = urllib.parse.quote('88888877119911441111886688')
+        res = real_product_client.get(f'/api/products/barcode/{encoded}')
+        data = res.get_json()
+        # Must NOT return the corrupted string as the product's barcode
+        assert data.get('product', {}).get('barcode') != '88888877119911441111886688'
