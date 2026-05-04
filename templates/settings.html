@@ -3791,9 +3791,10 @@ document.addEventListener('DOMContentLoaded', () => {
 async function loadAutoRules(){
   const el=document.getElementById('autoRulesTable'); if(!el) return;
   try{const r=await fetch('/api/auto-discount/rules'); const d=await r.json();
+    if(!r.ok){el.textContent='Error: '+( d.error||'Failed to load rules'); return;}
     const rows=(d.rules||[]).map(x=>`<div style="display:grid;grid-template-columns:1.5fr repeat(4,1fr) auto;gap:6px;padding:6px 0;border-top:1px solid var(--border)"><span>${x.name}</span><span>${x.min_price}</span><span>${x.max_price}</span><span>${x.discount_percent}%</span><span>${x.is_active?'Active':'Inactive'}</span><span><button onclick="toggleAutoRule(${x.id},${!x.is_active})">${x.is_active?'Disable':'Enable'}</button> <button onclick="deleteAutoRule(${x.id})">Delete</button></span></div>`).join('');
     el.innerHTML='<div style="display:grid;grid-template-columns:1.5fr repeat(4,1fr) auto;gap:6px;font-weight:700"><span>Name</span><span>Min</span><span>Max</span><span>Discount</span><span>Status</span><span>Actions</span></div>'+rows;
-  }catch(e){el.textContent='Failed to load rules';}
+  }catch(e){el.textContent='Failed to load rules: '+e.message;}
 }
 async function addAutoRule(){
   const name=prompt('Rule name'); if(!name) return;
@@ -3801,7 +3802,7 @@ async function addAutoRule(){
   const r=await fetch('/api/auto-discount/rules',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,min_price,max_price,discount_percent,is_active:true})});
   const d=await r.json(); if(!r.ok){alert(d.error||'Failed'); return;} loadAutoRules();
 }
-async function toggleAutoRule(id,is_active){await fetch('/api/auto-discount/rules/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({is_active})});loadAutoRules();}
-async function deleteAutoRule(id){if(!confirm('Delete rule?')) return; await fetch('/api/auto-discount/rules/'+id,{method:'DELETE'});loadAutoRules();}
-document.addEventListener('DOMContentLoaded',loadAutoRules);
+async function toggleAutoRule(id,is_active){const r=await fetch('/api/auto-discount/rules/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({is_active})}); if(r.ok) loadAutoRules();}
+async function deleteAutoRule(id){if(!confirm('Delete rule?')) return; const r=await fetch('/api/auto-discount/rules/'+id,{method:'DELETE'}); if(r.ok) loadAutoRules();}
+if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',loadAutoRules);}else{loadAutoRules();}
 </script>
