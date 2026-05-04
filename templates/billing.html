@@ -571,9 +571,10 @@
 <div class="modal-overlay" id="missingProductModal">
   <div class="modal" style="width:440px">
     <div class="modal-title">⚠️ Product Not Found</div>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:14px">
+    <div style="font-size:13px;color:var(--muted);margin-bottom:6px">
       Barcode <strong id="missingBarcodeLabel"></strong> was not found. Add the product details below.
     </div>
+    <div id="missingBarcodeDebug" style="display:none;font-size:11px;color:var(--danger);background:var(--danger-bg,#fff0f0);border-radius:4px;padding:4px 8px;margin-bottom:10px;word-break:break-all"></div>
     <input type="hidden" id="missingBarcodeValue">
     <div class="form-group mb-3">
       <label class="form-label">Product Name <span style="color:var(--danger)">*</span></label>
@@ -659,6 +660,9 @@ let scanBuffer = '';
 let scanTimer = null;
 let scanLock = false;
 let barcodeDebounceTimer = null;
+let _lastScanCode = '';
+let _lastScanTime = 0;
+const SCAN_DEDUPE_MS = 700;
 let selectedCartIdx = -1;
 window.getSelectedCartIndex = () => selectedCartIdx;
 window.getCartLength = () => cart.length;
@@ -1417,11 +1421,22 @@ function handleScannerInput(value, source) {
   value = (value || '').trim();
   if (!value || scanLock) return;
 
+  // Ignore the same code scanned twice within SCAN_DEDUPE_MS (700 ms).
+  const now = Date.now();
+  if (value === _lastScanCode && (now - _lastScanTime) < SCAN_DEDUPE_MS) {
+    scanBuffer = '';
+    clearTimeout(scanTimer);
+    clearTimeout(barcodeDebounceTimer);
+    return;
+  }
+  _lastScanCode = value;
+  _lastScanTime = now;
+
   scanLock = true;
   scanBuffer = '';
   clearTimeout(scanTimer);
   clearTimeout(barcodeDebounceTimer);
-  console.log('[SCANNER] scanned:', value, 'source:', source);
+  console.log('[SCAN]', { rawCode: value, source });
 
   handleBarcodeValue(value).finally(() => {
     setTimeout(() => { scanLock = false; }, 250);
@@ -1457,8 +1472,7 @@ async function handleBarcodeValue(barcode) {
   const input = document.getElementById('barcodeInput');
   if (input) input.value = '';
 
-  console.log('[SCANNER] raw:', raw, '-> normalized:', clean);
-  console.log('[SCANNER] lookup: /api/products/barcode/' + encodeURIComponent(raw));
+  console.log('[SCAN]', { rawCode: raw, normalizedCode: clean });
   try {
     // Send raw to backend — server normalizes authoritatively
     const res = await fetch(`/api/products/barcode/${encodeURIComponent(raw)}`);
@@ -1472,16 +1486,15 @@ async function handleBarcodeValue(barcode) {
 
     if (res.ok && data.success && data.product) {
       const p = data.product;
-      console.log('[SCANNER] product found:', p.name, '(id=' + p.id + ')');
+      console.log('[SCAN] product found:', p.name, '(id=' + p.id + ')');
       if (!allProducts.find(x => x.id == p.id)) allProducts.push(p);
       addToCart(p.id);
-      console.log('[SCANNER] added to cart:', p.name);
       return;
     }
 
     const normalizedCode = data.normalized_code || clean;
-    console.log('[SCANNER] product not found. raw:', raw, 'normalized:', normalizedCode);
-    openMissingProductModal(normalizedCode);
+    console.log('[SCAN] not found', { rawCode: raw, normalizedCode, attempted: `/api/products/barcode/${encodeURIComponent(raw)}` });
+    openMissingProductModal(raw, normalizedCode);
   } catch (_) {
     toast('Scan error', 'error');
   } finally {
@@ -1489,9 +1502,21 @@ async function handleBarcodeValue(barcode) {
   }
 }
 
-function openMissingProductModal(barcode) {
-  document.getElementById('missingBarcodeValue').value = barcode;
-  document.getElementById('missingBarcodeLabel').textContent = barcode;
+function openMissingProductModal(rawCode, normalizedCode) {
+  // normalizedCode is what the backend searched for; use it as the save barcode.
+  // rawCode is shown for debug so the user (and console) can spot scanner issues.
+  const saveBarcode = normalizedCode || rawCode || '';
+  document.getElementById('missingBarcodeValue').value = saveBarcode;
+  document.getElementById('missingBarcodeLabel').textContent = saveBarcode;
+  const debugEl = document.getElementById('missingBarcodeDebug');
+  if (debugEl) {
+    if (rawCode && rawCode !== saveBarcode) {
+      debugEl.textContent = `Raw scan: ${rawCode}  →  Normalized: ${saveBarcode}`;
+      debugEl.style.display = '';
+    } else {
+      debugEl.style.display = 'none';
+    }
+  }
   document.getElementById('missingName').value = '';
   document.getElementById('missingPrice').value = '';
   document.getElementById('missingCategory').value = '';
@@ -2790,10 +2815,22 @@ function initGlobalScannerCapture() {
     const isEditable = active && (active.tagName === 'TEXTAREA' || (active.tagName === 'INPUT' && active.id !== 'barcodeInput'));
     if (isEditable) return;
 
+    const barcodeInputEl = document.getElementById('barcodeInput');
+    // When barcodeInput is focused the browser inserts characters naturally and
+    // the 'input' listener keeps scanBuffer in sync.  Do NOT also append here —
+    // that would write each character twice (browser insert + manual append).
+    const barcodeInputFocused = (active === barcodeInputEl);
+
     if (e.key === 'Enter') {
+      if (barcodeInputFocused) {
+        // barcodeInput's own keydown listener handles Enter; just reset buffer.
+        scanBuffer = '';
+        clearTimeout(scanTimer);
+        return;
+      }
       // Prefer scanBuffer; fall back to whatever is visible in the input field
       // (covers paste/programmatic input that bypasses per-character keydown).
-      const val = scanBuffer.trim() || (document.getElementById('barcodeInput')?.value || '').trim();
+      const val = scanBuffer.trim() || (barcodeInputEl?.value || '').trim();
       if (val) {
         clearTimeout(barcodeDebounceTimer);
         handleScannerInput(val, 'enter-global');
@@ -2804,12 +2841,16 @@ function initGlobalScannerCapture() {
     }
 
     if (e.key.length !== 1 || e.ctrlKey || e.altKey || e.metaKey) return;
+
+    // Only accumulate manually when barcodeInput is NOT focused.
+    // When it IS focused the 'input' event keeps scanBuffer current.
+    if (barcodeInputFocused) return;
+
     scanBuffer += e.key;
     clearTimeout(scanTimer);
     scanTimer = setTimeout(() => { scanBuffer = ''; }, SCAN_TIMEOUT_MS);
 
-    const input = document.getElementById('barcodeInput');
-    if (input) input.value = scanBuffer;
+    if (barcodeInputEl) barcodeInputEl.value = scanBuffer;
   });
 }
 

@@ -20,6 +20,32 @@ _PREFIX_RE = re.compile(
 _AIM_RE = re.compile(r'^\][A-Za-z]\d')
 
 
+def _try_recover_doubled(raw: str) -> str | None:
+    """Detect and recover a barcode that was doubled character-by-character.
+
+    Some scanner/browser combinations write every character twice into the
+    input, e.g. "8887191411868" becomes "88888877119911441111886688".
+    The pattern is: every character in the original appears exactly twice in
+    sequence (char pairs are identical and adjacent).
+
+    Returns the recovered half-length string if the pattern matches, else None.
+    """
+    n = len(raw)
+    if n < 4 or n % 2 != 0:
+        return None
+    half = n // 2
+    recovered = []
+    for i in range(0, n, 2):
+        if raw[i] != raw[i + 1]:
+            return None
+        recovered.append(raw[i])
+    candidate = ''.join(recovered)
+    # Sanity: recovered must be at least half as long and all printable
+    if len(candidate) != half:
+        return None
+    return candidate
+
+
 def normalize_scanned_code(raw: str | None) -> str:
     """Return a clean, lookup-ready code from raw scanner or keyboard input.
 
@@ -30,6 +56,7 @@ def normalize_scanned_code(raw: str | None) -> str:
       '{"type":"product","barcode":"12345"}' -> "12345"
       " 12345 "                   -> "12345"
       "]C112345"                  -> "12345"   (AIM Code128 prefix)
+      "88888877119911441111886688"  -> "8887191411868"  (doubled-char recovery)
     """
     if not raw:
         return ''
@@ -55,5 +82,11 @@ def normalize_scanned_code(raw: str | None) -> str:
 
     # Strip known prefix labels (BAR:, BARCODE:, PRODUCT:, SKU:, CODE:, QR:)
     value = _PREFIX_RE.sub('', value).strip()
+
+    # Detect and recover doubled-character corruption introduced when a scanner
+    # types into a focused input whose keydown handler also appends the char.
+    recovered = _try_recover_doubled(value)
+    if recovered:
+        value = recovered
 
     return value
