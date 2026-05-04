@@ -119,11 +119,25 @@
           <div class="flex gap-2 items-center mb-4">
             <label class="form-label" style="margin:0">Days:</label>
             <div class="chip-group" id="dayChips">
+              <div class="chip" onclick="setTodayProfit(this)">Today</div>
               <div class="chip active" onclick="setDays(7,this)">7 Days</div>
               <div class="chip" onclick="setDays(14,this)">14 Days</div>
               <div class="chip" onclick="setDays(30,this)">30 Days</div>
             </div>
           </div>
+
+        <div class="card mb-6" id="todayProfitCard" style="display:none;padding:18px">
+          <div style="font-weight:700;margin-bottom:12px">🗓 Daily Profit Report (Today)</div>
+          <div class="grid-3">
+            <div class="stat-card"><div class="text-muted text-xs">Gross Sales</div><div id="tpGross">LKR 0</div></div>
+            <div class="stat-card"><div class="text-muted text-xs">Cost</div><div id="tpCost">LKR 0</div></div>
+            <div class="stat-card"><div class="text-muted text-xs">Expenses</div><div id="tpExpenses">LKR 0</div></div>
+            <div class="stat-card"><div class="text-muted text-xs">Broker Commission</div><div id="tpBroker">LKR 0</div></div>
+            <div class="stat-card"><div class="text-muted text-xs">Service Profit</div><div id="tpServiceProfit">LKR 0</div></div>
+            <div class="stat-card"><div class="text-muted text-xs">Net Profit</div><div id="tpNet">LKR 0</div></div>
+          </div>
+        </div>
+
           <div class="card mb-6" style="padding:24px">
             <div style="font-weight:700;margin-bottom:16px">Daily Revenue vs Cost vs Profit</div>
             <div style="position:relative;height:300px"><canvas id="dailyChart"></canvas></div>
@@ -599,7 +613,7 @@ const SUCCESS = '#10B981';
 const DANGER  = '#EF4444';
 function fmtLKR(v){ return 'LKR '+Number(v||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0}); }
 function fmt(v){ return fmtLKR(v); }
-function today(){ return new Date().toISOString().split('T')[0]; }
+function today(){ const d=new Date(); const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; }
 function daysAgo(n){ const d=new Date(); d.setDate(d.getDate()-n); return d.toISOString().split('T')[0]; }
 // Null-safe element accessor — prevents .style crash on missing elements
 function el(id){ return document.getElementById(id); }
@@ -647,17 +661,36 @@ function updateSummary(data) {
   elStyle('sumProfit', 'color', profit>=0?'var(--accent2)':'var(--danger)');
 }
 
+async function setTodayProfit(el){
+  document.querySelectorAll('#dayChips .chip').forEach(c=>c.classList.remove('active'));
+  if(el) el.classList.add('active');
+  const t=today();
+  const d=await api(`/api/profit/extended?from=${t}&to=${t}`);
+  if(!d||d.ok===false){toast('Today profit load failed','error');return;}
+  document.getElementById('todayProfitCard').style.display='';
+  document.getElementById('tpGross').textContent=fmtLKR(d.product_sales_revenue||0);
+  document.getElementById('tpCost').textContent=fmtLKR(d.product_sales_cost||0);
+  const exp=(d.shop_expenses||0)+(d.work_expenses||0)+(d.extra_expenses||0)+(d.bank_loan||0)+(d.other_expenses||0);
+  document.getElementById('tpExpenses').textContent=fmtLKR(exp);
+  document.getElementById('tpBroker').textContent=fmtLKR(d.total_broker_commission||0);
+  document.getElementById('tpServiceProfit').textContent=fmtLKR(d.service_profit||0);
+  document.getElementById('tpNet').textContent=fmtLKR(d.accounting_net_profit||0);
+  loadDaily(1, t, t);
+}
+
 function setDays(days, el) {
   currentDays=days;
   document.querySelectorAll('#dayChips .chip').forEach(c=>c.classList.remove('active'));
   el.classList.add('active'); loadDaily(days);
 }
 
-async function loadDaily(days) {
+async function loadDaily(days, fromDate=null, toDate=null) {
   if (!_rptLoading.show('Daily Profit')) return;
   const ctrl=new AbortController(); const tOut=setTimeout(()=>ctrl.abort(),30000);
   try {
-  const data=await api(`/api/profit/daily?days=${days}`,{signal:ctrl.signal}); if(!data||data.ok===false){_rptLoading.error(data?.error||'Daily profit failed to load.');return;}
+  const query = fromDate && toDate ? `/api/profit/daily?from=${fromDate}&to=${toDate}&days=${days}` : `/api/profit/daily?days=${days}`;
+  const data=await api(query,{signal:ctrl.signal}); if(!data||data.ok===false){_rptLoading.error(data?.error||'Daily profit failed to load.');return;}
+  document.getElementById('todayProfitCard').style.display='none';
   updateSummary(data);
   const labels=data.map(r=>r.day);
   const chartCanvas = el('dailyChart');
@@ -691,6 +724,7 @@ async function loadMonthly() {
   const ctrl=new AbortController(); const tOut=setTimeout(()=>ctrl.abort(),30000);
   try {
   const data=await api('/api/profit/monthly?months=12',{signal:ctrl.signal}); if(!data||data.ok===false){_rptLoading.error(data?.error||'Monthly profit failed to load.');return;}
+  document.getElementById('todayProfitCard').style.display='none';
   updateSummary(data);
   const chartCanvas = el('monthlyChart');
   if (chartCanvas) {

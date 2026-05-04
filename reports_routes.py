@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 
 from flask import Response, abort, jsonify, render_template, request
 from flask_login import current_user, login_required
-from sqlalchemy import extract, func, or_
+from sqlalchemy import extract, func, or_, case
 from sqlalchemy.orm import joinedload
 
 from input_helpers import safe_int_arg
@@ -47,7 +47,7 @@ def register_reports_routes(
     @login_required
     def reports():
         _ensure_reports_access()
-        today = datetime.now().date()
+        today = datetime.now().astimezone().date()
         weekly = []
         for i in range(6, -1, -1):
             d = today - timedelta(days=i)
@@ -85,6 +85,40 @@ def register_reports_routes(
             db.session.query(func.coalesce(func.sum(Sale.discount), 0)).filter_by(status='completed').scalar() or 0
         )
         avg_basket_all = (total_revenue / total_sales) if total_sales else 0
+        payment_rows = (
+            db.session.query(
+                Payment.method.label('method'),
+                func.coalesce(func.sum(Payment.amount), 0).label('total'),
+            )
+            .join(Sale, Sale.id == Payment.sale_id)
+            .filter(func.date(Sale.sale_date).between(start, end), Sale.status == 'completed')
+            .group_by(Payment.method)
+            .all()
+        )
+        payment_map = {str((r.method or '')).strip().lower(): float(r.total or 0) for r in payment_rows}
+
+        try:
+            from models import ProductReturn
+            returns_total = float(
+                db.session.query(func.coalesce(func.sum(ProductReturn.total_amount), 0))
+                .filter(func.date(ProductReturn.return_date).between(start, end), ProductReturn.status == 'completed')
+                .scalar()
+                or 0
+            )
+        except Exception:
+            returns_total = 0.0
+
+        try:
+            from models import RepairJob
+            service_income = float(
+                db.session.query(func.coalesce(func.sum(RepairJob.total_amount), 0))
+                .filter(func.date(RepairJob.received_date).between(start, end), RepairJob.status != 'cancelled')
+                .scalar()
+                or 0
+            )
+        except Exception:
+            service_income = 0.0
+
         top_products = (
             db.session.query(
                 Product.name,
@@ -146,7 +180,7 @@ def register_reports_routes(
         from_d = request.args.get('from', '')
         to_d = request.args.get('to', '')
         top_n = safe_int_arg('top', 5, min_val=1, max_val=20)
-        today = datetime.now().date()
+        today = datetime.now().astimezone().date()
 
         if from_d and to_d:
             try:
@@ -204,6 +238,40 @@ def register_reports_routes(
             _entry = _daily_map.get(str(d), {'rev': 0.0, 'cnt': 0})
             daily.append({'day': d.strftime('%a %d/%m'), 'sales': _entry['rev'], 'count': _entry['cnt']})
 
+        payment_rows = (
+            db.session.query(
+                Payment.method.label('method'),
+                func.coalesce(func.sum(Payment.amount), 0).label('total'),
+            )
+            .join(Sale, Sale.id == Payment.sale_id)
+            .filter(func.date(Sale.sale_date).between(start, end), Sale.status == 'completed')
+            .group_by(Payment.method)
+            .all()
+        )
+        payment_map = {str((r.method or '')).strip().lower(): float(r.total or 0) for r in payment_rows}
+
+        try:
+            from models import ProductReturn
+            returns_total = float(
+                db.session.query(func.coalesce(func.sum(ProductReturn.total_amount), 0))
+                .filter(func.date(ProductReturn.return_date).between(start, end), ProductReturn.status == 'completed')
+                .scalar()
+                or 0
+            )
+        except Exception:
+            returns_total = 0.0
+
+        try:
+            from models import RepairJob
+            service_income = float(
+                db.session.query(func.coalesce(func.sum(RepairJob.total_amount), 0))
+                .filter(func.date(RepairJob.received_date).between(start, end), RepairJob.status != 'cancelled')
+                .scalar()
+                or 0
+            )
+        except Exception:
+            service_income = 0.0
+
         top_products = (
             db.session.query(
                 Product.name,
@@ -232,6 +300,14 @@ def register_reports_routes(
                     for r in top_products
                 ],
                 'period': period,
+                'returns_total': returns_total,
+                'service_income': service_income,
+                'payment_breakdown': {
+                    'cash': payment_map.get('cash', 0.0),
+                    'card': payment_map.get('card', 0.0),
+                    'bank': payment_map.get('bank', 0.0),
+                    'credit': payment_map.get('credit', 0.0),
+                },
                 'start': str(start),
                 'end': str(end),
             }
@@ -244,7 +320,7 @@ def register_reports_routes(
         report_type = request.args.get('type', 'sales')
         from_d = request.args.get('from', '')
         to_d = request.args.get('to', '')
-        today = datetime.now().date()
+        today = datetime.now().astimezone().date()
         start, end = _parse_date_range(from_d, to_d, today.replace(day=1), today)
 
         output = io.StringIO()
@@ -371,7 +447,7 @@ def register_reports_routes(
         _ensure_reports_access()
         from_d = request.args.get('from', '')
         to_d = request.args.get('to', '')
-        today = datetime.now().date()
+        today = datetime.now().astimezone().date()
         start, end = _parse_date_range(from_d, to_d, today.replace(day=1), today)
 
         rows = (
@@ -409,7 +485,7 @@ def register_reports_routes(
         _ensure_reports_access()
         from_d = request.args.get('from', '')
         to_d = request.args.get('to', '')
-        today = datetime.now().date()
+        today = datetime.now().astimezone().date()
         start, end = _parse_date_range(from_d, to_d, today, today)
 
         rows = (
@@ -451,7 +527,7 @@ def register_reports_routes(
         _ensure_reports_access()
         from_d = request.args.get('from', '')
         to_d = request.args.get('to', '')
-        today = datetime.now().date()
+        today = datetime.now().astimezone().date()
         start, end = _parse_date_range(from_d, to_d, today.replace(day=1), today)
 
         rows = (

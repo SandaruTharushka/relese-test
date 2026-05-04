@@ -3400,8 +3400,20 @@ def api_profit_daily():
         days = min(365, max(1, int(request.args.get('days', 30))))
     except (ValueError, TypeError):
         days = 30
-    today = datetime.now().date()
-    start = today - timedelta(days=days - 1)
+    today = datetime.now().astimezone().date()
+
+    from_d = request.args.get('from', '')
+    to_d = request.args.get('to', '')
+    if from_d and to_d:
+        try:
+            start = datetime.strptime(from_d, '%Y-%m-%d').date()
+            end_date = datetime.strptime(to_d, '%Y-%m-%d').date()
+        except ValueError:
+            start = today - timedelta(days=days - 1)
+            end_date = today
+    else:
+        start = today - timedelta(days=days - 1)
+        end_date = today
 
     sale_cost_subq = db.session.query(
         SaleItem.sale_id.label('sale_id'),
@@ -3417,7 +3429,7 @@ def api_profit_daily():
         func.count(Sale.id).label('orders')
     ).outerjoin(sale_cost_subq, sale_cost_subq.c.sale_id == Sale.id)\
      .filter(
-         func.date(Sale.sale_date).between(start, today),
+         func.date(Sale.sale_date).between(start, end_date),
          Sale.status == 'completed'
      )\
      .group_by(func.date(Sale.sale_date))\
@@ -3435,8 +3447,9 @@ def api_profit_daily():
         }
 
     data = []
-    for i in range(days - 1, -1, -1):
-        d = today - timedelta(days=i)
+    range_days = (end_date - start).days + 1
+    for i in range(range_days):
+        d = start + timedelta(days=i)
         values = row_map.get(d, {'revenue': 0.0, 'cost': 0.0, 'orders': 0})
         data.append({
             'date': str(d), 'day': d.strftime('%d/%m'),
