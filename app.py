@@ -56,6 +56,7 @@ import license as lic_module
 from services.printer_service import PrinterService
 from services.printing.label_printer import LabelPrintExecutionService
 from services.barcode_scanner_service import BarcodeService, ScannerService, ProductFillService, LabelLayoutService
+from utils.timezone import now_utc, now_sl, format_sl_datetime
 
 from shared_helpers import (
     WARRANTY_DAYS,
@@ -391,6 +392,8 @@ if not _secure_cookies:
 app.config.setdefault('WTF_CSRF_TIME_LIMIT', None)
 
 configure_app_logging(app)
+app.logger.info('UTC now: %s', now_utc().strftime('%Y-%m-%d %H:%M:%S %Z'))
+app.logger.info('SL now: %s', now_sl().strftime('%Y-%m-%d %H:%M:%S %Z'))
 printer_service = PrinterService(app.logger)
 label_print_service = LabelPrintExecutionService(app.logger)
 
@@ -3114,7 +3117,7 @@ def api_barcode_scanner_search():
     if target in {'invoice', 'both'}:
         sale = find_sale_by_scanned_value(value)
         if sale:
-            return jsonify({'ok': True, 'type': 'invoice', 'invoice': {'id': sale.id, 'invoice_number': sale.invoice_number, 'total_amount': float(sale.total_amount or 0), 'sale_date': sale.sale_date.strftime('%Y-%m-%d %H:%M:%S')}})
+            return jsonify({'ok': True, 'type': 'invoice', 'invoice': {'id': sale.id, 'invoice_number': sale.invoice_number, 'total_amount': float(sale.total_amount or 0), 'sale_date': format_sl_datetime(sale.sale_date)}})
 
     return jsonify({'ok': False, 'error': f'No product/invoice found for {value}'}), 404
 
