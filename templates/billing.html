@@ -430,7 +430,9 @@
   <div class="modal" style="width:360px">
     <div class="modal-title">🏷️ Item Discount</div>
     <div class="form-group mb-4">
-      <label class="form-label">Discount Amount (LKR)</label>
+      <label class="form-label">Discount Type</label>
+      <select class="form-input" id="itemDiscType"><option value="amount">Amount (LKR)</option><option value="percent">Percentage (%)</option></select>
+      <label class="form-label" style="margin-top:8px">Discount Value</label>
       <input class="form-input" id="itemDiscValue" type="number" min="0" placeholder="Enter discount">
     </div>
     <input type="hidden" id="itemDiscIdx">
@@ -1226,6 +1228,8 @@ async function applyAutoDiscount(idx) {
     const r = await fetch(`/api/auto-discount/lookup?price=${encodeURIComponent(item.price)}`);
     const data = await r.json();
     const pct = parseFloat(data.discount_percent || 0) || 0;
+    item.discount_type = 'percent';
+    item.discount_value = pct;
     item.discount_percent = pct;
     item.discount = ((item.price * item.qty) * pct / 100);
     item.discount_source = pct > 0 ? 'auto' : 'none';
@@ -1336,17 +1340,36 @@ function updateQty(idx, delta) {
   renderCart();
 }
 
+
+function getGrossLineTotal(item) { return (item && item.is_weight) ? (item.total || 0) : ((item?.price || 0) * (item?.qty || 0)); }
+function getLineDiscount(item) {
+  const gross = getGrossLineTotal(item);
+  const t = (item?.discount_type || (item?.discount_percent > 0 ? 'percent' : 'amount'));
+  const v = Math.max(0, parseFloat(item?.discount_value ?? (t === 'percent' ? item?.discount_percent : item?.discount) ?? 0) || 0);
+  if (t === 'percent') return Math.min(gross, gross * Math.min(100, v) / 100);
+  return Math.min(gross, v);
+}
+
 function openItemDiscount(idx) {
   document.getElementById('itemDiscIdx').value = idx;
-  document.getElementById('itemDiscValue').value = cart[idx].discount || 0;
+  document.getElementById('itemDiscType').value = cart[idx].discount_type || ((cart[idx].discount_percent||0)>0 ? 'percent' : 'amount');
+  document.getElementById('itemDiscValue').value = cart[idx].discount_value ?? (cart[idx].discount || 0);
   openModal('itemDiscModal');
 }
 
 function applyItemDiscount() {
   const idx = parseInt(document.getElementById('itemDiscIdx').value);
+  const type = (document.getElementById('itemDiscType').value || 'amount');
   const val = parseFloat(document.getElementById('itemDiscValue').value) || 0;
   if (cart[idx]) {
-    cart[idx].discount = Math.max(0, val);
+    const gross = getGrossLineTotal(cart[idx]);
+    if (val < 0) { toast('Discount cannot be negative', 'error'); return; }
+    if (type === 'percent' && (val < 0 || val > 100)) { toast('Percentage discount must be between 0 and 100', 'error'); return; }
+    if (type === 'amount' && val > gross) { toast('Amount discount cannot exceed line total', 'error'); return; }
+    cart[idx].discount_type = type;
+    cart[idx].discount_value = val;
+    cart[idx].discount_percent = type === 'percent' ? val : 0;
+    cart[idx].discount = type === 'percent' ? (gross * val / 100) : val;
     cart[idx].discount_source = cart[idx].discount > 0 ? 'manual' : 'none';
     renderCart();
   }
@@ -1376,7 +1399,8 @@ function renderCart() {
     const isImei   = item.is_imei_tracked;
     const qtyLabel = isWeight ? `${item.qty.toFixed(3)}kg` : item.qty;
     const lineTotal = isWeight ? item.total : item.price * item.qty;
-    const afterDisc = lineTotal - (item.discount || 0);
+    const discountAmount = getLineDiscount(item);
+    const afterDisc = lineTotal - discountAmount;
     const subLabel  = isWeight ? `LKR ${item.price.toFixed(2)}/kg` : `LKR ${item.price.toLocaleString()} each`;
     const qtyControls = isWeight
       ? `<span style="font-size:11px;color:var(--accent2);font-weight:700;padding:0 6px">${qtyLabel}</span>`
@@ -1385,8 +1409,8 @@ function renderCart() {
         : `<button onclick="event.stopPropagation();updateQty(${i},-1)" style="width:24px;height:24px;background:var(--border);border:none;border-radius:6px;cursor:pointer;font-weight:700;color:var(--text)">−</button>
            <span style="font-size:13px;font-weight:700;width:22px;text-align:center">${qtyLabel}</span>
            <button onclick="event.stopPropagation();updateQty(${i},1)" style="width:24px;height:24px;background:var(--accent);border:none;border-radius:6px;cursor:pointer;font-weight:700;color:#fff">+</button>`;
-    const discBadge = item.discount > 0
-      ? `<div style="font-size:10px;color:var(--warning)">-LKR ${item.discount.toFixed(2)} ${item.discount_source==='auto' ? `(Auto ${item.discount_percent||0}%)` : item.discount_source==='manual' ? '(Manual)' : 'disc'}</div>` : '';
+    const discBadge = discountAmount > 0
+      ? `<div style="font-size:10px;color:var(--warning)">-LKR ${discountAmount.toFixed(2)} (${(item.discount_type||'amount')==='percent' ? `${(item.discount_value||0)}%` : `LKR ${(item.discount_value||0).toFixed(2)}`})</div>` : "";
     const assignedImeis = (Array.isArray(item.imeis) ? item.imeis.filter(Boolean) : (item.imei ? [item.imei] : []));
     const imeiMeta = item.imei_record_details || {};
     const imeiBadge = isImei
@@ -1441,7 +1465,7 @@ function selectCartItem(idx) {
 
 function recalc() {
   const rawSub  = cart.reduce((s, i) => s + (i.is_weight ? i.total : i.price * i.qty), 0);
-  const itemDisc = cart.reduce((s, i) => s + (i.discount || 0), 0);
+  const itemDisc = cart.reduce((s, i) => s + getLineDiscount(i), 0);
   const sub = rawSub - itemDisc;
   const discFlat = parseFloat(document.getElementById('discountInput')?.value || 0) || 0;
   const discPct  = parseFloat(document.getElementById('discountPercent')?.value || 0) || 0;
@@ -1821,6 +1845,8 @@ function addWeightItem(product, quantityKg, totalPrice, label) {
     total: totalPrice,
     is_weight: true,
     discount: 0,
+    discount_type: 'amount',
+    discount_value: 0,
     discount_percent: 0,
     discount_source: 'none',
     auto_discount_rule_id: null,
@@ -1982,7 +2008,11 @@ async function confirmPayment() {
     items: cart.map(i => ({
       product_id: i.id, name: i.name, price: i.price,
       qty: i.qty,
-      discount: i.discount || 0,
+      discount: getLineDiscount(i),
+      discount_type: i.discount_type || 'amount',
+      discount_value: i.discount_value ?? (i.discount_percent || i.discount || 0),
+      discount_amount: getLineDiscount(i),
+      line_total: getGrossLineTotal(i) - getLineDiscount(i),
       discount_percent: i.discount_percent || 0,
       discount_source: i.discount_source || 'none',
       auto_discount_rule_id: i.auto_discount_rule_id || null,
@@ -2313,7 +2343,7 @@ function showReceipt(data) {
   const wsName     = customerSummary.type === 'Wholesale' ? customerSummary.name : '';
 
   const rawSub   = cart.reduce((s, i) => s + (i.is_weight ? i.total : i.price * i.qty), 0);
-  const itemDisc = cart.reduce((s, i) => s + (i.discount || 0), 0);
+  const itemDisc = cart.reduce((s, i) => s + getLineDiscount(i), 0);
   const sub      = rawSub - itemDisc;
   const discFlat = parseFloat(document.getElementById('discountInput')?.value || 0) || 0;
   const discPct  = parseFloat(document.getElementById('discountPercent')?.value || 0) || 0;

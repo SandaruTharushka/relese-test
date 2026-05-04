@@ -277,6 +277,9 @@ MIGRATIONS: list[Migration] = [
         "ALTER TABLE sale_items ADD COLUMN discount_percent NUMERIC(5,2) DEFAULT 0",
         "ALTER TABLE sale_items ADD COLUMN discount_source VARCHAR(20) DEFAULT 'none'",
         "ALTER TABLE sale_items ADD COLUMN auto_discount_rule_id INTEGER NULL",
+        "ALTER TABLE sale_items ADD COLUMN discount_type VARCHAR(20) DEFAULT 'amount'",
+        "ALTER TABLE sale_items ADD COLUMN discount_value FLOAT DEFAULT 0",
+        "ALTER TABLE sale_items ADD COLUMN discount_amount FLOAT DEFAULT 0",
     ]),
 ]
 
