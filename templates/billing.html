@@ -2131,13 +2131,15 @@ function resolveReceiptVisualProfile(profile) {
 
 function renderReceiptHtml(model, visualProfile) {
   const profile = visualProfile || resolveReceiptVisualProfile(getRcptProfile());
+  const show = model.show || {};
   const mode = profile.mode || 'thermal';
   const compactClass = profile.compact ? ' compact-58' : '';
   const shellClass = mode === 'a4'
     ? 'receipt-shell receipt-shell--a4'
     : `receipt-shell receipt-shell--thermal${compactClass}`;
   const storeLogo = storeSettings.store_logo_url ? `<img class="receipt-logo" src="${escapeHtml(storeSettings.store_logo_url)}" alt="Store Logo">` : '';
-  const customerPhone = model.customer.phone ? `<div><span class="lbl">Phone:</span> ${escapeHtml(model.customer.phone)}</div>` : '';
+  const showCustomerPhone = show.show_customer_phone !== false && model.customer.phone;
+  const customerPhone = showCustomerPhone ? `<div><span class="lbl">Phone:</span> ${escapeHtml(model.customer.phone)}</div>` : '';
   const customerType = model.customer.type ? `<div><span class="lbl">Type:</span> ${escapeHtml(model.customer.type)}</div>` : '';
   const paymentExtras = (model.paymentMeta || []).map(r => `<div class="receipt-total-row"><span class="k">${escapeHtml(r.label)}</span><span class="v">${escapeHtml(r.value)}</span></div>`).join('');
   const footerLines = (model.footerLines || []).map(line => `<div>${escapeHtml(line)}</div>`).join('');
@@ -2155,46 +2157,57 @@ function renderReceiptHtml(model, visualProfile) {
   const tableHead = profile.compact
     ? '<tr><th style="width:56%">Item</th><th style="width:14%" class="num">Qty</th><th style="width:30%" class="num">Total</th></tr>'
     : '<tr><th style="width:43%">Item</th><th style="width:10%" class="num">Qty</th><th style="width:16%" class="num">Unit Price</th><th style="width:13%" class="num">Disc.</th><th style="width:18%" class="num">Total</th></tr>';
-  return `
-    <div class="${shellClass}">
-      <div class="receipt-header">
-        ${storeLogo}
-        <div class="receipt-company">${escapeHtml(model.storeName)}</div>
-        ${model.tagline ? `<div class="receipt-tagline">${escapeHtml(model.tagline)}</div>` : ''}
-        <div class="receipt-meta">
-          ${model.address ? `<div>${escapeHtml(model.address)}</div>` : ''}
-          ${model.phone ? `<div>${escapeHtml(model.phone)}</div>` : ''}
-          ${model.email ? `<div>${escapeHtml(model.email)}</div>` : ''}
-        </div>
-        <div class="receipt-title">${escapeHtml(model.title)}</div>
-      </div>
-      <div class="receipt-info-grid">
-        <div><span class="lbl">Invoice #:</span> ${escapeHtml(model.invoiceNo)}</div>
-        <div><span class="lbl">Date:</span> ${escapeHtml(model.date)}</div>
-        <div><span class="lbl">Time:</span> ${escapeHtml(model.time)}</div>
-        <div><span class="lbl">Cashier:</span> ${escapeHtml(model.cashier)}</div>
-      </div>
+
+  const infoGridRows = [
+    show.show_invoice  !== false ? `<div><span class="lbl">Invoice #:</span> ${escapeHtml(model.invoiceNo)}</div>` : '',
+    show.show_datetime !== false ? `<div><span class="lbl">Date:</span> ${escapeHtml(model.date)}</div>` : '',
+    show.show_datetime !== false ? `<div><span class="lbl">Time:</span> ${escapeHtml(model.time)}</div>` : '',
+    show.show_cashier  !== false ? `<div><span class="lbl">Cashier:</span> ${escapeHtml(model.cashier)}</div>` : '',
+  ].filter(Boolean).join('');
+
+  const showCustomer = show.show_customer !== false;
+  const customerBlock = showCustomer ? `
       <div class="receipt-customer">
         <div class="receipt-customer-title">Customer Details</div>
         <div><span class="lbl">Name:</span> ${escapeHtml(model.customer.name)}</div>
         ${customerPhone}
         ${customerType}
+      </div>` : '';
+
+  const totalsRows = [
+    show.show_subtotal       !== false ? `<div class="receipt-total-row"><span class="k">Subtotal</span><span class="v">${escapeHtml(model.totals.subtotal)}</span></div>` : '',
+    show.show_discount_total !== false ? `<div class="receipt-total-row"><span class="k">Discount</span><span class="v">${escapeHtml(model.totals.discount)}</span></div>` : '',
+    show.show_tax            !== false ? `<div class="receipt-total-row"><span class="k">${escapeHtml(model.totals.taxLabel)}</span><span class="v">${escapeHtml(model.totals.tax)}</span></div>` : '',
+    show.show_grand_total    !== false ? `<div class="receipt-total-row grand"><span class="k">Grand Total</span><span class="v">${escapeHtml(model.totals.grandTotal)}</span></div>` : '',
+    show.show_paid           !== false ? `<div class="receipt-total-row"><span class="k">Paid Amount</span><span class="v">${escapeHtml(model.totals.paid)}</span></div>` : '',
+    show.show_change         !== false ? `<div class="receipt-total-row"><span class="k">${escapeHtml(model.totals.balanceLabel)}</span><span class="v">${escapeHtml(model.totals.balance)}</span></div>` : '',
+  ].filter(Boolean).join('');
+
+  return `
+    <div class="${shellClass}">
+      <div class="receipt-header">
+        ${storeLogo}
+        ${show.show_store_name !== false ? `<div class="receipt-company">${escapeHtml(model.storeName)}</div>` : ''}
+        ${show.show_branch !== false && model.tagline ? `<div class="receipt-tagline">${escapeHtml(model.tagline)}</div>` : ''}
+        <div class="receipt-meta">
+          ${show.show_address === true && model.address ? `<div>${escapeHtml(model.address)}</div>` : ''}
+          ${show.show_phone !== false && model.phone ? `<div>${escapeHtml(model.phone)}</div>` : ''}
+          ${show.show_email === true && model.email ? `<div>${escapeHtml(model.email)}</div>` : ''}
+        </div>
+        <div class="receipt-title">${escapeHtml(model.title)}</div>
       </div>
+      ${infoGridRows ? `<div class="receipt-info-grid">${infoGridRows}</div>` : ''}
+      ${customerBlock}
       <table class="receipt-table">
         <thead>${tableHead}</thead>
         <tbody>${itemRows}</tbody>
       </table>
       <div class="receipt-totals">
-        <div class="receipt-total-row"><span class="k">Subtotal</span><span class="v">${escapeHtml(model.totals.subtotal)}</span></div>
-        <div class="receipt-total-row"><span class="k">Discount</span><span class="v">${escapeHtml(model.totals.discount)}</span></div>
-        <div class="receipt-total-row"><span class="k">${escapeHtml(model.totals.taxLabel)}</span><span class="v">${escapeHtml(model.totals.tax)}</span></div>
-        <div class="receipt-total-row grand"><span class="k">Grand Total</span><span class="v">${escapeHtml(model.totals.grandTotal)}</span></div>
-        <div class="receipt-total-row"><span class="k">Paid Amount</span><span class="v">${escapeHtml(model.totals.paid)}</span></div>
-        <div class="receipt-total-row"><span class="k">${escapeHtml(model.totals.balanceLabel)}</span><span class="v">${escapeHtml(model.totals.balance)}</span></div>
+        ${totalsRows}
       </div>
       ${paymentExtras ? `<div class="receipt-payment-meta">${paymentExtras}</div>` : ''}
       <div class="receipt-footer">
-        ${footerLines}
+        ${show.show_thankyou !== false ? footerLines : ''}
         <div class="receipt-footer-branding">
           <div class="brand-name">${escapeHtml(lockedBranding.companyName)}</div>
           <div class="brand-phone">Tel: ${escapeHtml(lockedBranding.phone)}</div>
@@ -2456,6 +2469,7 @@ function showReceipt(data) {
     footerLines,
     lockedBranding,
     poweredBy: !!pf.show_powered_by,
+    show: pf,
   };
 
   document.getElementById('receiptInvoice').textContent = data.invoice;
