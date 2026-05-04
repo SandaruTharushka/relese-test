@@ -587,7 +587,10 @@
       </div>
       <div class="form-group" style="margin-bottom:0">
         <label class="form-label">Category (optional)</label>
-        <input class="form-input" id="missingCategory" placeholder="Category name">
+        <div style="position:relative">
+          <input class="form-input" id="missingCategory" placeholder="Category name" autocomplete="off">
+          <div id="missingCategorySuggestions" style="display:none;position:absolute;left:0;right:0;top:calc(100% + 4px);max-height:180px;overflow:auto;background:var(--card);border:1px solid var(--border);border-radius:10px;z-index:20;box-shadow:var(--shadow)"></div>
+        </div>
       </div>
     </div>
     <div class="flex gap-2">
@@ -696,6 +699,11 @@ let _retailSearchCache = [];
 let _retailSearchTimer = null;
 let _selectedRetailCustomer = null;
 let _wsSearchReqSeq = 0;
+let _missingCategorySearchTimer = null;
+let _missingCategoryReqSeq = 0;
+let _missingCategoryOptions = [];
+let _missingCategorySelectedIdx = -1;
+let _missingCategorySelected = null;
 
 function renderWsCustomers(matches) {
   const dd = document.getElementById('wsDropdown');
@@ -1520,8 +1528,12 @@ function openMissingProductModal(rawCode, normalizedCode) {
   document.getElementById('missingName').value = '';
   document.getElementById('missingPrice').value = '';
   document.getElementById('missingCategory').value = '';
+  resetMissingCategoryAutocomplete();
   openModal('missingProductModal');
-  setTimeout(() => document.getElementById('missingName').focus(), 80);
+  setTimeout(() => {
+    bindMissingCategoryAutocomplete();
+    document.getElementById('missingName').focus();
+  }, 80);
 }
 
 function cancelMissingProduct() {
@@ -1533,7 +1545,8 @@ async function saveMissingProduct() {
   const barcode = (document.getElementById('missingBarcodeValue').value || '').trim();
   const name = (document.getElementById('missingName').value || '').trim();
   const price = parseFloat(document.getElementById('missingPrice').value || '0');
-  const category = (document.getElementById('missingCategory').value || '').trim();
+  const categoryInput = document.getElementById('missingCategory');
+  const category = (categoryInput?.value || '').trim();
 
   if (!name) { toast('Product name is required', 'error'); return; }
   if (!(price > 0)) { toast('Price must be greater than 0', 'error'); return; }
@@ -1545,7 +1558,13 @@ async function saveMissingProduct() {
   try {
     const res = await api('/api/products/create', {
       method: 'POST',
-      body: { barcode, name, price, category }
+      body: {
+        barcode,
+        name,
+        price,
+        category,
+        category_id: _missingCategorySelected?.id || null
+      }
     });
 
     if (!res || !res.success || !res.product) {
@@ -1564,6 +1583,97 @@ async function saveMissingProduct() {
     btn.textContent = 'Save & Add';
     document.getElementById('barcodeInput')?.focus();
   }
+}
+
+function normalizeCategoryName(name) {
+  return (name || '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function resetMissingCategoryAutocomplete() {
+  _missingCategoryOptions = [];
+  _missingCategorySelectedIdx = -1;
+  _missingCategorySelected = null;
+  renderMissingCategorySuggestions();
+}
+
+function bindMissingCategoryAutocomplete() {
+  const input = document.getElementById('missingCategory');
+  if (!input || input.dataset.autocompleteBound === '1') return;
+  input.dataset.autocompleteBound = '1';
+
+  input.addEventListener('input', () => {
+    const q = (input.value || '').trim();
+    _missingCategorySelected = null;
+    clearTimeout(_missingCategorySearchTimer);
+    if (!q) return resetMissingCategoryAutocomplete();
+    _missingCategorySearchTimer = setTimeout(() => searchMissingCategories(q), 250);
+  });
+
+  input.addEventListener('keydown', (e) => {
+    if (!_missingCategoryOptions.length) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      _missingCategorySelectedIdx = Math.min(_missingCategorySelectedIdx + 1, _missingCategoryOptions.length - 1);
+      renderMissingCategorySuggestions();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      _missingCategorySelectedIdx = Math.max(_missingCategorySelectedIdx - 1, 0);
+      renderMissingCategorySuggestions();
+    } else if (e.key === 'Enter') {
+      if (_missingCategorySelectedIdx >= 0) {
+        e.preventDefault();
+        chooseMissingCategory(_missingCategoryOptions[_missingCategorySelectedIdx]);
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      resetMissingCategoryAutocomplete();
+    }
+  });
+
+  input.addEventListener('blur', () => setTimeout(() => resetMissingCategoryAutocomplete(), 120));
+}
+
+async function searchMissingCategories(q) {
+  const reqId = ++_missingCategoryReqSeq;
+  try {
+    const res = await fetch(`/api/categories/search?q=${encodeURIComponent(q)}`);
+    if (!res.ok) throw new Error('category search failed');
+    const payload = await res.json();
+    if (reqId !== _missingCategoryReqSeq) return;
+    _missingCategoryOptions = Array.isArray(payload.categories) ? payload.categories : [];
+    _missingCategorySelectedIdx = _missingCategoryOptions.length ? 0 : -1;
+    renderMissingCategorySuggestions();
+  } catch (e) {
+    console.warn('missing category search failed', e);
+    _missingCategoryOptions = [];
+    _missingCategorySelectedIdx = -1;
+    renderMissingCategorySuggestions();
+  }
+}
+
+function renderMissingCategorySuggestions() {
+  const dd = document.getElementById('missingCategorySuggestions');
+  if (!dd) return;
+  if (!_missingCategoryOptions.length) {
+    dd.style.display = 'none';
+    dd.innerHTML = '';
+    return;
+  }
+  dd.innerHTML = _missingCategoryOptions.map((cat, idx) => `
+    <div style="padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--border);background:${idx === _missingCategorySelectedIdx ? 'var(--hover)' : 'transparent'}"
+         onmousedown="chooseMissingCategory({id:${cat.id},name:${JSON.stringify(cat.name)}})">
+      ${cat.name}
+    </div>
+  `).join('');
+  dd.style.display = 'block';
+}
+
+function chooseMissingCategory(cat) {
+  const input = document.getElementById('missingCategory');
+  if (!input || !cat) return;
+  input.value = cat.name || '';
+  _missingCategorySelected = { id: cat.id, name: cat.name };
+  resetMissingCategoryAutocomplete();
 }
 
 // ── Barcode Auto Product Detection (OpenFoodFacts) ──────────────────────────
