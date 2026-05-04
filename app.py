@@ -1981,24 +1981,38 @@ def api_inventory_parts_search():
     ])
 
 
-@app.route('/api/products/barcode/<barcode>')
+@app.route('/api/products/barcode/<path:barcode>')
 @login_required
 def api_product_barcode(barcode):
+    from services.barcode_normalizer import normalize_scanned_code
+    raw_code = barcode
+    code = normalize_scanned_code(raw_code)
+    if not code:
+        return jsonify({'ok': False, 'success': False, 'raw_code': raw_code,
+                        'normalized_code': '', 'message': 'Empty barcode'}), 400
     # 1. Primary barcode field
-    p = Product.query.filter_by(barcode=barcode, status='active').first()
+    p = Product.query.filter_by(barcode=code, status='active').first()
     # 2. SKU (covers QR codes whose value equals the product SKU)
     if not p:
-        p = Product.query.filter_by(sku=barcode, status='active').first()
+        p = Product.query.filter_by(sku=code, status='active').first()
     # 3. Alias barcode table
     if not p:
-        pb = ProductBarcode.query.filter_by(barcode=barcode).first()
+        pb = ProductBarcode.query.filter_by(barcode=code).first()
         if pb:
             p = Product.query.filter_by(id=pb.product_id, status='active').first()
     if not p:
-        return jsonify({'success': False}), 404
-    payload = p.to_dict()
-    payload.update({'success': True, 'product': p.to_dict()})
-    return jsonify(payload), 200
+        return jsonify({
+            'ok': False, 'success': False,
+            'raw_code': raw_code, 'normalized_code': code,
+            'message': f'Item not found for scanned code: {code}',
+        }), 404
+    product_dict = p.to_dict()
+    return jsonify({
+        'ok': True, 'success': True,
+        'product': product_dict,
+        # Flat fields kept for backward-compat with billing.html checks
+        **product_dict,
+    }), 200
 
 @app.route('/api/products/create', methods=['POST'])
 @login_required
@@ -2918,16 +2932,20 @@ def api_system_status():
 @app.route('/api/barcode/scan/<path:barcode>')
 @login_required
 def api_barcode_scan(barcode):
-    decoded = decode_barcode(barcode)
+    from services.barcode_normalizer import normalize_scanned_code
+    code = normalize_scanned_code(barcode)
+    decoded = decode_barcode(code)
     btype   = decoded['type']
     if btype == 'normal':
-        product = Product.query.filter_by(barcode=barcode, status='active').first()
+        product = Product.query.filter_by(barcode=code, status='active').first()
+        if not product:
+            product = Product.query.filter_by(sku=code, status='active').first()
         if not product:
             # Check alias barcodes table
-            pb = ProductBarcode.query.filter_by(barcode=barcode).first()
+            pb = ProductBarcode.query.filter_by(barcode=code).first()
             if pb:
                 product = Product.query.filter_by(id=pb.product_id, status='active').first()
-        if not product: return jsonify({'ok': False, 'msg': f'Product not found: {barcode}'})
+        if not product: return jsonify({'ok': False, 'msg': f'Product not found: {code}'})
         return jsonify({'ok': True, 'type': 'normal', 'product': product.to_dict(),
                         'quantity': 1, 'price': product.sell_price, 'total': product.sell_price, 'label': product.name})
     elif btype == 'weight':

@@ -1428,15 +1428,40 @@ function handleScannerInput(value, source) {
   });
 }
 
+function normalizeScannedCode(raw) {
+  // Mirror of services/barcode_normalizer.py — keeps client and server in sync.
+  // Backend always re-normalizes; this is just for cleaner console logs and
+  // passing the already-clean value to openMissingProductModal.
+  let value = (raw || '').trim();
+  if (!value) return '';
+  // Try JSON QR payload
+  if (value.startsWith('{')) {
+    try {
+      const payload = JSON.parse(value);
+      for (const field of ['barcode', 'code', 'sku', 'product_code', 'value']) {
+        if (payload[field]) { value = String(payload[field]).trim(); break; }
+      }
+    } catch (_) { /* not JSON */ }
+  }
+  // Strip AIM symbology identifiers (e.g. ]C1, ]E0)
+  value = value.replace(/^\][A-Za-z]\d/, '');
+  // Strip known prefix labels
+  value = value.replace(/^(BARCODE|BAR|PRODUCT|PROD|SKU|CODE|QR)[:_\-]/i, '').trim();
+  return value;
+}
+
 async function handleBarcodeValue(barcode) {
-  const clean = (barcode || '').trim();
-  if (!clean) return;
+  const raw = (barcode || '').trim();
+  if (!raw) return;
+  const clean = normalizeScannedCode(raw);
   const input = document.getElementById('barcodeInput');
   if (input) input.value = '';
 
-  console.log('[SCANNER] search endpoint: /api/products/barcode/' + encodeURIComponent(clean));
+  console.log('[SCANNER] raw:', raw, '-> normalized:', clean);
+  console.log('[SCANNER] lookup: /api/products/barcode/' + encodeURIComponent(raw));
   try {
-    const res = await fetch(`/api/products/barcode/${encodeURIComponent(clean)}`);
+    // Send raw to backend — server normalizes authoritatively
+    const res = await fetch(`/api/products/barcode/${encodeURIComponent(raw)}`);
     // Session expired can come back either as HTTP 401 JSON or a redirect/login HTML.
     if (handleUnauthorizedResponse(res)) return;
     if (res.redirected || !(res.headers.get('content-type') || '').includes('application/json')) {
@@ -1454,8 +1479,9 @@ async function handleBarcodeValue(barcode) {
       return;
     }
 
-    console.log('[SCANNER] product not found for code:', clean);
-    openMissingProductModal(clean);
+    const normalizedCode = data.normalized_code || clean;
+    console.log('[SCANNER] product not found. raw:', raw, 'normalized:', normalizedCode);
+    openMissingProductModal(normalizedCode);
   } catch (_) {
     toast('Scan error', 'error');
   } finally {
