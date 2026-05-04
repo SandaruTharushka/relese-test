@@ -1,11 +1,12 @@
 """Retail customer CRM routes."""
-from datetime import datetime
 
 from flask import request, jsonify, render_template
 from flask_login import login_required
 from sqlalchemy import or_, func
 
 from customer_linking import ensure_customer_profile, normalize_phone
+from utils.timezone import format_sl_date, format_sl_datetime
+
 from models import (
     db,
     RetailCustomer,
@@ -125,7 +126,7 @@ def register_customer_routes(app, log_action=None):
                 'total_invoices': int(sale_count),
                 'total_spent': round(total_spent, 2),
                 'outstanding_balance': round(outstanding, 2),
-                'last_visit': last_visit.strftime('%Y-%m-%d %H:%M') if last_visit else '',
+                'last_visit': format_sl_datetime(last_visit),
             })
             rows.append(dto)
 
@@ -236,8 +237,8 @@ def register_customer_routes(app, log_action=None):
             total_sales += total
             total_paid += paid
             if status != 'paid':
-                outstanding.append({'type': 'invoice', 'ref_type': 'sale', 'ref_id': s.id, 'number': s.invoice_number, 'date': s.sale_date.strftime('%Y-%m-%d'), 'total': total, 'paid': paid, 'balance': bal, 'status': status})
-            sales_rows.append({'id': s.id, 'invoice_number': s.invoice_number, 'date': s.sale_date.strftime('%Y-%m-%d %H:%M'), 'invoice_type': 'retail', 'items_count': len(s.items or []), 'total': total, 'paid': paid, 'balance': bal, 'payment_status': status})
+                outstanding.append({'type': 'invoice', 'ref_type': 'sale', 'ref_id': s.id, 'number': s.invoice_number, 'date': format_sl_date(s.sale_date), 'total': total, 'paid': paid, 'balance': bal, 'status': status})
+            sales_rows.append({'id': s.id, 'invoice_number': s.invoice_number, 'date': format_sl_datetime(s.sale_date), 'invoice_type': 'retail', 'items_count': len(s.items or []), 'total': total, 'paid': paid, 'balance': bal, 'payment_status': status})
             timeline.append({'date': s.sale_date, 'type': 'invoice', 'icon': '🧾', 'title': f'Invoice {s.invoice_number}', 'subtitle': f'{len(s.items or [])} items', 'amount': total, 'status': status})
 
         for j in jobs:
@@ -250,8 +251,8 @@ def register_customer_routes(app, log_action=None):
             total_paid += paid
             vehicle_str = ' '.join(filter(None, [j.vehicle_reg_no, j.vehicle_make, j.vehicle_model]))
             if status != 'paid':
-                outstanding.append({'type': 'service', 'ref_type': 'job', 'ref_id': j.id, 'number': j.job_number, 'date': (j.received_date.strftime('%Y-%m-%d') if j.received_date else ''), 'total': total, 'paid': paid, 'balance': bal, 'status': status})
-            jobs_rows.append({'id': j.id, 'job_number': j.job_number, 'date': j.received_date.strftime('%Y-%m-%d %H:%M') if j.received_date else '', 'vehicle': vehicle_str, 'issue': j.issue_reported or '', 'status': j.status, 'total': total, 'paid': paid, 'balance': bal, 'payment_status': status})
+                outstanding.append({'type': 'service', 'ref_type': 'job', 'ref_id': j.id, 'number': j.job_number, 'date': format_sl_date(j.received_date), 'total': total, 'paid': paid, 'balance': bal, 'status': status})
+            jobs_rows.append({'id': j.id, 'job_number': j.job_number, 'date': format_sl_datetime(j.received_date), 'vehicle': vehicle_str, 'issue': j.issue_reported or '', 'status': j.status, 'total': total, 'paid': paid, 'balance': bal, 'payment_status': status})
             timeline.append({'date': j.received_date, 'type': 'service_job', 'icon': '🔧', 'title': f'Service Job {j.job_number}', 'subtitle': vehicle_str or (j.issue_reported or '')[:40], 'amount': total, 'status': status})
 
         # Installment plans — add outstanding if applicable
@@ -264,8 +265,8 @@ def register_customer_routes(app, log_action=None):
             total_installments += plan_total
             total_paid += plan_paid + plan_down
             if plan.status not in ('completed',) and plan_outstanding > 0:
-                outstanding.append({'type': 'installment', 'ref_type': 'plan', 'ref_id': plan.id, 'number': plan.agreement_no or f'AGR-{plan.id:06d}', 'date': plan.start_date.strftime('%Y-%m-%d') if plan.start_date else '', 'total': plan_total, 'paid': plan_paid + plan_down, 'balance': plan_outstanding, 'status': plan.status})
-            installment_plan_rows.append({'id': plan.id, 'agreement_no': plan.agreement_no or f'AGR-{plan.id:06d}', 'invoice_number': plan.invoice_number or '', 'product_name': plan.product_name or '', 'start_date': plan.start_date.strftime('%Y-%m-%d') if plan.start_date else '', 'total_amount': plan_total, 'down_payment': plan_down, 'monthly_amount': money_to_float(plan.monthly_amount), 'num_installments': plan.num_installments, 'paid': plan_paid + plan_down, 'outstanding': plan_outstanding, 'status': plan.status})
+                outstanding.append({'type': 'installment', 'ref_type': 'plan', 'ref_id': plan.id, 'number': plan.agreement_no or f'AGR-{plan.id:06d}', 'date': format_sl_date(plan.start_date), 'total': plan_total, 'paid': plan_paid + plan_down, 'balance': plan_outstanding, 'status': plan.status})
+            installment_plan_rows.append({'id': plan.id, 'agreement_no': plan.agreement_no or f'AGR-{plan.id:06d}', 'invoice_number': plan.invoice_number or '', 'product_name': plan.product_name or '', 'start_date': format_sl_date(plan.start_date), 'total_amount': plan_total, 'down_payment': plan_down, 'monthly_amount': money_to_float(plan.monthly_amount), 'num_installments': plan.num_installments, 'paid': plan_paid + plan_down, 'outstanding': plan_outstanding, 'status': plan.status})
             if plan.start_date:
                 timeline.append({'date': plan.start_date, 'type': 'installment', 'icon': '📋', 'title': f'Installment Plan {plan.agreement_no or "AGR"}', 'subtitle': plan.product_name or '', 'amount': plan_total, 'status': plan.status})
 
@@ -273,17 +274,17 @@ def register_customer_routes(app, log_action=None):
         all_payments = []
         for p in sale_payments:
             ref = p.sale.invoice_number if p.sale else ''
-            all_payments.append({'date': p.payment_date.strftime('%Y-%m-%d %H:%M'), 'type': 'invoice_payment', 'type_label': 'Sale Payment', 'reference': ref, 'amount': money_to_float(p.amount), 'method': p.method or '', 'note': p.terminal_note or ''})
+            all_payments.append({'date': format_sl_datetime(p.payment_date), 'type': 'invoice_payment', 'type_label': 'Sale Payment', 'reference': ref, 'amount': money_to_float(p.amount), 'method': p.method or '', 'note': p.terminal_note or ''})
             timeline.append({'date': p.payment_date, 'type': 'payment', 'icon': '💳', 'title': f'Sale payment — {ref}', 'subtitle': p.method or '', 'amount': money_to_float(p.amount), 'status': 'paid'})
 
         for p in repair_payments:
             ref = p.job.job_number if p.job else ''
-            all_payments.append({'date': p.payment_date.strftime('%Y-%m-%d %H:%M'), 'type': 'service_payment', 'type_label': 'Service Payment', 'reference': ref, 'amount': money_to_float(p.amount), 'method': p.method or '', 'note': p.note or ''})
+            all_payments.append({'date': format_sl_datetime(p.payment_date), 'type': 'service_payment', 'type_label': 'Service Payment', 'reference': ref, 'amount': money_to_float(p.amount), 'method': p.method or '', 'note': p.note or ''})
             timeline.append({'date': p.payment_date, 'type': 'payment', 'icon': '💳', 'title': f'Service payment — {ref}', 'subtitle': p.method or '', 'amount': money_to_float(p.amount), 'status': 'paid'})
 
         for p in installment_payments:
             plan_ref = p.plan.agreement_no if p.plan else ''
-            all_payments.append({'date': p.payment_date.strftime('%Y-%m-%d %H:%M'), 'type': 'installment_payment', 'type_label': 'Installment', 'reference': plan_ref, 'amount': money_to_float(p.amount), 'method': p.method or '', 'note': p.notes or ''})
+            all_payments.append({'date': format_sl_datetime(p.payment_date), 'type': 'installment_payment', 'type_label': 'Installment', 'reference': plan_ref, 'amount': money_to_float(p.amount), 'method': p.method or '', 'note': p.notes or ''})
             timeline.append({'date': p.payment_date, 'type': 'payment', 'icon': '💳', 'title': f'Installment payment — {plan_ref}', 'subtitle': p.method or '', 'amount': money_to_float(p.amount), 'status': 'paid'})
 
         for r in returns:
@@ -316,9 +317,9 @@ def register_customer_routes(app, log_action=None):
             'payments': all_payments,
             'returns': [r.to_dict() for r in returns],
             'outstanding': outstanding,
-            'vehicles': [{'plate_number': v[0], 'last_service_date': v[1].strftime('%Y-%m-%d') if v[1] else '', 'service_count': int(v[2] or 0), 'make': v[3] or '', 'model': v[4] or '', 'year': v[5] or '', 'color': v[6] or ''} for v in vehicles],
-            'timeline': [{'date': t['date'].strftime('%Y-%m-%d %H:%M'), 'type': t['type'], 'icon': t.get('icon', '•'), 'title': t['title'], 'subtitle': t.get('subtitle', ''), 'amount': round(t['amount'], 2), 'status': t.get('status', '')} for t in timeline[:300]],
-            'last_activity_date': timeline[0]['date'].strftime('%Y-%m-%d %H:%M') if timeline else '',
+            'vehicles': [{'plate_number': v[0], 'last_service_date': format_sl_date(v[1]), 'service_count': int(v[2] or 0), 'make': v[3] or '', 'model': v[4] or '', 'year': v[5] or '', 'color': v[6] or ''} for v in vehicles],
+            'timeline': [{'date': format_sl_datetime(t['date']), 'type': t['type'], 'icon': t.get('icon', '•'), 'title': t['title'], 'subtitle': t.get('subtitle', ''), 'amount': round(t['amount'], 2), 'status': t.get('status', '')} for t in timeline[:300]],
+            'last_activity_date': format_sl_datetime(timeline[0]['date']) if timeline else '',
         })
 
     @app.route('/api/retail-customers/<int:cid>', methods=['DELETE'])

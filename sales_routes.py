@@ -11,6 +11,7 @@ from sqlalchemy import or_, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import selectinload, joinedload, contains_eager
 
+from utils.timezone import format_sl_date, format_sl_datetime
 from shared_helpers import contains_sql_like
 from validators import parse_positive_float, parse_positive_int
 from services.receipt_renderer import build_receipt_context
@@ -813,7 +814,7 @@ def register_sales_routes(
                 'tendered': tendered,
                 'change': change_amt,
                 'cashier': current_user.full_name,
-                'date': sale.sale_date.strftime('%Y-%m-%d %H:%M:%S'),
+                'date': format_sl_datetime(sale.sale_date),
                 'ws_balance': ws_balance,
                 'card_transaction': card_txn if method == 'Card' else None,
             })
@@ -1030,8 +1031,8 @@ def register_sales_routes(
                     'invoice_number': s.invoice_number,
                     'total': float(s.total_amount or 0),
                     'total_amount': float(s.total_amount or 0),
-                    'date': s.sale_date.strftime('%Y-%m-%d') if s.sale_date else '',
-                    'sale_date': s.sale_date.strftime('%Y-%m-%d %H:%M:%S') if s.sale_date else '',
+                    'date': format_sl_date(s.sale_date),
+                    'sale_date': format_sl_datetime(s.sale_date),
                     'customer': s.wholesale_customer.name if s.wholesale_customer else '',
                     'cashier': s.cashier_user.full_name if s.cashier_user else '',
                     'status': s.status or 'completed',

@@ -216,7 +216,7 @@
 
 <script>
   // ── Timestamp ─────────────────────────────────
-  document.getElementById('printedAt').textContent = new Date().toLocaleString('en-LK');
+  document.getElementById('printedAt').textContent = new Date().toLocaleString('en-LK', { timeZone: 'Asia/Colombo' });
 
   // ── Show status message ───────────────────────
   function showStatus(msg, type = 'info') {

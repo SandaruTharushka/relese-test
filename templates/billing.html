@@ -938,8 +938,8 @@ async function _retailQuickAddSave() {
 })();
 
 // Clock
-setInterval(() => { document.getElementById('clockLabel').textContent = new Date().toLocaleTimeString(); }, 1000);
-document.getElementById('clockLabel').textContent = new Date().toLocaleTimeString();
+setInterval(() => { document.getElementById('clockLabel').textContent = new Date().toLocaleTimeString('en-LK', { timeZone: 'Asia/Colombo' }); }, 1000);
+document.getElementById('clockLabel').textContent = new Date().toLocaleTimeString('en-LK', { timeZone: 'Asia/Colombo' });
 
 // Load store settings
 function isTaxEnabled() {
