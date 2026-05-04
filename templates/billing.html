@@ -2418,34 +2418,32 @@ async function printCurrentReceipt() {
   _autoPrintArmed = false;
   const btn = document.getElementById('receiptPrintBtn');
   const url = String(_currentReceiptUrl || '').trim();
-  const rawText = String(document.getElementById('receiptTextRaw')?.textContent || '').trim();
-  if (!url) {
+
+  if (!_currentSaleId) {
     toast('Receipt is not ready yet. Please try again.', 'warning');
-    return;
-  }
-  if (!rawText) {
-    toast('Receipt text is not ready yet. Please try again.', 'warning');
     return;
   }
 
   _clearAutoCloseTimers();
   if (btn) btn.disabled = true;
 
+  console.log('[billing] print receipt: sale_id=%s invoice=%s', _currentSaleId, _currentReceiptInvoice);
+
   try {
-    const response = await fetch('/api/printer/print/receipt', {
+    const response = await fetch('/api/printing/receipt/print-sale', {
       method: 'POST',
       headers: withCsrfHeaders({'Content-Type': 'application/json'}),
       body: JSON.stringify({
-        title: `Sale Receipt ${_currentReceiptInvoice || ''}`.trim(),
-        receipt_text: rawText,
+        sale_id: _currentSaleId,
         copies: 1,
       }),
     });
     const data = await response.json().catch(() => ({}));
+    console.log('[billing] print-sale response ok=%s code=%s', data?.ok, data?.code);
     if (!response.ok || !data.ok) {
       const reason = data?.msg || data?.error || `Printer dispatch failed (${response.status})`;
       if (data?.code === 'PRINTER_UNAVAILABLE' || data?.code === 'PRINTER_NOT_INSTALLED' || data?.code === 'MISSING_PRINTER') {
-        if (window.SuperMartReceiptPrint?.printFromUrl) {
+        if (window.SuperMartReceiptPrint?.printFromUrl && url) {
           await window.SuperMartReceiptPrint.printFromUrl({
             url,
             button: btn,

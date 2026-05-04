@@ -1159,7 +1159,7 @@ async function printServiceReceipt(jid, btn){
     const receiptUrl = `/repairs/${encodeURIComponent(jid)}/receipt/print?auto_print=1`;
     let dispatchError = null;
     try {
-      const response = await fetch('/api/printer/print/job-receipt', {
+      const response = await fetch('/api/printing/receipt/print-job', {
         method: 'POST',
         headers: csrfHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ job_id: jid, copies: 1 }),

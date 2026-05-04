@@ -735,6 +735,33 @@ async function printReturn(returnId, triggerBtn = null) {
   const actionButton = triggerBtn instanceof HTMLElement ? triggerBtn : null;
   const printUrl = `/print/receipt/return/${targetReturnId}?auto_print=1`;
 
+  console.log('[returns] print return: return_id=%s', targetReturnId);
+
+  // Try canonical thermal print path first
+  try {
+    const response = await fetch('/api/printing/receipt/print-return', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': window.__csrfToken || ''},
+      body: JSON.stringify({ return_id: targetReturnId, copies: 1 }),
+    });
+    const data = await response.json().catch(() => ({}));
+    console.log('[returns] print-return response ok=%s code=%s', data?.ok, data?.code);
+    if (response.ok && data?.ok) {
+      toast(data.msg || 'Return receipt sent to printer.', 'success');
+      return;
+    }
+    // Fall through to browser print if printer unavailable
+    const code = data?.code || '';
+    if (code !== 'PRINTER_UNAVAILABLE' && code !== 'PRINTER_NOT_INSTALLED' && code !== 'MISSING_PRINTER') {
+      toast(data?.msg || 'Return receipt print failed.', 'error');
+      return;
+    }
+    console.warn('[returns] thermal printer unavailable, falling back to browser print', code);
+  } catch (fetchErr) {
+    console.warn('[returns] thermal print request failed, falling back to browser print', fetchErr);
+  }
+
+  // Browser-print fallback
   try {
     await window.SuperMartReceiptPrint.printFromUrl({
       url: printUrl,
