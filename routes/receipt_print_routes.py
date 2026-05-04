@@ -40,6 +40,7 @@ def register_receipt_print_routes(
     Sale,
     RepairJob,
     UserLog,
+    ProductReturn=None,
 ) -> None:
 
     def _require_print_access():
@@ -150,8 +151,22 @@ def register_receipt_print_routes(
         _require_print_access()
         data = request.get_json(silent=True) or {}
         sale_id = data.get('sale_id') or data.get('sid')
+        return_id = data.get('return_id') or data.get('rid')
+
+        # Resolve sale_id from return record when only return_id is provided
+        if not sale_id and return_id and ProductReturn is not None:
+            try:
+                rid = int(return_id)
+                ret = ProductReturn.query.filter_by(id=rid).first()
+                if not ret:
+                    return jsonify({'ok': False, 'code': 'RETURN_NOT_FOUND', 'msg': f'Return {rid} not found'}), 404
+                sale_id = ret.sale_id
+                app.logger.info('[RECEIPT] print-return resolved return_id=%s → sale_id=%s', rid, sale_id)
+            except (TypeError, ValueError):
+                return jsonify({'ok': False, 'code': 'INVALID_RETURN_ID', 'msg': 'return_id must be an integer'}), 400
+
         if not sale_id:
-            return jsonify({'ok': False, 'code': 'MISSING_SALE_ID', 'msg': 'sale_id is required'}), 400
+            return jsonify({'ok': False, 'code': 'MISSING_SALE_ID', 'msg': 'sale_id or return_id is required'}), 400
         try:
             sid = int(sale_id)
         except (TypeError, ValueError):
@@ -180,6 +195,17 @@ def register_receipt_print_routes(
                 actor_id=getattr(current_user, 'id', None),
             )
             _log_print(payload.get('target', ''), ok, copies)
+            log_action(
+                'Return receipt printed',
+                target_type='receipt_print_return',
+                target_id=sid,
+                metadata={
+                    'invoice': invoice_no,
+                    'return_id': return_id,
+                    'target': payload.get('target'),
+                    'copies': copies,
+                },
+            )
             return jsonify({'ok': ok, 'sale_id': sid, 'invoice': invoice_no, **payload}), status_code
         except Exception:
             app.logger.exception('[RECEIPT] return_receipt_unexpected_failure sale=%s', sid)

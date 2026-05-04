@@ -1081,28 +1081,6 @@ def gen_ean13(product_id):
     check = (10 - ((odds + evens * 3) % 10)) % 10
     return body + str(check)
 
-def validate_barcode_by_type(value, barcode_type):
-    """Legacy compat shim — delegates to canonical label.validator."""
-    from services.printing.label.validator import validate_barcode
-    ok, msg = validate_barcode(value, barcode_type)
-    return ok, msg
-
-def generate_barcode_for_product(product, mode='random', prefix='SM'):
-    """Legacy compat shim — delegates to canonical barcode.generator."""
-    from services.printing.barcode.generator import BarcodeGeneratorService
-    try:
-        result = BarcodeGeneratorService.generate(
-            product_id=product.id,
-            mode=mode or 'random',
-            barcode_type='code128',
-            prefix=prefix or 'SM',
-            manual_value='',
-            exists_fn=lambda val: barcode_in_use(val, exclude_product_id=product.id),
-        )
-        return result['barcode']
-    except ValueError:
-        return None
-
 def gen_invoice(retry_offset=0):
     """Generate a unique, race-condition-free invoice number using atomic DB sequence."""
     from services.atomic_sequence import next_sequence as _next_seq
@@ -1636,6 +1614,7 @@ register_receipt_print_routes(
     Sale=Sale,
     RepairJob=RepairJob,
     UserLog=UserLog,
+    ProductReturn=ProductReturn,
 )
 
 register_label_print_routes(
@@ -2013,20 +1992,6 @@ def api_inventory_parts_search():
         for p in results
     ])
 
-
-@app.route('/api/barcode/validate')
-@login_required
-def api_barcode_validate():
-    barcode = (request.args.get('barcode') or '').strip()
-    exclude_product_id = request.args.get('exclude_product_id')
-    try:
-        exclude_product_id = int(exclude_product_id) if exclude_product_id else None
-    except (TypeError, ValueError):
-        exclude_product_id = None
-    if not barcode:
-        return jsonify({'ok': False, 'error': 'Barcode is required'}), 400
-    available = not barcode_in_use(barcode, exclude_product_id=exclude_product_id)
-    return jsonify({'ok': True, 'barcode': barcode, 'available': available})
 
 @app.route('/api/products/barcode/<barcode>')
 @login_required
@@ -3877,108 +3842,6 @@ def api_generate_barcode(pid):
            not ProductBarcode.query.filter_by(barcode=candidate).first():
             return jsonify({'barcode': candidate})
     return jsonify({'error': 'Could not generate unique barcode'}), 500
-
-@app.route('/api/barcode/image')
-@login_required
-def api_barcode_image():
-    try:
-        from barcode import EAN8, EAN13, Code128, Code39
-        from barcode.writer import ImageWriter
-    except Exception:
-        return jsonify({'error': 'python-barcode dependency is not installed'}), 500
-
-    value = (request.args.get('value') or '').strip()
-    barcode_type = (request.args.get('type') or 'code128').strip().lower()
-    is_valid, msg = validate_barcode_by_type(value, barcode_type)
-    if not is_valid:
-        return jsonify({'error': msg}), 400
-
-    klass_map = {'ean13': EAN13, 'ean8': EAN8, 'code128': Code128, 'code39': Code39}
-    barcode_cls = klass_map.get(barcode_type, Code128)
-    try:
-        barcode_obj = barcode_cls(value, writer=ImageWriter())
-        out = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
-        try:
-            base = out.name[:-4]
-            barcode_obj.save(base, options={'module_height': 12.0, 'quiet_zone': 2.5, 'write_text': True})
-            with open(base + '.png', 'rb') as fh:
-                data = fh.read()
-        finally:
-            out.close()
-            for suffix in ['', '.png']:
-                try:
-                    os.remove(out.name[:-4] + suffix)
-                except Exception:
-                    pass
-        return Response(data, mimetype='image/png')
-    except Exception as exc:
-        return jsonify({'error': f'Failed to generate barcode image: {exc}'}), 500
-
-@app.route('/api/barcode/save', methods=['POST'])
-@login_required
-def api_barcode_save():
-    require_roles('Admin', 'Operator', 'Manager')
-    data = request.get_json(silent=True) or {}
-    product_id = data.get('product_id')
-    barcode_value = (data.get('barcode') or '').strip()
-    barcode_type = (data.get('barcode_type') or 'code128').strip().lower()
-    if not product_id:
-        return jsonify({'ok': False, 'error': 'Please select a product'}), 400
-    product = db.session.get(Product, int(product_id))
-    if not product or product.status != 'active':
-        return jsonify({'ok': False, 'error': 'Product not found'}), 404
-    valid, error_msg = validate_barcode_by_type(barcode_value, barcode_type)
-    if not valid:
-        return _printing_error(error_msg, code='INVALID_BARCODE', status=400)
-    if barcode_in_use(barcode_value, exclude_product_id=product.id):
-        return jsonify({'ok': False, 'error': f'Barcode "{barcode_value}" already exists'}), 409
-    product.barcode = barcode_value
-    product.barcode_type = barcode_type or product.barcode_type
-    db.session.commit()
-    log_action('Barcode saved to product', target_type='product', target_id=product.id, metadata={'barcode': barcode_value, 'barcode_type': barcode_type})
-    return jsonify({'ok': True, 'msg': f'Barcode saved to {product.name}', 'product_id': product.id, 'barcode': barcode_value})
-
-@app.route('/api/barcode/generate', methods=['POST'])
-@login_required
-def api_barcode_generate():
-    require_roles('Admin', 'Operator', 'Manager')
-    data = request.get_json(silent=True) or {}
-    product_id = data.get('product_id')
-    if not product_id:
-        return jsonify({'ok': False, 'error': 'Product is required'}), 400
-    product = db.session.get(Product, int(product_id))
-    if not product or product.status != 'active':
-        return jsonify({'ok': False, 'error': 'Product not found'}), 404
-    mode = data.get('mode') or 'random'
-    prefix = data.get('prefix') or 'SM'
-    candidate = generate_barcode_for_product(product, mode=mode, prefix=prefix)
-    if not candidate:
-        return jsonify({'ok': False, 'error': 'Could not generate a unique barcode'}), 500
-    return jsonify({'ok': True, 'barcode': candidate, 'mode': mode})
-
-@app.route('/api/barcode/generate-missing', methods=['POST'])
-@login_required
-def api_barcode_generate_missing():
-    require_roles('Admin', 'Operator', 'Manager')
-    data = request.get_json(silent=True) or {}
-    mode = data.get('mode') or 'random'
-    prefix = data.get('prefix') or 'SM'
-    overwrite_existing = str(data.get('overwrite', 'false')).strip().lower() == 'true'
-    products = Product.query.filter(Product.status == 'active').order_by(Product.id.asc()).all()
-    updated = 0
-    skipped = 0
-    for product in products:
-        if (product.barcode or '').strip() and not overwrite_existing:
-            skipped += 1
-            continue
-        candidate = generate_barcode_for_product(product, mode=mode, prefix=prefix)
-        if not candidate:
-            skipped += 1
-            continue
-        product.barcode = candidate
-        updated += 1
-    db.session.commit()
-    return jsonify({'ok': True, 'updated': updated, 'skipped': skipped, 'overwrite': overwrite_existing})
 
 # ── BOOTSTRAP DIAGNOSTICS ─────────────────────────────────────────────────────
 def _print_startup_user_summary():

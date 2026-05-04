@@ -219,3 +219,18 @@ def register_barcode_routes(
     @login_required
     def api_barcode_image_compat():
         return api_printing_barcode_image()
+
+    @app.route('/api/barcode/save', methods=['POST'])
+    @login_required
+    def api_barcode_save_compat():
+        return api_printing_barcode_save()
+
+    @app.route('/api/barcode/generate', methods=['POST'])
+    @login_required
+    def api_barcode_generate_compat():
+        return api_printing_barcode_generate()
+
+    @app.route('/api/barcode/generate-missing', methods=['POST'])
+    @login_required
+    def api_barcode_generate_missing_compat():
+        return api_printing_barcode_bulk_generate()

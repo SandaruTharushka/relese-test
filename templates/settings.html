@@ -1987,7 +1987,7 @@ function _updatePrinterSelectOptions(selectId, printers) {
 
 async function refreshPrinterStatus({silent = true} = {}) {
   try {
-    const r = await fetch('/api/printer/status');
+    const r = await fetch('/api/printing/receipt/status');
     const d = await r.json();
     if (!d.ok) {
       if (!silent) toast('Printer status check failed', 'error');
@@ -2014,8 +2014,8 @@ function startPrinterStatusPolling() {
 window.loadHardwareSettings = async function() {
   try {
     const [sRes, lRes, mRes] = await Promise.all([
-      fetch('/api/printer/settings'),
-      fetch('/api/printer/list'),
+      fetch('/api/printing/settings/receipt'),
+      fetch('/api/printing/printers'),
       fetch('/api/printer-manager/summary'),
     ]);
     const sData = sRes.ok ? await sRes.json() : {};
@@ -2083,21 +2083,21 @@ async function savePrinterSettings() {
   console.log('[printer] savePrinterSettings payload', payload);
 
   try {
-    const r = await fetch('/api/printer/settings', {
+    const r = await fetch('/api/printing/settings/receipt', {
       method: 'POST',
       headers: withCsrfHeaders({'Content-Type': 'application/json'}),
       body: JSON.stringify(payload),
     });
-    console.log('[printer] POST /api/printer/settings status', r.status, r.statusText);
+    console.log('[printer] POST /api/printing/settings/receipt status', r.status, r.statusText);
     let d = {};
     try {
       d = await r.json();
     } catch (parseErr) {
-      console.error('[printer] Failed to parse /api/printer/settings response JSON', parseErr);
+      console.error('[printer] Failed to parse /api/printing/settings/receipt response JSON', parseErr);
       toast('Save failed: invalid server response', 'error');
       return false;
     }
-    console.log('[printer] POST /api/printer/settings response', d);
+    console.log('[printer] POST /api/printing/settings/receipt response', d);
     if (!r.ok) {
       toast(d.msg || `Failed to save printer settings (${r.status})`, 'error');
       return false;
@@ -2174,7 +2174,7 @@ async function refreshPrinterList(btn) {
   const orig = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = '…'; }
   try {
-    const r = await fetch('/api/printer/list');
+    const r = await fetch('/api/printing/printers');
     const d = r.ok ? await r.json() : {};
     const printers = d.items || (d.printers || []).map(name => ({name, status:'unknown'}));
     const current = document.getElementById('s_printerName')?.value || '';
@@ -2217,21 +2217,21 @@ async function checkLabelPrinterStatus() {
 
 async function testReceiptPrinter() {
   toast('Sending test print to receipt printer…', 'info');
-  console.log('[printer] POST /api/printer/test/receipt start');
+  console.log('[printer] POST /api/printing/receipt/test start');
   try {
-    const r = await fetch('/api/printer/test/receipt', {
+    const r = await fetch('/api/printing/receipt/test', {
       method: 'POST', headers: withCsrfHeaders({}),
     });
-    console.log('[printer] POST /api/printer/test/receipt status', r.status, r.statusText);
+    console.log('[printer] POST /api/printing/receipt/test status', r.status, r.statusText);
     let d = {};
     try {
       d = await r.json();
     } catch (parseErr) {
-      console.error('[printer] Failed to parse /api/printer/test/receipt response JSON', parseErr);
+      console.error('[printer] Failed to parse /api/printing/receipt/test response JSON', parseErr);
       toast('Test print failed: invalid server response', 'error');
       return;
     }
-    console.log('[printer] POST /api/printer/test/receipt response', d);
+    console.log('[printer] POST /api/printing/receipt/test response', d);
     if (!r.ok) {
       toast(d.msg || `Test print failed (${r.status})`, 'error');
       return;
@@ -2247,7 +2247,7 @@ async function testReceiptPrinter() {
 async function testLabelPrinter() {
   toast('Sending test label to label printer…', 'info');
   try {
-    const r = await fetch('/api/printer/test/label', {
+    const r = await fetch('/api/printing/label/test', {
       method: 'POST', headers: withCsrfHeaders({}),
     });
     let d = {};
@@ -2280,7 +2280,7 @@ async function printSampleLabel() {
   if (btn) { btn.disabled = true; btn.textContent = 'Printing…'; }
   toast('Sending sample label to label printer…', 'info');
   try {
-    const r = await fetch('/api/barcode-label/sample', {
+    const r = await fetch('/api/printing/label/test', {
       method: 'POST',
       headers: withCsrfHeaders({'Content-Type': 'application/json'}),
       body: JSON.stringify({ barcode, name, copies, sell_price: '0.00' }),
@@ -2310,7 +2310,7 @@ async function printBarcodeLabel() {
   if (btn) { btn.disabled = true; btn.textContent = 'Printing…'; }
   toast('Sending barcode label to label printer…', 'info');
   try {
-    const r = await fetch('/api/barcode/label', {
+    const r = await fetch('/api/printing/label/print', {
       method: 'POST',
       headers: withCsrfHeaders({'Content-Type': 'application/json'}),
       body: JSON.stringify({
@@ -2332,7 +2332,7 @@ async function printBarcodeLabel() {
 /* ══ RECEIPT LAYOUT ════════════════════════════════════════════════════ */
 window.loadReceiptLayout = async function() {
   try {
-    const r = await fetch('/api/receipt-layout/settings');
+    const r = await fetch('/api/printing/settings/receipt-layout');
     const d = await r.json();
     if (!d.ok) return;
     const s = d.settings || {};
@@ -2422,7 +2422,7 @@ async function saveReceiptLayout() {
     rcpt_show_barcode_text:    g('t_rl_barcodeText'),
   };
   try {
-    const r = await fetch('/api/receipt-layout/settings', {
+    const r = await fetch('/api/printing/settings/receipt-layout', {
       method: 'POST',
       headers: withCsrfHeaders({'Content-Type': 'application/json'}),
       body: JSON.stringify(payload),
@@ -2530,7 +2530,7 @@ function autoGenBarcode() {
   const mode = document.getElementById('bc_auto_mode').value;
   const prefix = document.getElementById('bc_prefix').value.trim() || 'SM';
   if (!productId) { toast('Select a product first', 'error'); return; }
-  fetch('/api/barcode/generate', {
+  fetch('/api/printing/barcode/generate', {
     method: 'POST',
     headers: {'Content-Type':'application/json','X-CSRFToken':__csrfToken},
     body: JSON.stringify({ product_id: productId, mode, prefix })
@@ -2558,7 +2558,7 @@ function genBarcode() {
     info.textContent = `⚠ ${err}`;
     return;
   }
-  prev.innerHTML = `<img src="/api/barcode/image?value=${encodeURIComponent(val)}&type=${encodeURIComponent(type)}" alt="Barcode preview" style="max-height:90px;max-width:100%">`;
+  prev.innerHTML = `<img src="/api/printing/barcode/image?value=${encodeURIComponent(val)}&type=${encodeURIComponent(type)}" alt="Barcode preview" style="max-height:90px;max-width:100%">`;
   info.textContent = `Type: ${type.toUpperCase()} · Value: ${val}`;
   sp('lastBarcode', val);
 }
@@ -2567,7 +2567,7 @@ function downloadBarcode() {
   const type = document.getElementById('bc_type').value;
   if(!val) { toast('Enter a barcode value first','error'); return; }
   const a = document.createElement('a');
-  a.href = `/api/barcode/image?value=${encodeURIComponent(val)}&type=${encodeURIComponent(type)}`; a.download = 'barcode-'+val+'.png'; a.click();
+  a.href = `/api/printing/barcode/image?value=${encodeURIComponent(val)}&type=${encodeURIComponent(type)}`; a.download = 'barcode-'+val+'.png'; a.click();
 }
 function saveBarcodeToProduct() {
   const productId = document.getElementById('bc_product').value;
@@ -2576,7 +2576,7 @@ function saveBarcodeToProduct() {
   if (!productId) { toast('Select a product to save', 'error'); return; }
   const err = validateBarcodeInput(barcode, barcodeType);
   if (err) { toast(err, 'error'); return; }
-  fetch('/api/barcode/save', {
+  fetch('/api/printing/barcode/save', {
     method:'POST',
     headers:{'Content-Type':'application/json','X-CSRFToken':__csrfToken},
     body: JSON.stringify({ product_id: productId, barcode, barcode_type: barcodeType })
@@ -2596,7 +2596,7 @@ function printBarcode() {
   const copies = Math.max(1, parseInt(document.getElementById('bc_copies').value || '1', 10));
   const err = validateBarcodeInput(barcode, barcodeType);
   if (err) { toast(err, 'error'); return; }
-  fetch('/api/barcode/print', {
+  fetch('/api/printing/label/print', {
     method:'POST',
     headers:{'Content-Type':'application/json','X-CSRFToken':__csrfToken},
     body: JSON.stringify({ barcode, barcode_type: barcodeType, copies })
@@ -2611,7 +2611,7 @@ function printBarcode() {
 function bulkGenerateBarcodes() {
   const mode = document.getElementById('bc_auto_mode').value;
   const prefix = document.getElementById('bc_prefix').value.trim() || 'SM';
-  fetch('/api/barcode/generate-missing', {
+  fetch('/api/printing/barcode/bulk-generate', {
     method:'POST',
     headers:{'Content-Type':'application/json','X-CSRFToken':__csrfToken},
     body: JSON.stringify({ mode, prefix })
