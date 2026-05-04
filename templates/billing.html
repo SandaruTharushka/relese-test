@@ -133,7 +133,7 @@
         </div>
         <div style="display:flex;align-items:center;gap:8px">
           <label for="autoDiscountToggle" style="font-size:13px;font-weight:700">Auto Discount</label>
-          <input id="autoDiscountToggle" type="checkbox" checked onchange="window._autoDiscountEnabled=this.checked">
+          <input id="autoDiscountToggle" type="checkbox" checked onchange="syncAutoDiscountToggle(this.checked)">
           <span id="autoDiscountState" style="font-size:12px;color:var(--muted)">ON</span>
         </div>
 
@@ -1221,8 +1221,6 @@ async function applyAutoDiscount(idx) {
   const item = cart[idx];
   if (!item) return;
   const enabled = !!window._autoDiscountEnabled;
-  const stateEl = document.getElementById('autoDiscountState');
-  if (stateEl) stateEl.textContent = enabled ? 'ON' : 'OFF';
   if (!enabled || item.discount_source === 'manual') return;
   try {
     const r = await fetch(`/api/auto-discount/lookup?price=${encodeURIComponent(item.price)}`);
@@ -1821,9 +1819,14 @@ function addWeightItem(product, quantityKg, totalPrice, label) {
     qty: quantityKg,
     price: quantityKg > 0 ? totalPrice / quantityKg : totalPrice,
     total: totalPrice,
-    is_weight: true, discount: 0,
+    is_weight: true,
+    discount: 0,
+    discount_percent: 0,
+    discount_source: 'none',
+    auto_discount_rule_id: null,
   });
-  renderCart();
+  const cartIndex = cart.length - 1;
+  applyAutoDiscount(cartIndex).finally(() => renderCart());
 }
 
 function selectPayMethod(m) {
