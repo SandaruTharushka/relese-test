@@ -1,30 +1,30 @@
-"""Sales receipt text builder — v3.
+"""Sales receipt text builder — v4 clean invoice style.
 
-Uses EscposLayoutEngine to produce a structured, configurable thermal receipt:
+Clean professional layout (no separator lines):
 
-    ================================
-            GARAGE MANAGEMENT
-          Automobile & Electronics
-              077 XXX XXXX
-    --------------------------------
-              SALES INVOICE
-    --------------------------------
-    Invoice No : INV-0001
-    Date       : 2026-05-02 12:44
-    Cashier    : Admin
-    Customer   : Walk-in Customer
-    --------------------------------
-    ITEM              QTY   PRICE      TOTAL
-    Engine Oil          1 2500.00    2500.00
-    Brake Cable         2  850.00    1700.00
-    --------------------------------
-    Subtotal                       LKR 4,200.00
-    Discount                          LKR 0.00
-    Grand Total                    LKR 4,200.00
-    PAID                           LKR 4,200.00
-    CHANGE                            LKR 0.00
-    ================================
-          Thank you for your business!
+        GARAGE MANAGEMENT
+      Automobile & Electronics
+          077 XXX XXXX
+
+          SALES INVOICE
+
+Date: 2026-05-04          Time: 9:17 am
+Inv No: INV-0001          User: Admin
+Customer: Walk-in Customer
+
+R5-F-4-36311028 - VALVE KIT CALIBER
+        1.00 x 3,030.00      3,030.00
+
+ENGINE OIL FILTER
+        2.00 x 750.00        1,500.00
+
+Subtotal              LKR 4,530.00
+Total Discount            LKR 0.00
+Grand Total           LKR 4,530.00
+Amount Received       LKR 5,000.00
+Balance                 LKR 470.00
+
+    Thank you for your business!
 
 All visible fields are controlled by rcpt_* layout settings loaded from
 StoreSettings.  No hardcoded values in this file.
@@ -50,7 +50,7 @@ def _as_bool(layout: dict[str, Any], key: str, default: bool = True) -> bool:
 
 
 class SalesReceiptBuilder:
-    """Builds a thermal-printable sales invoice receipt from a Sale record."""
+    """Builds a clean invoice-style thermal receipt from a Sale record."""
 
     def build(
         self,
@@ -77,10 +77,7 @@ class SalesReceiptBuilder:
 
         eng = EscposLayoutEngine(width=width)
 
-        # ── Store header block ─────────────────────────────────────────────────
-        # Format: ==== first, then store info, then ---- separator
-        eng.double_separator()
-
+        # ── Store header block (centered, no separators) ───────────────────────
         if show('rcpt_show_store_name'):
             store_name = store.get('store_name') or 'Garage Management System'
             eng.double_height(store_name, align=header_align)
@@ -106,76 +103,93 @@ class SalesReceiptBuilder:
             else:
                 eng.left(store['store_email'])
         if show('rcpt_show_tax_number') and store.get('store_tax_number'):
+            line = f'Tax No: {store["store_tax_number"]}'
             if header_align == 'center':
-                eng.center(f'Tax No: {store["store_tax_number"]}')
+                eng.center(line)
             else:
-                eng.left(f'Tax No: {store["store_tax_number"]}')
+                eng.left(line)
 
-        eng.separator()
+        eng.blank()
         eng.center('SALES INVOICE')
-        eng.separator()
+        eng.blank()
 
-        # ── Invoice info ───────────────────────────────────────────────────────
-        if show('rcpt_show_invoice') and getattr(sale, 'invoice_number', ''):
-            eng.kv_row('Invoice No', sale.invoice_number)
+        # ── Invoice meta: Date/Time same row, Inv No/User same row ───────────
+        sale_dt = getattr(sale, 'sale_date', None) or datetime.utcnow()
+        date_str = f'Date: {sale_dt.strftime("%Y-%m-%d")}'
+        time_str = f'Time: {sale_dt.strftime("%I:%M %p").lstrip("0")}'
+
         if show('rcpt_show_datetime'):
-            sale_dt = getattr(sale, 'sale_date', None) or datetime.utcnow()
-            eng.kv_row('Date', sale_dt.strftime('%Y-%m-%d %H:%M'))
-        if show('rcpt_show_cashier') and cashier_name:
-            eng.kv_row('Cashier', cashier_name)
-        if show('rcpt_show_customer') and customer_name:
-            eng.kv_row('Customer', customer_name)
-        if show('rcpt_show_customer_phone') and customer_phone:
-            eng.kv_row('Phone', customer_phone)
-        if show('rcpt_show_payment_method') and payment_method_label:
-            eng.kv_row('Payment', payment_method_label)
+            if show('rcpt_show_cashier') and cashier_name:
+                eng.left_right(date_str, time_str)
+                inv_str = f'Inv No: {_safe(getattr(sale, "invoice_number", ""), "-")}'
+                user_str = f'User: {cashier_name}'
+                if show('rcpt_show_invoice'):
+                    eng.left_right(inv_str, user_str)
+                else:
+                    eng.left(f'User: {cashier_name}')
+            else:
+                eng.left_right(date_str, time_str)
+                if show('rcpt_show_invoice') and getattr(sale, 'invoice_number', ''):
+                    eng.left(f'Inv No: {sale.invoice_number}')
+        else:
+            if show('rcpt_show_invoice') and getattr(sale, 'invoice_number', ''):
+                if show('rcpt_show_cashier') and cashier_name:
+                    inv_str = f'Inv No: {sale.invoice_number}'
+                    user_str = f'User: {cashier_name}'
+                    eng.left_right(inv_str, user_str)
+                else:
+                    eng.left(f'Inv No: {sale.invoice_number}')
+            elif show('rcpt_show_cashier') and cashier_name:
+                eng.left(f'User: {cashier_name}')
 
-        eng.separator()
+        if show('rcpt_show_customer') and customer_name:
+            eng.left(f'Customer: {customer_name}')
+        if show('rcpt_show_customer_phone') and customer_phone:
+            eng.left(f'Phone: {customer_phone}')
+        if show('rcpt_show_payment_method') and payment_method_label:
+            eng.left(f'Payment: {payment_method_label}')
+
+        eng.blank()
 
         # ── Items ──────────────────────────────────────────────────────────────
         items = getattr(sale, 'items', []) or []
-        if items:
-            eng.three_col_header()
 
         for item in items:
             product = getattr(item, 'product', None)
             name = product.name if product else 'Unknown Item'
-            qty = item.quantity
-            try:
-                qty_display = int(qty) if float(qty) == int(float(qty)) else qty
-            except (TypeError, ValueError):
-                qty_display = qty
+            sku = getattr(product, 'barcode', '') if product else ''
+            qty = _to_dec(item.quantity)
+            price = _to_dec(item.price)
+            total = _to_dec(item.total)
 
-            if show('rcpt_show_sku') and product and getattr(product, 'barcode', ''):
-                eng.left(f'  SKU: {product.barcode}')
+            # Line 1: SKU - Name  (or just Name)
+            if show('rcpt_show_sku') and sku:
+                header_line = _clip(f'{sku} - {name}', width)
+            else:
+                header_line = _clip(name, width)
+            eng.left(header_line)
+
+            # Line 2: indented "qty x price" left, total right
+            try:
+                qty_f = float(qty)
+                qty_str = f'{qty_f:.2f}'
+            except (TypeError, ValueError):
+                qty_str = str(qty)
 
             if show('rcpt_show_qty') and show('rcpt_show_unit_price') and show('rcpt_show_line_total'):
-                eng.three_col_item(
-                    name, qty_display,
-                    _to_dec(item.price),
-                    _to_dec(item.total),
-                )
-                if show('rcpt_show_discount') and _to_dec(getattr(item, 'discount', 0)):
-                    eng.indented_pair('Discount', f'-{_to_dec(item.discount):,.2f}')
-            else:
-                wrap_names = show('rcpt_wrap_product_names')
-                if wrap_names:
-                    for name_line in _wrap(name, width):
-                        eng.left(name_line)
-                else:
-                    eng.left(_clip(name, width))
-                if show('rcpt_show_qty'):
-                    eng.two_col('  Qty', str(qty_display))
-                if show('rcpt_show_unit_price'):
-                    eng.two_col('  Price', f'{_to_dec(item.price):,.2f}')
-                if show('rcpt_show_discount') and _to_dec(getattr(item, 'discount', 0)):
-                    eng.two_col('  Discount', f'-{_to_dec(item.discount):,.2f}')
-                if show('rcpt_show_line_total'):
-                    eng.two_col('  Total', f'{_to_dec(item.total):,.2f}')
+                eng.item_detail(qty_str, price, total)
+            elif show('rcpt_show_qty') and show('rcpt_show_unit_price'):
+                eng.left(f'        {qty_str} x {price:,.2f}')
+            elif show('rcpt_show_line_total'):
+                eng.right(f'{total:,.2f}')
 
-        eng.separator()
+            if show('rcpt_show_discount') and _to_dec(getattr(item, 'discount', 0)):
+                disc = _to_dec(item.discount)
+                eng.left(f'        Discount: -{disc:,.2f}')
 
-        # ── Totals ─────────────────────────────────────────────────────────────
+            eng.blank()
+
+        # ── Totals (right-aligned, no separator) ───────────────────────────────
         subtotal    = _to_dec(getattr(sale, 'subtotal', 0))
         discount    = _to_dec(getattr(sale, 'discount', 0))
         tax         = _to_dec(getattr(sale, 'tax', 0))
@@ -184,19 +198,19 @@ class SalesReceiptBuilder:
         change      = _to_dec(getattr(sale, 'change_amount', 0))
 
         if show('rcpt_show_subtotal'):
-            eng.two_col('Subtotal', f'{currency} {subtotal:,.2f}')
+            eng.money_row('Subtotal', f'{currency} {subtotal:,.2f}')
         if show('rcpt_show_discount_total') and discount:
-            eng.two_col('Discount', f'-{currency} {discount:,.2f}')
+            eng.money_row('Total Discount', f'{currency} {discount:,.2f}')
         if show('rcpt_show_tax') and tax:
-            eng.two_col('Tax', f'{currency} {tax:,.2f}')
+            eng.money_row('Tax', f'{currency} {tax:,.2f}')
         if show('rcpt_show_grand_total'):
-            eng.grand_total_line('Grand Total', f'{currency} {grand_total:,.2f}')
+            eng.two_col_bold('Grand Total', f'{currency} {grand_total:,.2f}')
         if show('rcpt_show_paid'):
-            eng.two_col('PAID', f'{currency} {paid:,.2f}')
+            eng.money_row('Amount Received', f'{currency} {paid:,.2f}')
         if show('rcpt_show_change'):
-            eng.two_col('CHANGE', f'{currency} {change:,.2f}')
+            eng.money_row('Balance', f'{currency} {change:,.2f}')
 
-        eng.double_separator()
+        eng.blank()
 
         # ── Footer ─────────────────────────────────────────────────────────────
         footer_text = layout.get('rcpt_footer_text', 'Thank you for your business!')
@@ -215,7 +229,6 @@ class SalesReceiptBuilder:
         if show('rcpt_show_powered_by', False):
             eng.center('Powered by Garage Management System')
 
-        # Barcode text line (invoice number)
         enable_barcode = show('rcpt_enable_barcode', True)
         show_barcode_text = show('rcpt_show_barcode_text', True)
         invoice_no = getattr(sale, 'invoice_number', '') or ''

@@ -164,9 +164,18 @@ class ReceiptEngine:
         paper_size = self._paper_size(cpl)
 
         customer_name = customer_phone = ''
-        if sale.customer:
-            customer_name  = getattr(sale.customer, 'full_name', '') or ''
-            customer_phone = getattr(sale.customer, 'phone', '') or ''
+        rc = getattr(sale, 'retail_customer', None)
+        wc = getattr(sale, 'wholesale_customer', None)
+        if rc:
+            customer_name  = getattr(rc, 'name', '') or getattr(rc, 'full_name', '') or ''
+            customer_phone = getattr(rc, 'phone', '') or ''
+        elif wc:
+            customer_name  = getattr(wc, 'name', '') or ''
+            customer_phone = getattr(wc, 'phone', '') or ''
+        if not customer_name:
+            customer_name = getattr(sale, 'customer_name_snapshot', '') or ''
+        if not customer_phone:
+            customer_phone = getattr(sale, 'customer_phone_snapshot', '') or ''
 
         payments = getattr(sale, 'payments', []) or []
         payment_methods = list({p.method for p in payments if p.method})
@@ -296,9 +305,18 @@ class ReceiptEngine:
         paper_size = self._paper_size(cpl)
 
         customer_name = customer_phone = ''
-        if sale.customer:
-            customer_name  = getattr(sale.customer, 'full_name', '') or ''
-            customer_phone = getattr(sale.customer, 'phone', '') or ''
+        rc = getattr(sale, 'retail_customer', None)
+        wc = getattr(sale, 'wholesale_customer', None)
+        if rc:
+            customer_name  = getattr(rc, 'name', '') or getattr(rc, 'full_name', '') or ''
+            customer_phone = getattr(rc, 'phone', '') or ''
+        elif wc:
+            customer_name  = getattr(wc, 'name', '') or ''
+            customer_phone = getattr(wc, 'phone', '') or ''
+        if not customer_name:
+            customer_name = getattr(sale, 'customer_name_snapshot', '') or ''
+        if not customer_phone:
+            customer_phone = getattr(sale, 'customer_phone_snapshot', '') or ''
 
         # Delegate to SalesReceiptBuilder; patch footer text to indicate return
         return_layout = dict(layout)

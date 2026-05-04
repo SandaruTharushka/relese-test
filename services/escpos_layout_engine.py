@@ -258,6 +258,14 @@ class EscposLayoutEngine:
         """Left–right pair (right value right-justified to full width)."""
         return self._add(_pair(left, right, self.width))
 
+    def left_right(self, left: str, right: str) -> 'EscposLayoutEngine':
+        """Left text and right text on the same line (alias for two_col)."""
+        return self.two_col(left, right)
+
+    def money_row(self, label: str, amount: str) -> 'EscposLayoutEngine':
+        """Right-aligned money row: label left-justified, amount right-justified."""
+        return self.two_col(label, amount)
+
     def two_col_bold(self, left: str, right: str) -> 'EscposLayoutEngine':
         """Bold left–right pair."""
         return self._add(f'{ESCPOS_BOLD_ON}{_pair(left, right, self.width)}{ESCPOS_BOLD_OFF}')
@@ -299,6 +307,67 @@ class EscposLayoutEngine:
             + total_str.rjust(col['total'])
         )
         return self._add(row)
+
+    def item_detail(
+        self,
+        qty_str: str,
+        price: Any,
+        total: Any,
+        indent: int = 8,
+    ) -> 'EscposLayoutEngine':
+        """Detail line for an item: indented 'qty x price' left, total right.
+
+        Used after left(item_name) to complete the two-line item block.
+        """
+        prefix = ' ' * indent
+        price_str = f'{_to_dec(price):,.2f}'
+        total_str = f'{_to_dec(total):,.2f}'
+        detail = f'{prefix}{qty_str} x {price_str}'
+        if len(detail) + len(total_str) + 1 <= self.width:
+            spaces = self.width - len(detail) - len(total_str)
+            self._add(f'{detail}{" " * spaces}{total_str}')
+        else:
+            avail = max(len(prefix) + 1, self.width - len(total_str) - 1)
+            detail_clipped = detail[:avail]
+            spaces = max(1, self.width - len(detail_clipped) - len(total_str))
+            self._add(f'{detail_clipped}{" " * spaces}{total_str}')
+        return self
+
+    def clean_item_row(
+        self,
+        name: str,
+        qty: Any,
+        price: Any,
+        total: Any,
+        sku: str = '',
+    ) -> 'EscposLayoutEngine':
+        """Clean two-line item format for invoices (no separator lines needed):
+
+        SKU - Item Name
+                qty.00 x price           total
+        """
+        header = f'{sku} - {name}' if sku else str(name or 'Item')
+        self._add(_truncate(header, self.width))
+        try:
+            qty_val = float(qty or 0)
+            qty_str = f'{qty_val:.2f}'
+        except (TypeError, ValueError):
+            qty_str = str(qty or '0')
+        price_str = f'{_to_dec(price):,.2f}'
+        total_str = f'{_to_dec(total):,.2f}'
+        indent = '        '  # 8 spaces
+        detail = f'{indent}{qty_str} x {price_str}'
+        total_clean = total_str.strip()
+        # Build line preserving leading indent: pad between detail and total
+        if len(detail) + len(total_clean) + 1 <= self.width:
+            spaces = self.width - len(detail) - len(total_clean)
+            self._add(f'{detail}{" " * spaces}{total_clean}')
+        else:
+            avail = max(len(indent) + 1, self.width - len(total_clean) - 1)
+            detail_clipped = detail[:avail]
+            spaces = max(1, self.width - len(detail_clipped) - len(total_clean))
+            self._add(f'{detail_clipped}{" " * spaces}{total_clean}')
+        return self
 
     # ── Section headers and indented text ────────────────────────────────────
 
