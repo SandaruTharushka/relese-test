@@ -492,6 +492,9 @@ class SaleItem(db.Model):
     quantity             = db.Column(db.Float, nullable=False)   # quantity, not money
     price                = db.Column(MONEY, nullable=False)
     discount             = db.Column(MONEY, default=0)
+    discount_percent     = db.Column(_Numeric(5, 2, asdecimal=True), default=0)
+    discount_source      = db.Column(db.String(20), default='none')
+    auto_discount_rule_id = db.Column(db.Integer, db.ForeignKey('auto_discount_rules.id'), nullable=True)
     total                = db.Column(MONEY, nullable=False)
     warranty_period      = db.Column(db.String(50), default='none')
     warranty_expiry_date = db.Column(db.Date, nullable=True)
@@ -514,6 +517,9 @@ class SaleItem(db.Model):
             'quantity': self.quantity,
             'price': money_to_float(self.price),
             'discount': money_to_float(self.discount),
+            'discount_percent': money_to_float(self.discount_percent),
+            'discount_source': self.discount_source or 'none',
+            'auto_discount_rule_id': self.auto_discount_rule_id,
             'total': money_to_float(self.total),
             'warranty_period': self.warranty_period or 'none',
             'warranty_expiry_date': self.warranty_expiry_date.strftime('%Y-%m-%d') if self.warranty_expiry_date else None,
@@ -521,6 +527,36 @@ class SaleItem(db.Model):
             'imei': self.imei or '',
             'imei2': self.imei2 or '',
             'serial_number': self.serial_number or '',
+        }
+
+
+class AutoDiscountRule(db.Model):
+    __tablename__ = 'auto_discount_rules'
+    __table_args__ = (
+        CheckConstraint('min_price >= 0', name='ck_auto_discount_min_price_non_negative'),
+        CheckConstraint('max_price > min_price', name='ck_auto_discount_max_gt_min'),
+        CheckConstraint('discount_percent >= 0 AND discount_percent <= 100', name='ck_auto_discount_percent_range'),
+        Index('ix_auto_discount_rules_active_priority', 'is_active', 'priority'),
+    )
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    min_price = db.Column(_Numeric(18, 2, asdecimal=True), nullable=False)
+    max_price = db.Column(_Numeric(18, 2, asdecimal=True), nullable=False)
+    discount_percent = db.Column(_Numeric(5, 2, asdecimal=True), nullable=False)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    priority = db.Column(db.Integer, default=0, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'min_price': f'{money_to_decimal(self.min_price):.2f}',
+            'max_price': f'{money_to_decimal(self.max_price):.2f}',
+            'discount_percent': f'{money_to_decimal(self.discount_percent):.2f}',
+            'is_active': bool(self.is_active),
+            'priority': int(self.priority or 0),
         }
 
 

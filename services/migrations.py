@@ -260,6 +260,24 @@ MIGRATIONS: list[Migration] = [
         "ALTER TABLE products ADD COLUMN availability_status VARCHAR(20) NOT NULL DEFAULT 'IN_STOCK'",
         "ALTER TABLE products ADD COLUMN stock_note VARCHAR(200)",
     ]),
+    Migration(21, 'v8.3 auto discount rules and sale item discount metadata', [
+        """
+        CREATE TABLE IF NOT EXISTS auto_discount_rules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name VARCHAR(120) NOT NULL,
+            min_price NUMERIC(18,2) NOT NULL,
+            max_price NUMERIC(18,2) NOT NULL,
+            discount_percent NUMERIC(5,2) NOT NULL,
+            is_active BOOLEAN NOT NULL DEFAULT 1,
+            priority INTEGER NOT NULL DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        "ALTER TABLE sale_items ADD COLUMN discount_percent NUMERIC(5,2) DEFAULT 0",
+        "ALTER TABLE sale_items ADD COLUMN discount_source VARCHAR(20) DEFAULT 'none'",
+        "ALTER TABLE sale_items ADD COLUMN auto_discount_rule_id INTEGER NULL",
+    ]),
 ]
 
 
