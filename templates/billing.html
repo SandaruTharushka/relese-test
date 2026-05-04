@@ -131,6 +131,11 @@
                  autofocus>
           <span class="scan-badge">SCAN READY</span>
         </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <label for="autoDiscountToggle" style="font-size:13px;font-weight:700">Auto Discount</label>
+          <input id="autoDiscountToggle" type="checkbox" checked onchange="window._autoDiscountEnabled=this.checked">
+          <span id="autoDiscountState" style="font-size:12px;color:var(--muted)">ON</span>
+        </div>
 
         <!-- Wholesale customer search + selector -->
         <div>
@@ -1157,11 +1162,12 @@ function addToCart(pid) {
     cart.push({
       id: p.id, name: p.name, price: price, qty: 1,
       discount: 0, stock: p.stock_qty, barcode: p.barcode || '',
+      discount_percent: 0, discount_source: 'none', auto_discount_rule_id: null,
       warranty_period: p.warranty_period || 'none',
       is_imei_tracked: true, imei: null, imeis: [], imei_record_details: null,
     });
     const cartIndex = cart.length - 1;
-    window.requestAnimationFrame(() => renderCart());
+    applyAutoDiscount(cart.length - 1).finally(()=>window.requestAnimationFrame(() => renderCart()));
     highlightCartItem(cartIndex);
     playAddBeep();
     toast(`${p.name} added — select IMEI to continue`, 'info');
@@ -1184,16 +1190,36 @@ function addToCart(pid) {
     cart.push({
       id: p.id, name: p.name, price: price, qty: 1,
       discount: 0, stock: p.stock_qty, barcode: p.barcode || '',
+      discount_percent: 0, discount_source: 'none', auto_discount_rule_id: null,
       warranty_period: p.warranty_period || 'none',
       is_imei_tracked: false, imei: null, imeis: [], imei_record_details: null,
     });
     cartIndex = cart.length - 1;
   }
-  window.requestAnimationFrame(() => renderCart());
+  applyAutoDiscount(cartIndex).finally(()=>window.requestAnimationFrame(() => renderCart()));
   highlightCartItem(cartIndex);
   playAddBeep();
   toast(`${p.name} added`, 'success');
   return cartIndex;
+}
+
+
+async function applyAutoDiscount(idx) {
+  const item = cart[idx];
+  if (!item) return;
+  const enabled = !!window._autoDiscountEnabled;
+  const stateEl = document.getElementById('autoDiscountState');
+  if (stateEl) stateEl.textContent = enabled ? 'ON' : 'OFF';
+  if (!enabled || item.discount_source === 'manual') return;
+  try {
+    const r = await fetch(`/api/auto-discount/lookup?price=${encodeURIComponent(item.price)}`);
+    const data = await r.json();
+    const pct = parseFloat(data.discount_percent || 0) || 0;
+    item.discount_percent = pct;
+    item.discount = ((item.price * item.qty) * pct / 100);
+    item.discount_source = pct > 0 ? 'auto' : 'none';
+    item.auto_discount_rule_id = data.rule_id || null;
+  } catch(_e) {}
 }
 
 function highlightCartItem(idx) {
@@ -1310,6 +1336,7 @@ function applyItemDiscount() {
   const val = parseFloat(document.getElementById('itemDiscValue').value) || 0;
   if (cart[idx]) {
     cart[idx].discount = Math.max(0, val);
+    cart[idx].discount_source = cart[idx].discount > 0 ? 'manual' : 'none';
     renderCart();
   }
   closeModal('itemDiscModal');
@@ -1348,7 +1375,7 @@ function renderCart() {
            <span style="font-size:13px;font-weight:700;width:22px;text-align:center">${qtyLabel}</span>
            <button onclick="event.stopPropagation();updateQty(${i},1)" style="width:24px;height:24px;background:var(--accent);border:none;border-radius:6px;cursor:pointer;font-weight:700;color:#fff">+</button>`;
     const discBadge = item.discount > 0
-      ? `<div style="font-size:10px;color:var(--warning)">-LKR ${item.discount.toFixed(2)} disc</div>` : '';
+      ? `<div style="font-size:10px;color:var(--warning)">-LKR ${item.discount.toFixed(2)} ${item.discount_source==='auto' ? `(Auto ${item.discount_percent||0}%)` : item.discount_source==='manual' ? '(Manual)' : 'disc'}</div>` : '';
     const assignedImeis = (Array.isArray(item.imeis) ? item.imeis.filter(Boolean) : (item.imei ? [item.imei] : []));
     const imeiMeta = item.imei_record_details || {};
     const imeiBadge = isImei
@@ -1940,6 +1967,9 @@ async function confirmPayment() {
       product_id: i.id, name: i.name, price: i.price,
       qty: i.qty,
       discount: i.discount || 0,
+      discount_percent: i.discount_percent || 0,
+      discount_source: i.discount_source || 'none',
+      auto_discount_rule_id: i.auto_discount_rule_id || null,
       warranty_period: i.warranty_period || 'none',
       imei: i.imei || null,
       imeis: Array.isArray(i.imeis) ? i.imeis.filter(Boolean) : (i.imei ? [i.imei] : []),

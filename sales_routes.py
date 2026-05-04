@@ -15,6 +15,11 @@ from utils.timezone import format_sl_date, format_sl_datetime
 from shared_helpers import contains_sql_like
 from validators import parse_positive_float, parse_positive_int
 from services.receipt_renderer import build_receipt_context
+from services.auto_discount_service import (
+    calculate_discount_amount,
+    get_discount_for_price,
+    validate_no_overlap,
+)
 
 
 ALLOWED_PAYMENT_METHODS = {'Cash', 'Card', 'QR', 'PayHere', 'StoreCredit'}
@@ -410,6 +415,71 @@ def register_sales_routes(
     card_terminal_connected_checker=None,
 ):
     from customer_linking import ensure_customer_profile
+    from models import AutoDiscountRule
+
+    def _require_admin():
+        if not (getattr(current_user, 'is_admin', False) or str(getattr(current_user, 'role', '')).lower() == 'admin'):
+            abort(403)
+
+    @app.route('/api/auto-discount/rules', methods=['GET'])
+    @login_required
+    def auto_discount_rules_list():
+        _require_admin()
+        rules = AutoDiscountRule.query.order_by(AutoDiscountRule.priority.desc(), AutoDiscountRule.min_price.asc()).all()
+        return jsonify({'ok': True, 'rules': [r.to_dict() for r in rules]})
+
+    @app.route('/api/auto-discount/rules', methods=['POST'])
+    @login_required
+    def auto_discount_rules_create():
+        _require_admin()
+        d = request.get_json(silent=True) or {}
+        min_p = money_decimal(d.get('min_price'), 'Min price')
+        max_p = money_decimal(d.get('max_price'), 'Max price')
+        pct = money_decimal(d.get('discount_percent'), 'Discount percent')
+        if min_p < 0 or max_p <= min_p or pct < 0 or pct > 100:
+            return jsonify({'ok': False, 'error': 'Invalid rule values.'}), 400
+        if not validate_no_overlap(min_p, max_p):
+            return jsonify({'ok': False, 'error': 'Overlapping active price range.'}), 400
+        rule = AutoDiscountRule(name=str(d.get('name') or '').strip() or f'{min_p}-{max_p}', min_price=min_p, max_price=max_p, discount_percent=pct, is_active=bool(d.get('is_active', True)), priority=int(d.get('priority') or 0))
+        db.session.add(rule); db.session.commit()
+        return jsonify({'ok': True, 'rule': rule.to_dict()})
+
+    @app.route('/api/auto-discount/rules/<int:rule_id>', methods=['PUT'])
+    @login_required
+    def auto_discount_rules_update(rule_id):
+        _require_admin()
+        rule = db.session.get(AutoDiscountRule, rule_id) or abort(404)
+        d = request.get_json(silent=True) or {}
+        min_p = money_decimal(d.get('min_price', rule.min_price), 'Min price')
+        max_p = money_decimal(d.get('max_price', rule.max_price), 'Max price')
+        pct = money_decimal(d.get('discount_percent', rule.discount_percent), 'Discount percent')
+        is_active = bool(d.get('is_active', rule.is_active))
+        if min_p < 0 or max_p <= min_p or pct < 0 or pct > 100:
+            return jsonify({'ok': False, 'error': 'Invalid rule values.'}), 400
+        if is_active and not validate_no_overlap(min_p, max_p, exclude_rule_id=rule.id):
+            return jsonify({'ok': False, 'error': 'Overlapping active price range.'}), 400
+        rule.name = str(d.get('name', rule.name) or '').strip() or rule.name
+        rule.min_price, rule.max_price, rule.discount_percent = min_p, max_p, pct
+        rule.is_active = is_active
+        rule.priority = int(d.get('priority', rule.priority) or 0)
+        db.session.commit()
+        return jsonify({'ok': True, 'rule': rule.to_dict()})
+
+    @app.route('/api/auto-discount/rules/<int:rule_id>', methods=['DELETE'])
+    @login_required
+    def auto_discount_rules_delete(rule_id):
+        _require_admin()
+        rule = db.session.get(AutoDiscountRule, rule_id) or abort(404)
+        db.session.delete(rule); db.session.commit()
+        return jsonify({'ok': True})
+
+    @app.route('/api/auto-discount/lookup')
+    @login_required
+    def auto_discount_lookup():
+        price = money_decimal(request.args.get('price'), 'Price')
+        data = get_discount_for_price(price)
+        calc = calculate_discount_amount(price, data['discount_percent'])
+        return jsonify({'ok': True, 'price': f'{price:.2f}', 'discount_percent': data['discount_percent'], 'discount_amount': calc['discount_amount'], 'net_price': calc['net_price'], 'rule_name': data['rule_name'], 'rule_id': data['rule_id']})
 
     @app.route('/billing')
     @login_required
@@ -600,6 +670,14 @@ def register_sales_routes(
                         qty_needed = parse_positive_float(item.get('qty'), 'Quantity')
                         price      = parse_positive_float(item.get('price'), 'Price')
                         item_disc  = parse_positive_float(item.get('discount', 0), 'Item discount')
+                        item_disc_pct = money_decimal(item.get('discount_percent', 0), 'Item discount percent')
+                        item_disc_source = str(item.get('discount_source') or 'none').strip().lower()
+                        item_rule_id = item.get('auto_discount_rule_id')
+                        if item_disc_source == 'auto':
+                            auto_data = get_discount_for_price(price)
+                            item_disc_pct = money_decimal(auto_data.get('discount_percent', 0), 'Auto discount percent')
+                            item_disc = round(price * float(qty_needed) * float(item_disc_pct) / 100.0, 2)
+                            item_rule_id = auto_data.get('rule_id')
                         line_total = price * float(item.get('qty', 1)) - item_disc
 
                         # Atomic stock deduction — rowcount 0 means stock ran out
@@ -636,6 +714,9 @@ def register_sales_routes(
                             quantity=float(item.get('qty', 1)),
                             price=price,
                             discount=item_disc,
+                            discount_percent=item_disc_pct,
+                            discount_source=item_disc_source if item_disc_source in ('auto', 'manual', 'none') else 'none',
+                            auto_discount_rule_id=item_rule_id,
                             total=line_total,
                             warranty_period=wp,
                             warranty_expiry_date=expiry_date,
