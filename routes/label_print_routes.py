@@ -44,15 +44,39 @@ def register_label_print_routes(
     def api_printing_label_print():
         _require_print_access()
         data = request.get_json(silent=True) or {}
-        product = {
-            'barcode': str(data.get('barcode') or '').strip(),
-            'name': str(data.get('name') or 'Barcode Label').strip() or 'Barcode Label',
-            'sell_price': str(data.get('sell_price') or '0.00'),
-            'sku': str(data.get('sku') or ''),
-            'rack_number': str(data.get('rack_number') or ''),
-            'section_number': str(data.get('section_number') or ''),
-        }
         copies = max(1, min(int(data.get('copies') or 1), 50))
+
+        # ── Primary path: load Product from DB ──────────────────
+        product_id = data.get('product_id')
+        if product_id:
+            try:
+                pid = int(product_id)
+            except (TypeError, ValueError):
+                return jsonify({'ok': False, 'msg': 'product_id must be an integer'}), 400
+            db_product = db.session.get(Product, pid)
+            if not db_product or db_product.status != 'active':
+                return jsonify({'ok': False, 'msg': f'Product {pid} not found'}), 404
+            product = ProductFillService.product_payload(db_product)
+            product['id'] = db_product.id
+            app.logger.info('[LABEL PRINT] product_id=%s barcode=%s copies=%s source=DB', pid, product.get('barcode'), copies)
+        else:
+            # ── Fallback: use caller-supplied data (test / preview) ─
+            # Normalise nested {product: {...}} format used by some callers.
+            nested = data.get('product')
+            if isinstance(nested, dict):
+                src = nested
+            else:
+                src = data
+            product = {
+                'barcode': str(src.get('barcode') or '').strip(),
+                'name': str(src.get('name') or 'Barcode Label').strip() or 'Barcode Label',
+                'sell_price': str(src.get('sell_price') or '0.00'),
+                'sku': str(src.get('sku') or ''),
+                'rack_number': str(src.get('rack_number') or ''),
+                'section_number': str(src.get('section_number') or ''),
+            }
+            app.logger.info('[LABEL PRINT] barcode=%s copies=%s source=caller', product.get('barcode'), copies)
+
         ok, payload, status_code = print_domain.print_label(product=product, copies=copies)
         return jsonify({'ok': ok, **payload}), status_code
 

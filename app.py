@@ -36,7 +36,6 @@ from runtime_paths import ensure_persistent_app_structure, persistent_app_dir, p
 from logging_setup import configure_app_logging
 from reset_utils import delete_all_rows, ordered_delete_tables
 from startup_checks import run_startup_checks
-from printer_routes import register_printer_routes
 from settings_routes import register_settings_routes
 from reports_routes import register_reports_routes
 from service_analytics_routes import register_service_analytics_routes
@@ -1569,17 +1568,6 @@ register_settings_routes(
     log_action=log_action,
     update_env_file=update_env_file,
     requires_password_change=requires_password_change,
-)
-
-register_printer_routes(
-    app,
-    db=db,
-    StoreSettings=StoreSettings,
-    printer_service=printer_service,
-    log_action=log_action,
-    user_has_any_role=user_has_any_role,
-    UserLog=UserLog,
-    Product=Product,
 )
 
 # ── New canonical printing routes ────────────────────────────────────────

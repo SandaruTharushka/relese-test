@@ -246,3 +246,38 @@ def register_printing_settings_routes(
     @login_required
     def api_barcode_scanner_config_compat():
         return api_printing_settings_scanner()
+
+    # ── Printer list compat alias ─────────────────────────────────
+    @app.route('/api/printer/list', methods=['GET'])
+    @login_required
+    def api_printer_list_compat():
+        return api_printing_printers_list()
+
+    # ── External printer manager launch ──────────────────────────
+    @app.route('/api/printer-manager/open', methods=['POST'])
+    @login_required
+    def api_printer_manager_open():
+        import os
+        import subprocess
+        import sys
+
+        _require_admin()
+
+        def _manager_path() -> str:
+            candidates = []
+            if getattr(sys, 'frozen', False):
+                candidates.append(os.path.join(os.path.dirname(sys.executable), 'GarageManagementSystem.exe'))
+            candidates.append(os.path.join(os.path.dirname(__file__), '..', 'printer_manager_app.py'))
+            for c in candidates:
+                if c and os.path.exists(c):
+                    return c
+            return ''
+
+        executable = _manager_path()
+        if not executable:
+            return jsonify({'ok': False, 'code': 'MANAGER_NOT_INSTALLED', 'msg': 'Garage Printer Manager is not installed on this machine.'}), 404
+        if executable.lower().endswith('.exe'):
+            subprocess.Popen([executable], close_fds=True)
+        else:
+            subprocess.Popen([sys.executable, executable], close_fds=True)
+        return jsonify({'ok': True, 'msg': 'Opening Garage Printer Manager...'})

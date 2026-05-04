@@ -456,6 +456,92 @@ def register_receipt_print_routes(
             app.logger.exception('[RECEIPT] debug_layout_failed')
             return jsonify({'ok': False, 'code': 'DEBUG_ERROR', 'msg': 'Failed to load debug layout'}), 500
 
+    # ── Barcode invoice search ────────────────────────────────────────────────
+    #
+    # Used by barcode scanner to redirect scanned receipt barcodes to the
+    # correct page.  Format: INV-<invoice_no|sale_id>
+    #                        SRV-<job_no|job_id>
+    #                        RET-<return_no|return_id>
+
+    @app.route('/api/printing/invoice/search', methods=['GET'])
+    @login_required
+    def api_printing_invoice_search():
+        _require_print_access()
+        raw_code = (request.args.get('code') or '').strip()
+        if not raw_code:
+            return jsonify({'ok': False, 'code': 'MISSING_CODE', 'msg': 'code query parameter is required'}), 400
+
+        upper = raw_code.upper()
+
+        # ── Billing (INV-…) ──────────────────────────────────────────────────
+        if upper.startswith('INV-') or upper.startswith('INV'):
+            value = raw_code[4:].strip() if upper.startswith('INV-') else raw_code[3:].strip()
+            sale = Sale.query.filter_by(invoice_number=raw_code).first()
+            if not sale:
+                sale = Sale.query.filter_by(invoice_number=value).first()
+            if not sale:
+                try:
+                    sale = Sale.query.filter_by(id=int(value)).first()
+                except (TypeError, ValueError):
+                    pass
+            if sale:
+                app.logger.info('[INVOICE SEARCH] type=billing code=%s sale_id=%s', raw_code, sale.id)
+                return jsonify({
+                    'ok': True,
+                    'type': 'billing',
+                    'id': sale.id,
+                    'display_no': sale.invoice_number or f'SALE-{sale.id}',
+                    'url': f'/billing?invoice={sale.invoice_number or sale.id}',
+                })
+            return jsonify({'ok': False, 'code': 'NOT_FOUND', 'msg': f'No sale found for code: {raw_code}'}), 404
+
+        # ── Service job (SRV-…) ──────────────────────────────────────────────
+        if upper.startswith('SRV-') or upper.startswith('SRV'):
+            value = raw_code[4:].strip() if upper.startswith('SRV-') else raw_code[3:].strip()
+            job = RepairJob.query.filter_by(job_number=raw_code).first()
+            if not job:
+                job = RepairJob.query.filter_by(job_number=value).first()
+            if not job:
+                try:
+                    job = RepairJob.query.filter_by(id=int(value)).first()
+                except (TypeError, ValueError):
+                    pass
+            if job:
+                app.logger.info('[INVOICE SEARCH] type=service code=%s job_id=%s', raw_code, job.id)
+                return jsonify({
+                    'ok': True,
+                    'type': 'service',
+                    'id': job.id,
+                    'display_no': job.job_number or f'JOB-{job.id}',
+                    'url': f'/repairs?job={job.job_number or job.id}',
+                })
+            return jsonify({'ok': False, 'code': 'NOT_FOUND', 'msg': f'No service job found for code: {raw_code}'}), 404
+
+        # ── Return (RET-…) ───────────────────────────────────────────────────
+        if upper.startswith('RET-') or upper.startswith('RET'):
+            value = raw_code[4:].strip() if upper.startswith('RET-') else raw_code[3:].strip()
+            if ProductReturn is not None:
+                ret = ProductReturn.query.filter_by(return_number=raw_code).first()
+                if not ret:
+                    ret = ProductReturn.query.filter_by(return_number=value).first()
+                if not ret:
+                    try:
+                        ret = ProductReturn.query.filter_by(id=int(value)).first()
+                    except (TypeError, ValueError):
+                        pass
+                if ret:
+                    app.logger.info('[INVOICE SEARCH] type=return code=%s return_id=%s', raw_code, ret.id)
+                    return jsonify({
+                        'ok': True,
+                        'type': 'return',
+                        'id': ret.id,
+                        'display_no': ret.return_number or f'RET-{ret.id}',
+                        'url': f'/returns?return={ret.return_number or ret.id}',
+                    })
+            return jsonify({'ok': False, 'code': 'NOT_FOUND', 'msg': f'No return found for code: {raw_code}'}), 404
+
+        return jsonify({'ok': False, 'code': 'UNKNOWN_PREFIX', 'msg': f'Unrecognised code prefix: {raw_code}. Expected INV-…, SRV-…, or RET-…'}), 400
+
     # ─────────────────────────────────────────────────────────────────────────
     # BACKWARD-COMPAT ALIASES
     # ─────────────────────────────────────────────────────────────────────────

@@ -3598,7 +3598,6 @@ document.addEventListener('DOMContentLoaded', () => {
     safelyInvoke(loadReturnPolicy, 'loadReturnPolicy');
     safelyInvoke(getWindowFunction('loadHardwareSettings'), 'loadHardwareSettings');
     safelyInvoke(getWindowFunction('loadReceiptLayout'), 'loadReceiptLayout');
-    safelyInvoke(() => fetch('/api/hardware/auto-connect', { method: 'POST', headers: withCsrfHeaders({}) }).catch(() => {}), 'hardwareAutoConnect');
     /* ── Card terminal real-time status ─────────────────────────────── */
     function refreshCardTerminalStatus() {
       var statusEl = document.getElementById('cardTerminalStatus');
