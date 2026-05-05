@@ -57,6 +57,9 @@ static/invoice_qr/
 C:/ProgramData/
 C:\\ProgramData/
 
+# Runtime license/activation state — machine-specific, auto-generated on first run
+license/
+
 # Release artifacts
 release/
 last_update_check.txt
