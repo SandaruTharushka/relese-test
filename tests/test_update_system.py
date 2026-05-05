@@ -85,7 +85,7 @@ class TestAppVersionEndpoint:
         r = client.get('/api/app/version')
         d = r.get_json()
         assert 'app_name' in d
-        assert 'SuperMart' in d['app_name']
+        assert 'Garage' in d['app_name']
 
 
 # ── /api/updates/check ────────────────────────────────────────────────────────
