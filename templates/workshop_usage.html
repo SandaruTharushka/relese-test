@@ -50,6 +50,9 @@
 {% block content %}
 {{ sidebar('workshop_usage') }}
 <main class="main-content">
+  <div id="workshopPageDebug" class="wu-alert ok" style="display:block;margin-bottom:10px">
+    Workshop Page Loaded
+  </div>
   <div class="page-header" style="margin-bottom:18px">
     <div>
       <h1 class="page-title">🔧 Workshop Stock Use</h1>
@@ -144,7 +147,7 @@
       <div class="wu-card">
         <div class="wu-card-title">⚡ Recent Usage (Today)</div>
         <div id="recentUsageArea">
-          <div class="empty-state-sm">Loading…</div>
+          <div class="empty-state-sm">Loading workshop usage…</div>
         </div>
       </div>
 
@@ -259,6 +262,7 @@ const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || 
 
 // ── init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  console.log('[WorkshopUsage] DOM loaded');
   const today = new Date().toISOString().slice(0, 10);
   document.getElementById('filterFrom').value = today;
   document.getElementById('filterTo').value = today;
@@ -278,16 +282,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function initPage() {
   try {
+    console.log('[WorkshopUsage] Fetching page data');
     const res = await fetch('/api/workshop-usage/page-data', {
       headers: { 'X-CSRFToken': csrfToken }
     });
     const data = await res.json();
+    console.log('[WorkshopUsage] page-data response', data);
     if (data.ok) {
       pageSettings = { ...pageSettings, ...data.settings };
       applySettings();
       renderRecentUsage(data.recent_usage);
+    } else {
+      document.getElementById('recentUsageArea').innerHTML = '<div class="empty-state-sm">No data available</div>';
     }
-  } catch (_) {}
+  } catch (err) {
+    console.error('[WorkshopUsage] initPage failed', err);
+    document.getElementById('recentUsageArea').innerHTML = '<div class="empty-state-sm">No data available</div>';
+  }
   loadHistory();
 }
 
