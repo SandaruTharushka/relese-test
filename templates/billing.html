@@ -671,6 +671,34 @@ let barcodeDebounceTimer = null;
 let _lastScanCode = '';
 let _lastScanTime = 0;
 const SCAN_DEDUPE_MS = 700;
+
+// Dual-scanner prefix routing — settings loaded at page start
+let _dualScannerMode = false;
+let _salesPrefix = 'SALE-';
+let _workshopPrefix = 'WORK-';
+(function _loadDualScannerSettings() {
+  try {
+    const cached = sessionStorage.getItem('dualScannerSettings');
+    if (cached) {
+      const s = JSON.parse(cached);
+      _dualScannerMode   = !!s.dual_scanner_mode;
+      _salesPrefix       = s.sales_prefix    || 'SALE-';
+      _workshopPrefix    = s.workshop_prefix || 'WORK-';
+    }
+    // Re-fetch in background so settings are always fresh
+    fetch('/api/workshop-usage/page-data')
+      .then(r => r.json())
+      .then(d => {
+        if (d.ok && d.settings) {
+          _dualScannerMode = !!d.settings.dual_scanner_mode;
+          _salesPrefix     = d.settings.sales_prefix    || 'SALE-';
+          _workshopPrefix  = d.settings.workshop_prefix || 'WORK-';
+          sessionStorage.setItem('dualScannerSettings', JSON.stringify(d.settings));
+        }
+      })
+      .catch(() => {});
+  } catch (_) {}
+})();
 let selectedCartIdx = -1;
 window.getSelectedCartIndex = () => selectedCartIdx;
 window.getCartLength = () => cart.length;
@@ -1488,6 +1516,22 @@ function recalc() {
 function handleScannerInput(value, source) {
   value = (value || '').trim();
   if (!value || scanLock) return;
+
+  // Dual-scanner prefix routing: WORK- prefix → redirect to workshop page
+  const valueUpper = value.toUpperCase();
+  const workshopPfxUpper = (_workshopPrefix || 'WORK-').toUpperCase();
+  const salesPfxUpper = (_salesPrefix || 'SALE-').toUpperCase();
+
+  if (_dualScannerMode && valueUpper.startsWith(workshopPfxUpper)) {
+    console.log('[DUAL-SCAN] WORK- prefix detected — redirecting to workshop page');
+    toast('Workshop scan detected — opening Workshop Stock Use page', 'info');
+    setTimeout(() => { window.location.href = '/workshop-usage'; }, 800);
+    return;
+  }
+  // Strip SALE- prefix if present (billing page is the right destination)
+  if (_dualScannerMode && valueUpper.startsWith(salesPfxUpper)) {
+    value = value.slice(_salesPrefix.length);
+  }
 
   // Ignore the same code scanned twice within SCAN_DEDUPE_MS (700 ms).
   const now = Date.now();

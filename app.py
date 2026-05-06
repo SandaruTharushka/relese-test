@@ -23,7 +23,8 @@ from models import (db, User, Category, Supplier, Product,
                     VehicleBrand,
                     InstallmentPlan, Installment,
                     Broker, BrokerCommissionPayment,
-                    ExpenseCategory, ExpenseEntry)
+                    ExpenseCategory, ExpenseEntry,
+                    WorkshopStockUsage)
 from customer_routes import register_customer_routes
 from variant_routes import register_variant_routes
 from repair_routes import register_repair_routes
@@ -44,6 +45,7 @@ from purchases_returns_routes import register_purchases_returns_routes
 from sales_routes import register_sales_routes
 from broker_routes import register_broker_routes
 from expense_routes import register_expense_routes, seed_default_expense_categories
+from workshop_usage_routes import register_workshop_usage_routes
 # ── New canonical printing route modules ──────────────────────────────
 from routes.printing_settings_routes import register_printing_settings_routes
 from routes.receipt_print_routes import register_receipt_print_routes
@@ -1710,6 +1712,19 @@ register_repair_routes(app, log_action=log_action, print_domain=_print_domain_sv
 register_installment_routes(app, log_action=log_action)
 register_broker_routes(app, log_action=log_action)
 register_expense_routes(app, log_action=log_action)
+register_workshop_usage_routes(
+    app,
+    db=db,
+    Product=Product,
+    ProductBarcode=ProductBarcode,
+    StoreSettings=StoreSettings,
+    StockMovement=StockMovement,
+    WorkshopStockUsage=WorkshopStockUsage,
+    RepairJob=RepairJob,
+    RetailCustomer=RetailCustomer,
+    User=User,
+    log_action=log_action,
+)
 register_service_analytics_routes(
     app,
     db=db,
@@ -4249,6 +4264,12 @@ def auto_migrate():
         ('repair_jobs', 'broker_cash_price',        "ALTER TABLE repair_jobs ADD COLUMN broker_cash_price NUMERIC(14,2) DEFAULT 0"),
         # v8.1 — wholesale-retail customer sync: link wholesale_customers to canonical retail_customers
         ('wholesale_customers', 'retail_customer_id', "ALTER TABLE wholesale_customers ADD COLUMN retail_customer_id INTEGER NULL"),
+        # v9.0 — dual barcode scanner: extended StockMovement fields
+        ('stock_movements', 'quantity_before',  "ALTER TABLE stock_movements ADD COLUMN quantity_before FLOAT NULL"),
+        ('stock_movements', 'quantity_change',  "ALTER TABLE stock_movements ADD COLUMN quantity_change FLOAT NULL"),
+        ('stock_movements', 'quantity_after',   "ALTER TABLE stock_movements ADD COLUMN quantity_after FLOAT NULL"),
+        ('stock_movements', 'reference_type',   "ALTER TABLE stock_movements ADD COLUMN reference_type VARCHAR(40) NULL"),
+        ('stock_movements', 'reference_id',     "ALTER TABLE stock_movements ADD COLUMN reference_id INT NULL"),
     ]
     money_type_migrations = [
         ('sales', 'total_amount'),
