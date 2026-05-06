@@ -15,9 +15,24 @@
     <div class="page-content fade-in">
       <div class="table-wrap">
         <div class="table-header">
-          <div class="input-icon-wrap" style="width:280px">
-            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-            <input class="form-input" id="prodSearch" placeholder="Search products…" oninput="filterTable()">
+          <div class="flex gap-2 items-center" style="flex-wrap:wrap;gap:8px">
+            <div class="input-icon-wrap" style="width:240px">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+              <input class="form-input" id="prodSearch" placeholder="Search products…" oninput="filterTable()">
+            </div>
+            <div style="position:relative;width:210px">
+              <input class="form-input" id="prodCatSearch" placeholder="Filter by category…" autocomplete="off"
+                     oninput="onProdCatSearchInput(this.value)"
+                     style="padding-right:28px">
+              <button id="prodCatClearBtn" onclick="clearProdCatFilter()"
+                      style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);
+                             background:none;border:none;cursor:pointer;color:var(--muted);font-size:16px;line-height:1"
+                      title="Clear category filter">✕</button>
+              <div id="prodCatDropdown"
+                   style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:400;
+                          background:var(--card);border:1px solid var(--border);border-radius:10px;
+                          box-shadow:var(--shadowL);max-height:220px;overflow-y:auto"></div>
+            </div>
           </div>
           <span class="text-muted text-sm">{{ products|length }} products</span>
         </div>
@@ -29,7 +44,7 @@
             </tr></thead>
             <tbody>
               {% for p in products %}
-              <tr data-name="{{ p.name|lower }}" data-barcode="{{ p.barcode or '' }}" data-product-id="{{ p.id }}">
+              <tr data-name="{{ p.name|lower }}" data-barcode="{{ p.barcode or '' }}" data-product-id="{{ p.id }}" data-category="{{ (p.cat.name or '')|lower if p.cat else '' }}" data-category-id="{{ p.category_id or '' }}">
                 <td class="text-xs text-muted">{{ p.barcode or '—' }}</td>
                 <td style="font-weight:600">
                   {{ p.name }}
@@ -233,14 +248,120 @@
 {% endblock %}
 {% block scripts %}
 <script>
+// ── Barcode normalizer (mirrors services/barcode_normalizer.py) ───────────────
+function normalizeProductBarcode(raw) {
+  let value = (raw || '').trim();
+  if (!value) return '';
+  if (value.startsWith('{')) {
+    try {
+      const p = JSON.parse(value);
+      for (const f of ['barcode', 'code', 'sku', 'product_code', 'value']) {
+        if (p[f]) { value = String(p[f]).trim(); break; }
+      }
+    } catch (_) {}
+  }
+  if (value.includes('=') && !value.startsWith('{')) {
+    try {
+      const qs = value.startsWith('http') ? new URL(value).searchParams
+               : new URLSearchParams(value.replace(/^\?/, ''));
+      for (const f of ['barcode', 'code', 'product_code', 'sku']) {
+        const v = qs.get(f);
+        if (v && v.trim()) { value = v.trim(); break; }
+      }
+    } catch (_) {}
+  }
+  value = value.replace(/^\][A-Za-z]\d/, '');
+  value = value.replace(/^(BARCODE|BAR|PRODUCT|PROD|SKU|CODE|QR)[:_\-]/i, '').trim();
+  return value;
+}
+
+// ── Products table search + category filter ───────────────────────────────────
+let _activeCatId   = '';   // '' means All
+let _activeCatName = '';
+
 function filterTable() {
-  const q = document.getElementById('prodSearch').value.toLowerCase();
+  const q   = document.getElementById('prodSearch').value.toLowerCase();
+  const cid = _activeCatId;
   document.querySelectorAll('#prodTable tbody tr').forEach(r => {
-    const name = r.dataset.name || '';
-    const bc   = r.dataset.barcode || '';
-    r.style.display = (name.includes(q) || bc.includes(q)) ? '' : 'none';
+    const name    = r.dataset.name     || '';
+    const bc      = r.dataset.barcode  || '';
+    const catId   = r.dataset.categoryId || '';
+    const catName = r.dataset.category  || '';
+    const matchesText = !q || name.includes(q) || bc.includes(q) || catName.includes(q);
+    const matchesCat  = !cid || catId === cid;
+    r.style.display = (matchesText && matchesCat) ? '' : 'none';
   });
 }
+
+// ── Category search dropdown for the table filter ────────────────────────────
+let _prodCatSearchTimer = null;
+let _prodCatSearchReq   = 0;
+
+function onProdCatSearchInput(q) {
+  clearTimeout(_prodCatSearchTimer);
+  q = (q || '').trim();
+  if (!q) { hideProdCatDropdown(); _activeCatId = ''; _activeCatName = ''; filterTable(); return; }
+  _prodCatSearchTimer = setTimeout(() => _doProdCatSearch(q), 220);
+}
+
+async function _doProdCatSearch(q) {
+  const dd = document.getElementById('prodCatDropdown');
+  if (!dd) return;
+  const reqId = ++_prodCatSearchReq;
+  dd.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:var(--muted)">Searching…</div>';
+  dd.style.display = 'block';
+  try {
+    const res = await fetch(`/api/categories/search?q=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    if (reqId !== _prodCatSearchReq) return;
+    const cats = data.categories || [];
+    if (!cats.length) {
+      dd.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:var(--muted);text-align:center">No categories found</div>';
+      return;
+    }
+    dd.innerHTML = cats.map(c => `
+      <div style="padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px"
+           onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background=''"
+           onmousedown="selectProdCatFilter(${c.id},${JSON.stringify(c.name)})">
+        ${escHtml(c.name)}
+      </div>`).join('');
+  } catch (_) {
+    if (reqId !== _prodCatSearchReq) return;
+    dd.innerHTML = '<div style="padding:10px 14px;font-size:12px;color:var(--danger)">Search failed</div>';
+  }
+}
+
+function selectProdCatFilter(id, name) {
+  _activeCatId   = String(id);
+  _activeCatName = name;
+  const inp = document.getElementById('prodCatSearch');
+  if (inp) inp.value = name;
+  const clearBtn = document.getElementById('prodCatClearBtn');
+  if (clearBtn) clearBtn.style.display = 'block';
+  hideProdCatDropdown();
+  filterTable();
+}
+
+function clearProdCatFilter() {
+  _activeCatId   = '';
+  _activeCatName = '';
+  const inp = document.getElementById('prodCatSearch');
+  if (inp) inp.value = '';
+  const clearBtn = document.getElementById('prodCatClearBtn');
+  if (clearBtn) clearBtn.style.display = 'none';
+  hideProdCatDropdown();
+  filterTable();
+}
+
+function hideProdCatDropdown() {
+  const dd = document.getElementById('prodCatDropdown');
+  if (dd) dd.style.display = 'none';
+}
+
+document.addEventListener('click', function(e) {
+  const wrap = document.getElementById('prodCatSearch')?.parentElement;
+  if (wrap && !wrap.contains(e.target)) hideProdCatDropdown();
+});
 
 function toggleWeightField() {
   document.getElementById('pricePerKgField').style.display =
@@ -256,13 +377,33 @@ async function validateBarcodeInput(inputId, helpId, excludeProductId = null) {
   const input = document.getElementById(inputId);
   const help = document.getElementById(helpId);
   if (!input || !help) return true;
-  const barcode = (input.value || '').trim();
-  if (!barcode) { help.textContent = ''; return true; }
+  const rawBarcode = (input.value || '').trim();
+  if (!rawBarcode) { help.textContent = ''; return true; }
+  // Normalize QR/URL barcode on frontend so user sees extracted value
+  const barcode = normalizeProductBarcode(rawBarcode);
+  if (barcode !== rawBarcode) {
+    input.value = barcode;
+    if (barcode) {
+      help.textContent = `ℹ Extracted from QR: "${barcode}"`;
+      help.style.color = 'var(--accent)';
+    }
+  }
+  if (!barcode) {
+    help.textContent = '⚠ Barcode is empty after normalization';
+    help.style.color = 'var(--warning)';
+    return false;
+  }
   try {
     const params = new URLSearchParams({ barcode });
     if (excludeProductId) params.set('exclude_product_id', String(excludeProductId));
     const res = await fetch(`/api/barcode/validate?${params.toString()}`);
     const data = await res.json();
+    if (!data.ok) {
+      // Show the real reason — not "already used" when it's a format error
+      help.textContent = `⚠ ${data.error || 'Barcode validation failed'}`;
+      help.style.color = 'var(--warning)';
+      return true; // allow save; backend will also normalize before checking duplicates
+    }
     const available = !!data.available;
     help.textContent = available ? '✅ Barcode is available.' : '❌ Barcode is already used by another product.';
     help.style.color = available ? 'var(--success)' : 'var(--danger)';
@@ -372,8 +513,9 @@ async function addProduct() {
   if (!name)          { toast('Product name is required', 'error'); return; }
   if (isNaN(sell) || sell < 0) { toast('Sell price must be a valid non-negative number', 'error'); return; }
   if (!await validateBarcodeInput('pBarcode', 'pBarcodeHelp')) { toast('Please use a unique barcode', 'error'); return; }
+  // pBarcode.value was already normalized by validateBarcodeInput above
   const data = {
-    name, barcode: document.getElementById('pBarcode').value,
+    name, barcode: document.getElementById('pBarcode').value.trim(),
     category_id: document.getElementById('pCategory').value || null,
     supplier_id:  document.getElementById('pSupplier').value || null,
     buy_price:  parseFloat(document.getElementById('pBuyPrice').value)  || 0,
@@ -425,9 +567,10 @@ async function saveEdit() {
   if (!name)          { toast('Product name is required', 'error'); return; }
   if (isNaN(sell) || sell < 0) { toast('Sell price must be a valid non-negative number', 'error'); return; }
   if (!await validateBarcodeInput('ePBarcode', 'ePBarcodeHelp', pid)) { toast('Please use a unique barcode', 'error'); return; }
+  // ePBarcode.value was already normalized by validateBarcodeInput above
   const data = {
     name:         name,
-    barcode:      document.getElementById('ePBarcode').value,
+    barcode:      document.getElementById('ePBarcode').value.trim(),
     category_id:  document.getElementById('ePCategory').value || null,
     supplier_id:  document.getElementById('ePSupplier').value || null,
     buy_price:    parseFloat(document.getElementById('ePBuyPrice').value)  || 0,

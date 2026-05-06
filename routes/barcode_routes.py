@@ -79,16 +79,27 @@ def register_barcode_routes(
     @app.route('/api/printing/barcode/validate', methods=['GET'])
     @login_required
     def api_printing_barcode_validate():
-        barcode = (request.args.get('barcode') or '').strip()
+        from services.barcode_normalizer import normalize_scanned_code
+        raw = (request.args.get('barcode') or '').strip()
+        barcode = normalize_scanned_code(raw)
         barcode_type = (request.args.get('type') or request.args.get('barcode_type') or 'code128').strip().lower()
         exclude_id = request.args.get('exclude_product_id')
 
         if not barcode:
-            return jsonify({'ok': False, 'error': 'Barcode is required'}), 400
+            return jsonify({'ok': False, 'error': 'Barcode value is empty after normalization', 'available': False}), 400
 
-        ok, msg = validate_barcode(barcode, barcode_type)
-        if not ok:
-            return jsonify({'ok': False, 'error': msg, 'barcode': barcode, 'available': False})
+        # For QR/URL-derived codes we skip strict CODE128 format checks —
+        # any non-empty printable string is a valid barcode identifier.
+        # Only run format validation for explicitly typed barcodes (ean13 / ean8 / code39).
+        if barcode_type in ('ean13', 'ean8', 'code39'):
+            ok, msg = validate_barcode(barcode, barcode_type)
+            if not ok:
+                return jsonify({'ok': False, 'error': msg, 'barcode': raw, 'normalized': barcode, 'available': False})
+        # code128 / normal / qr — accept any non-empty value (length guard only)
+        elif len(barcode) > 128:
+            return jsonify({'ok': False,
+                            'error': 'Barcode value is too long (max 128 characters)',
+                            'barcode': raw, 'normalized': barcode, 'available': False})
 
         try:
             excl = int(exclude_id) if exclude_id else None
@@ -96,7 +107,11 @@ def register_barcode_routes(
             excl = None
 
         available = not barcode_in_use(barcode, exclude_product_id=excl)
-        return jsonify({'ok': True, 'barcode': barcode, 'barcode_type': barcode_type, 'valid': True, 'available': available})
+        return jsonify({
+            'ok': True, 'barcode': barcode, 'raw': raw,
+            'normalized': barcode, 'barcode_type': barcode_type,
+            'valid': True, 'available': available,
+        })
 
     # ── Barcode image preview ─────────────────────────────────────
     @app.route('/api/printing/barcode/image', methods=['GET'])

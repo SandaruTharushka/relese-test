@@ -5,11 +5,13 @@ raw scanner/keyboard barcode before comparing it to DB values:
   - billing scan lookup API  (/api/products/barcode/<barcode>)
   - legacy scan API          (/api/barcode/scan/<barcode>)
   - product barcode search
+  - product add / update routes (strip QR payload before saving)
 """
 from __future__ import annotations
 
 import json
 import re
+from urllib.parse import parse_qs, urlparse
 
 _PREFIX_RE = re.compile(
     r'^(BARCODE|BAR|PRODUCT|PROD|SKU|CODE|QR)[:_\-]',
@@ -65,6 +67,12 @@ def normalize_scanned_code(raw: str | None) -> str:
     if not value:
         return ''
 
+    # Track whether the code was extracted from a structured QR payload.
+    # If so, the extracted value is already clean — skip AIM / prefix stripping
+    # because those patterns are only meaningful for raw hardware scanner output
+    # (e.g. ]C112345 or SKU:12345), not for values stored inside JSON/URL fields.
+    extracted_from_qr = False
+
     # Try to parse JSON QR payloads before doing prefix stripping
     if value.startswith('{'):
         try:
@@ -73,15 +81,37 @@ def normalize_scanned_code(raw: str | None) -> str:
                 candidate = str(payload.get(field) or '').strip()
                 if candidate:
                     value = candidate
+                    extracted_from_qr = True
                     break
         except (json.JSONDecodeError, TypeError, ValueError):
             pass  # not JSON — treat as plain string
 
-    # Strip AIM scanner symbology identifiers (e.g. ]C1, ]E0, ]Q0)
-    value = _AIM_RE.sub('', value)
+    # Try URL / query-string QR payloads, e.g.:
+    #   https://example.com/product?barcode=ABC123
+    #   ?barcode=ABC123
+    #   barcode=ABC123&name=Foo
+    if not extracted_from_qr and '=' in value and not value.startswith('{'):
+        try:
+            if '://' in value:
+                qs = parse_qs(urlparse(value).query)
+            else:
+                qs = parse_qs(value.lstrip('?'))
+            for field in ('barcode', 'code', 'product_code', 'sku'):
+                candidates = qs.get(field, [])
+                candidate = str(candidates[0]).strip() if candidates else ''
+                if candidate:
+                    value = candidate
+                    extracted_from_qr = True
+                    break
+        except Exception:
+            pass
 
-    # Strip known prefix labels (BAR:, BARCODE:, PRODUCT:, SKU:, CODE:, QR:)
-    value = _PREFIX_RE.sub('', value).strip()
+    if not extracted_from_qr:
+        # Strip AIM scanner symbology identifiers (e.g. ]C1, ]E0, ]Q0)
+        value = _AIM_RE.sub('', value)
+
+        # Strip known prefix labels (BAR:, BARCODE:, PRODUCT:, SKU:, CODE:, QR:)
+        value = _PREFIX_RE.sub('', value).strip()
 
     # Detect and recover doubled-character corruption introduced when a scanner
     # types into a focused input whose keydown handler also appends the char.

@@ -210,15 +210,18 @@
 
         </div>
 
-        <!-- Search + categories -->
-        <div class="flex gap-2 items-center">
-          <div class="input-icon-wrap flex-1">
+        <!-- Search + categories — search always on its own row so it stays clickable -->
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div class="input-icon-wrap" style="width:100%">
             <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
             </svg>
             <input class="form-input" id="searchInput" placeholder="Search products… (F2)" title="Focus product search (F2)" oninput="filterProducts()">
           </div>
-          <div class="chip-group" id="catChips" style="flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px">
+          <!-- Category chips in a separate scrollable row — never overlays the search input -->
+          <div class="chip-group" id="catChips"
+               style="flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;
+                      max-width:100%;scrollbar-width:thin">
             <div class="chip active" data-value="">All</div>
             {% for c in categories %}
             <div class="chip" data-value="{{ c.id }}">{{ c.name }}</div>
@@ -3020,31 +3023,131 @@ function anyVisibleModalOpen() {
   return [...document.querySelectorAll('.modal-overlay')].some(m => m.classList.contains('show'));
 }
 
+// ── Canonical billing scan / search handler ───────────────────────────────────
+// Single function called by ALL entry points: scanner Enter, manual Enter,
+// debounce timer.  Normalizes QR/URL codes, does exact barcode lookup first,
+// then falls back to product name / code search so manual text search works.
+async function handleBillingScanOrSearch(rawValue) {
+  const raw = (rawValue || '').trim();
+  if (!raw || scanLock) return;
+
+  const clean = normalizeScannedCode(raw);
+  const input = document.getElementById('barcodeInput');
+  if (input) input.value = '';
+
+  // Dual-scanner prefix routing
+  const valueUpper = raw.toUpperCase();
+  const workshopPfxUpper = (_workshopPrefix || 'WORK-').toUpperCase();
+  const salesPfxUpper    = (_salesPrefix    || 'SALE-').toUpperCase();
+  if (_dualScannerMode && valueUpper.startsWith(workshopPfxUpper)) {
+    toast('Workshop scan detected — opening Workshop Stock Use page', 'info');
+    setTimeout(() => { window.location.href = '/workshop-usage'; }, 800);
+    return;
+  }
+  let lookupValue = raw;
+  if (_dualScannerMode && valueUpper.startsWith(salesPfxUpper)) {
+    lookupValue = raw.slice(_salesPrefix.length);
+  }
+
+  // Dedup: ignore same code within SCAN_DEDUPE_MS
+  const now = Date.now();
+  if (lookupValue === _lastScanCode && (now - _lastScanTime) < SCAN_DEDUPE_MS) {
+    scanBuffer = '';
+    clearTimeout(scanTimer);
+    clearTimeout(barcodeDebounceTimer);
+    return;
+  }
+  _lastScanCode = lookupValue;
+  _lastScanTime = now;
+
+  scanLock = true;
+  scanBuffer = '';
+  clearTimeout(scanTimer);
+  clearTimeout(barcodeDebounceTimer);
+
+  try {
+    // 1. Try exact barcode / QR lookup (server normalizes authoritatively)
+    const res = await fetch(`/api/products/barcode/${encodeURIComponent(lookupValue)}`);
+    if (handleUnauthorizedResponse(res)) return;
+    if (res.redirected || !(res.headers.get('content-type') || '').includes('application/json')) {
+      window.location.href = '/login'; return;
+    }
+    const data = await res.json();
+
+    if (res.ok && data.success && data.product) {
+      const p = data.product;
+      if (!allProducts.find(x => x.id == p.id)) allProducts.push(p);
+      addToCart(p.id);
+      return;
+    }
+
+    // 2. Fallback: search loaded product list by name / code / barcode
+    const needle = (data.normalized_code || clean).toLowerCase();
+    if (needle) {
+      const nameMatches = allProducts.filter(p =>
+        (p.name  || '').toLowerCase().includes(needle) ||
+        (p.barcode || '').toLowerCase() === needle ||
+        (p.code  || '').toLowerCase() === needle
+      );
+      if (nameMatches.length === 1) {
+        addToCart(nameMatches[0].id);
+        return;
+      }
+      if (nameMatches.length > 1) {
+        // Filter the grid to show all matches — keep category selection
+        const searchEl = document.getElementById('searchInput');
+        if (searchEl) { searchEl.value = needle; filterProducts(); }
+        toast(`${nameMatches.length} products match "${needle}" — select one`, 'info');
+        return;
+      }
+    }
+
+    // 3. Not found anywhere
+    openMissingProductModal(lookupValue, data.normalized_code || clean);
+  } catch (_) {
+    toast('Scan error', 'error');
+  } finally {
+    setTimeout(() => { document.getElementById('barcodeInput')?.focus(); }, 30);
+    setTimeout(() => { scanLock = false; }, 250);
+  }
+}
+
+// Keep handleScannerInput as a thin wrapper for backward-compat with
+// any inline handlers that still call it (e.g. weight scanner modal).
+function handleScannerInput(value, _source) {
+  handleBillingScanOrSearch(value);
+}
+
 function initGlobalScannerCapture() {
-  // Direct listeners on barcodeInput handle QR scanners that send the entire
-  // scan value via paste / programmatic input (no per-character keydown events).
+  if (window._billingListenersAttached) return; // guard: attach only once
+  window._billingListenersAttached = true;
+
   const barcodeInput = document.getElementById('barcodeInput');
   if (barcodeInput) {
-    // Sync scanBuffer on any programmatic or paste input, then debounce-fire
-    // for scanners that do not send an Enter key after the scan.
+    // Sync scanBuffer when user types or scanner pastes into the focused input.
+    // Setting .value programmatically does NOT fire this event, so there is no
+    // risk of duplicate accumulation.
     barcodeInput.addEventListener('input', function() {
       scanBuffer = barcodeInput.value;
       clearTimeout(barcodeDebounceTimer);
+      // Only auto-fire debounce for scanner-speed input (≥4 chars).
+      // Slow manual typing should still require Enter to avoid accidental
+      // lookups mid-word.
       const val = barcodeInput.value.trim();
       if (val.length >= 4) {
         barcodeDebounceTimer = setTimeout(() => {
-          handleScannerInput(barcodeInput.value, 'debounce');
+          handleBillingScanOrSearch(barcodeInput.value);
         }, 350);
       }
     });
 
-    // Catch Enter pressed while barcodeInput is focused (scanner with suffix).
+    // Enter key while barcodeInput is focused — both scanner suffix and manual Enter.
     barcodeInput.addEventListener('keydown', function(e) {
       if (e.key === 'Enter') {
         e.preventDefault();
         clearTimeout(barcodeDebounceTimer);
         const val = barcodeInput.value.trim() || scanBuffer.trim();
-        if (val) handleScannerInput(val, 'enter-direct');
+        if (val) handleBillingScanOrSearch(val);
       }
     });
   }
@@ -3054,13 +3157,15 @@ function initGlobalScannerCapture() {
     if (modalOpen) return;
 
     const active = document.activeElement;
-    const isEditable = active && (active.tagName === 'TEXTAREA' || (active.tagName === 'INPUT' && active.id !== 'barcodeInput'));
+    const isEditable = active && (
+      active.tagName === 'TEXTAREA' ||
+      (active.tagName === 'INPUT' && active.id !== 'barcodeInput')
+    );
     if (isEditable) return;
 
     const barcodeInputEl = document.getElementById('barcodeInput');
-    // When barcodeInput is focused the browser inserts characters naturally and
-    // the 'input' listener keeps scanBuffer in sync.  Do NOT also append here —
-    // that would write each character twice (browser insert + manual append).
+    // When barcodeInput is focused the browser inserts chars naturally; the
+    // 'input' listener keeps scanBuffer in sync — do NOT also append here.
     const barcodeInputFocused = (active === barcodeInputEl);
 
     if (e.key === 'Enter') {
@@ -3070,12 +3175,10 @@ function initGlobalScannerCapture() {
         clearTimeout(scanTimer);
         return;
       }
-      // Prefer scanBuffer; fall back to whatever is visible in the input field
-      // (covers paste/programmatic input that bypasses per-character keydown).
       const val = scanBuffer.trim() || (barcodeInputEl?.value || '').trim();
       if (val) {
         clearTimeout(barcodeDebounceTimer);
-        handleScannerInput(val, 'enter-global');
+        handleBillingScanOrSearch(val);
       }
       scanBuffer = '';
       clearTimeout(scanTimer);
@@ -3084,15 +3187,18 @@ function initGlobalScannerCapture() {
 
     if (e.key.length !== 1 || e.ctrlKey || e.altKey || e.metaKey) return;
 
-    // Only accumulate manually when barcodeInput is NOT focused.
-    // When it IS focused the 'input' event keeps scanBuffer current.
+    // Only accumulate in buffer when barcodeInput is NOT focused.
+    // When it IS focused, the browser inserts chars naturally and 'input'
+    // syncs scanBuffer — adding here too would double every character.
     if (barcodeInputFocused) return;
 
     scanBuffer += e.key;
     clearTimeout(scanTimer);
     scanTimer = setTimeout(() => { scanBuffer = ''; }, SCAN_TIMEOUT_MS);
-
-    if (barcodeInputEl) barcodeInputEl.value = scanBuffer;
+    // NOTE: do NOT set barcodeInputEl.value = scanBuffer here.
+    // That programmatic set stays in the input when barcodeInput later gets
+    // focused; the user's next keystrokes then append to the leftover value,
+    // causing every character to appear doubled.
   });
 }
 

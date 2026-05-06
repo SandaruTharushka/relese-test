@@ -2035,8 +2035,9 @@ def api_product_barcode(barcode):
 @app.route('/api/products/create', methods=['POST'])
 @login_required
 def api_create_product_quick():
+    from services.barcode_normalizer import normalize_scanned_code
     d = request.get_json(silent=True) or {}
-    barcode = (d.get('barcode') or '').strip()
+    barcode = normalize_scanned_code(d.get('barcode') or '') or ''
     name = (d.get('name') or '').strip()
     category_name = ' '.join((d.get('category') or d.get('category_name') or '').strip().split())
     incoming_category_id = d.get('category_id')
@@ -2116,6 +2117,7 @@ def api_categories_search():
 @app.route('/api/products', methods=['POST'])
 @login_required
 def api_add_product():
+    from services.barcode_normalizer import normalize_scanned_code
     require_roles('Admin', 'Operator', 'Manager')
     d = request.get_json(silent=True)
     if not d:
@@ -2142,8 +2144,8 @@ def api_add_product():
     except (TypeError, ValueError) as e:
         return jsonify({'error': f'Invalid numeric value: {str(e)}'}), 400
 
-    # ── Duplicate barcode check ────────────────────────────────────────────
-    barcode = (d.get('barcode') or '').strip() or None
+    # ── Normalize and deduplicate barcode ─────────────────────────────────
+    barcode = normalize_scanned_code(d.get('barcode') or '') or None
     sku = (d.get('sku') or '').strip() or None
     if barcode and barcode_in_use(barcode):
         return jsonify({'error': f'Barcode "{barcode}" is already used by another product'}), 409
@@ -2248,6 +2250,7 @@ def api_product_details(pid):
 @app.route('/api/products/<int:pid>', methods=['PUT'])
 @login_required
 def api_update_product(pid):
+    from services.barcode_normalizer import normalize_scanned_code
     require_roles('Admin', 'Operator', 'Manager')
     p = db.session.get(Product, pid)
     if not p:
@@ -2261,8 +2264,8 @@ def api_update_product(pid):
     if not name:
         return jsonify({'error': 'Product name is required'}), 400
 
-    # ── Duplicate barcode check (exclude this product) ─────────────────────
-    barcode = (d.get('barcode') or '').strip() or None
+    # ── Normalize and deduplicate barcode (exclude this product) ──────────
+    barcode = normalize_scanned_code(d.get('barcode') or '') or None
     sku = (d.get('sku') or '').strip() or None
     if barcode and barcode_in_use(barcode, exclude_product_id=pid):
         return jsonify({'error': f'Barcode "{barcode}" is already used by another product'}), 409
