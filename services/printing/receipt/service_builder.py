@@ -274,11 +274,11 @@ class ServiceReceiptBuilder:
         if show('svc_rcpt_show_parts_total') and parts_total:
             eng.money_row('Parts Total', f'{currency} {parts_total:,.2f}')
         if show('svc_rcpt_show_grand_total'):
-            eng.two_col_bold('Total', f'{currency} {grand_total:,.2f}')
+            eng.two_col_bold('TOTAL', f'{currency} {grand_total:,.2f}')
         if show('svc_rcpt_show_paid'):
-            eng.money_row('Paid', f'{currency} {paid_total:,.2f}')
+            eng.money_row('PAID', f'{currency} {paid_total:,.2f}')
         if show('svc_rcpt_show_balance'):
-            eng.money_row('Balance', f'{currency} {balance_total:,.2f}')
+            eng.money_row('BALANCE', f'{currency} {balance_total:,.2f}')
 
         eng.blank()
 

@@ -459,6 +459,30 @@ start_auto_backup_scheduler(app)
 _warn_placeholder_configs(app)
 run_startup_checks(app)
 
+
+class _ControlCharStripMiddleware:
+    """Strip ASCII control characters from URL paths before Werkzeug routing.
+
+    Werkzeug 3.x rejects paths containing control characters (e.g. bare \\n
+    decoded from %0A) before the route handler runs.  This middleware cleans
+    the PATH_INFO so that barcode scanner payloads with trailing newlines
+    still reach the normalizer.
+    """
+
+    def __init__(self, wsgi_app) -> None:
+        self._app = wsgi_app
+
+    def __call__(self, environ, start_response):
+        path = environ.get('PATH_INFO', '')
+        clean = ''.join(c for c in path if ord(c) >= 0x20 or c == '\t')
+        if clean != path:
+            environ = environ.copy()
+            environ['PATH_INFO'] = clean
+        return self._app(environ, start_response)
+
+
+app.wsgi_app = _ControlCharStripMiddleware(app.wsgi_app)
+
 csrf = CSRFProtect()
 csrf.init_app(app)
 
@@ -2086,7 +2110,8 @@ def api_categories_search():
     query = ' '.join((request.args.get('q') or '').strip().split())
     if not query:
         return jsonify({'ok': True, 'categories': []})
-    term = f"%{query.replace('%', '\\%').replace('_', '\\_')}%"
+    escaped = query.replace('%', r'\%').replace('_', r'\_')
+    term = f"%{escaped}%"
     cats = (Category.query
             .filter(Category.name.ilike(term, escape='\\'))
             .order_by(Category.name.asc())

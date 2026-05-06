@@ -366,6 +366,38 @@ def register_repair_routes(app, log_action=None, print_domain=None):
     def api_repair_job_card_direct_print_blocked():
         return jsonify({'ok': False, 'error': 'Use web print for job card.'}), 400
 
+    @app.route('/api/printer/print/job-receipt', methods=['POST'])
+    @login_required
+    def api_printer_print_job_receipt_compat():
+        """Backward-compat alias: dispatches service/job receipt via print_domain."""
+        data = request.get_json(silent=True) or {}
+        raw_job_id = data.get('job_id') or data.get('jid')
+        if not raw_job_id:
+            return jsonify({'ok': False, 'code': 'MISSING_JOB_ID', 'msg': 'job_id is required'}), 400
+        try:
+            jid = int(raw_job_id)
+        except (TypeError, ValueError):
+            return jsonify({'ok': False, 'code': 'INVALID_JOB_ID', 'msg': 'job_id must be an integer'}), 400
+        job = RepairJob.query.filter_by(id=jid).first()
+        if not job:
+            return jsonify({'ok': False, 'code': 'REPAIR_JOB_NOT_FOUND', 'msg': 'Repair job not found'}), 404
+        try:
+            from services.printing.receipt.receipt_engine import ReceiptEngine
+            engine = ReceiptEngine(StoreSettings)
+            result = engine.build_service_receipt(job_id=jid, actor_user_id=getattr(current_user, 'id', None))
+            copies = max(1, min(int(data.get('copies') or 1), 5))
+            job_number = job.job_number or f'JOB-{jid}'
+            ok, payload, status_code = print_domain.print_receipt(
+                receipt_text=result.receipt_text,
+                title=f'Service Job {job_number}',
+                copies=copies,
+                actor_id=getattr(current_user, 'id', None),
+            )
+            return jsonify({'ok': ok, 'job_id': jid, 'job_number': job_number, **payload}), status_code
+        except Exception:
+            app.logger.exception('[RECEIPT] job_receipt_compat_failure jid=%s', jid)
+            return jsonify({'ok': False, 'code': 'SERVICE_RECEIPT_ERROR', 'msg': 'Failed to print service receipt'}), 500
+
     # ── API ────────────────────────────────────────────────────────────────────
 
     @app.route('/api/repairs', methods=['GET'])

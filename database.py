@@ -36,7 +36,10 @@ def _validate_seed_database(bundled_db: Path) -> bool:
 
     Rejects the seed when any checked table has more rows than _SEED_MAX_ROWS,
     which would indicate a customer-populated DB was accidentally packaged.
+    Returns False for a non-existent or unreadable file.
     """
+    if not Path(bundled_db).exists():
+        return False
     try:
         conn = sqlite3.connect(str(bundled_db), timeout=2)
         try:

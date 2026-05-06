@@ -232,7 +232,7 @@ class SalesReceiptBuilder:
         enable_barcode = show('rcpt_enable_barcode', True)
         show_barcode_text = show('rcpt_show_barcode_text', True)
         invoice_no = getattr(sale, 'invoice_number', '') or ''
-        if enable_barcode and show_barcode_text and invoice_no:
+        if enable_barcode and show_barcode_text and invoice_no and show('rcpt_show_invoice'):
             eng.barcode_line(invoice_no)
 
         eng.blank(2)
