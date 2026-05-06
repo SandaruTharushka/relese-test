@@ -618,14 +618,84 @@ class Payment(db.Model):
 
 class StockMovement(db.Model):
     __tablename__ = 'stock_movements'
-    id            = db.Column(db.Integer, primary_key=True)
-    product_id    = db.Column(db.Integer, db.ForeignKey('products.id'))
-    movement_type = db.Column(db.String(20))
-    quantity      = db.Column(db.Float)
-    date          = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
-    reference     = db.Column(db.String(80))
-    note          = db.Column(db.String(200))
-    product       = db.relationship('Product')
+    id             = db.Column(db.Integer, primary_key=True)
+    product_id     = db.Column(db.Integer, db.ForeignKey('products.id'))
+    movement_type  = db.Column(db.String(30))
+    quantity       = db.Column(db.Float)
+    date           = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    reference      = db.Column(db.String(80))
+    note           = db.Column(db.String(200))
+    # Extended fields for workshop usage tracking (nullable for backward compat)
+    quantity_before  = db.Column(db.Float, nullable=True)
+    quantity_change  = db.Column(db.Float, nullable=True)
+    quantity_after   = db.Column(db.Float, nullable=True)
+    reference_type   = db.Column(db.String(40), nullable=True)
+    reference_id     = db.Column(db.Integer, nullable=True)
+    product          = db.relationship('Product')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'product_id': self.product_id,
+            'movement_type': self.movement_type,
+            'quantity': self.quantity,
+            'date': self.date.strftime('%Y-%m-%d %H:%M') if self.date else '',
+            'reference': self.reference or '',
+            'note': self.note or '',
+            'quantity_before': self.quantity_before,
+            'quantity_change': self.quantity_change,
+            'quantity_after': self.quantity_after,
+            'reference_type': self.reference_type or '',
+            'reference_id': self.reference_id,
+        }
+
+
+# ── WORKSHOP STOCK USAGE ──────────────────────────────────────────────────────
+
+class WorkshopStockUsage(db.Model):
+    __tablename__ = 'workshop_stock_usage'
+    __table_args__ = (
+        Index('ix_workshop_stock_usage_created_at', 'created_at'),
+        Index('ix_workshop_stock_usage_product_id', 'product_id'),
+    )
+    id                    = db.Column(db.Integer, primary_key=True)
+    product_id            = db.Column(db.Integer, db.ForeignKey('products.id'), nullable=False)
+    barcode               = db.Column(db.String(50))
+    product_name_snapshot = db.Column(db.String(150), nullable=False)
+    quantity              = db.Column(db.Float, nullable=False, default=1)
+    unit_cost             = db.Column(MONEY, default=0)
+    selling_price         = db.Column(MONEY, default=0)
+    total_cost            = db.Column(MONEY, default=0)
+    job_id                = db.Column(db.Integer, db.ForeignKey('repair_jobs.id'), nullable=True)
+    vehicle_id            = db.Column(db.Integer, nullable=True)
+    customer_id           = db.Column(db.Integer, db.ForeignKey('retail_customers.id'), nullable=True)
+    mechanic_name         = db.Column(db.String(100), nullable=True)
+    reason                = db.Column(db.String(200), nullable=True)
+    created_at            = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    created_by            = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    product               = db.relationship('Product', foreign_keys=[product_id])
+    job                   = db.relationship('RepairJob', foreign_keys=[job_id])
+    creator               = db.relationship('User', foreign_keys=[created_by])
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'product_id': self.product_id,
+            'barcode': self.barcode or '',
+            'product_name_snapshot': self.product_name_snapshot,
+            'quantity': self.quantity,
+            'unit_cost': money_to_float(self.unit_cost),
+            'selling_price': money_to_float(self.selling_price),
+            'total_cost': money_to_float(self.total_cost),
+            'job_id': self.job_id,
+            'job_number': self.job.job_number if self.job else None,
+            'vehicle_id': self.vehicle_id,
+            'customer_id': self.customer_id,
+            'mechanic_name': self.mechanic_name or '',
+            'reason': self.reason or '',
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+            'created_by': self.creator.full_name if self.creator else '',
+        }
 
 
 class UserLog(db.Model):

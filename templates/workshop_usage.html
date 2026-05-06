@@ -1,0 +1,718 @@
+{% extends "base.html" %}
+{% from "sidebar.html" import sidebar with context %}
+{% block title %} — Workshop Stock Use{% endblock %}
+{% block extra_head %}
+<style>
+.wu-layout{display:grid;grid-template-columns:420px 1fr;gap:20px;min-height:calc(100vh - 120px)}
+@media(max-width:1100px){.wu-layout{grid-template-columns:1fr}}
+.wu-scanner-panel{background:var(--card);border-radius:14px;padding:22px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:14px}
+.wu-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase}
+.wu-badge.workshop{background:rgba(245,158,11,.15);color:#d97706;border:1px solid rgba(245,158,11,.35)}
+.wu-badge.instant{background:rgba(16,185,129,.15);color:#059669;border:1px solid rgba(16,185,129,.3)}
+.wu-badge.confirm{background:rgba(99,102,241,.15);color:#4f46e5;border:1px solid rgba(99,102,241,.3)}
+.scan-input-wrap{position:relative}
+.scan-input-wrap input{width:100%;padding:16px 18px;font-size:18px;border:2px solid var(--border);border-radius:10px;background:var(--input);color:var(--text);transition:.2s}
+.scan-input-wrap input:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px rgba(79,108,246,.15)}
+.scan-input-wrap .scan-icon{position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:22px;opacity:.5}
+.scan-flash-ok{border-color:#10b981 !important;box-shadow:0 0 0 3px rgba(16,185,129,.2) !important;background:rgba(16,185,129,.05) !important}
+.scan-flash-err{border-color:#ef4444 !important;box-shadow:0 0 0 3px rgba(239,68,68,.2) !important;background:rgba(239,68,68,.05) !important}
+.scan-flash-warn{border-color:#f59e0b !important;box-shadow:0 0 0 3px rgba(245,158,11,.2) !important;background:rgba(245,158,11,.05) !important}
+.wu-form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.wu-form-group{display:flex;flex-direction:column;gap:5px}
+.wu-form-group label{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.wu-form-group input,.wu-form-group select,.wu-form-group textarea{padding:9px 12px;border:1px solid var(--border);border-radius:8px;background:var(--input);color:var(--text);font-size:14px}
+.wu-form-group input:focus,.wu-form-group select:focus{border-color:var(--accent);outline:none}
+.wu-pending-table{width:100%;border-collapse:collapse;font-size:13px}
+.wu-pending-table th{padding:8px 10px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);border-bottom:1px solid var(--border)}
+.wu-pending-table td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+.wu-pending-table tr:last-child td{border-bottom:none}
+.wu-alert{padding:10px 14px;border-radius:8px;font-size:13px;font-weight:600;display:none}
+.wu-alert.ok{background:rgba(16,185,129,.12);color:#065f46;border:1px solid rgba(16,185,129,.3)}
+.wu-alert.err{background:rgba(239,68,68,.1);color:#b91c1c;border:1px solid rgba(239,68,68,.3)}
+.wu-alert.warn{background:rgba(245,158,11,.1);color:#92400e;border:1px solid rgba(245,158,11,.3)}
+.wu-right-panel{display:flex;flex-direction:column;gap:20px}
+.wu-card{background:var(--card);border-radius:14px;padding:20px;box-shadow:var(--shadow)}
+.wu-card-title{font-size:14px;font-weight:700;color:var(--text);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.history-table{width:100%;border-collapse:collapse;font-size:13px}
+.history-table th{padding:8px 10px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);border-bottom:2px solid var(--border)}
+.history-table td{padding:8px 10px;border-bottom:1px solid var(--border)}
+.history-table tr:hover td{background:var(--hover)}
+.qty-badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700;background:rgba(79,108,246,.12);color:var(--accent)}
+.cost-badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700;background:rgba(16,185,129,.12);color:#059669}
+.btn-icon{background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:6px;font-size:15px;color:var(--muted);transition:.15s}
+.btn-icon:hover{background:var(--hover);color:var(--danger)}
+.empty-state-sm{text-align:center;padding:28px;color:var(--muted);font-size:13px}
+.scan-sound-dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-left:6px}
+.scan-sound-dot.on{background:#10b981}
+.scan-sound-dot.off{background:#94a3b8}
+</style>
+{% endblock %}
+{% block content %}
+{{ sidebar('workshop_usage') }}
+<main class="main-content">
+  <div class="page-header" style="margin-bottom:18px">
+    <div>
+      <h1 class="page-title">🔧 Workshop Stock Use</h1>
+      <p class="page-subtitle" style="color:var(--muted);font-size:13px;margin-top:2px">Scan parts taken from shop inventory for workshop/service jobs</p>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <span id="modeBadge" class="wu-badge workshop">WORKSHOP SCANNER</span>
+      <span id="deductModeBadge" class="wu-badge instant">INSTANT DEDUCT</span>
+      <button onclick="openSettings()" class="btn btn-sm" style="padding:7px 14px;font-size:13px">⚙️ Settings</button>
+    </div>
+  </div>
+
+  <div class="wu-layout">
+    <!-- LEFT: Scanner panel -->
+    <div class="wu-scanner-panel">
+      <div>
+        <label style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:6px">
+          Scan Barcode <span style="color:var(--danger)">*</span>
+          <span class="scan-sound-dot" id="soundDot" title="Scan sound"></span>
+        </label>
+        <div class="scan-input-wrap">
+          <input id="barcodeInput" type="text" autocomplete="off" autocorrect="off"
+                 placeholder="Scan or type barcode and press Enter…"
+                 onkeydown="onBarcodeKeydown(event)">
+          <span class="scan-icon">📷</span>
+        </div>
+        <div id="scanAlert" class="wu-alert" style="margin-top:8px"></div>
+      </div>
+
+      <div class="wu-form-row">
+        <div class="wu-form-group">
+          <label>Quantity</label>
+          <input id="qtyInput" type="number" value="1" min="1" step="0.5" style="font-size:16px;font-weight:700">
+        </div>
+        <div class="wu-form-group">
+          <label>Mechanic</label>
+          <input id="mechanicInput" list="mechanicList" placeholder="Select or type…">
+          <datalist id="mechanicList">
+            {% for name in mechanic_names %}
+            <option value="{{ name }}">
+            {% endfor %}
+          </datalist>
+        </div>
+      </div>
+
+      <div class="wu-form-group">
+        <label>Service Job (optional)</label>
+        <select id="jobSelect">
+          <option value="">— No job linked —</option>
+          {% for job in open_jobs %}
+          <option value="{{ job.id }}">[{{ job.job_number }}] {{ job.customer_name or 'Unknown' }} — {{ job.vehicle_make or '' }} {{ job.vehicle_model or '' }} {{ job.vehicle_reg_no or '' }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="wu-form-group">
+        <label>Reason / Notes</label>
+        <input id="reasonInput" type="text" placeholder="e.g. Engine overhaul, brake repair…">
+      </div>
+
+      <!-- Pending items table (confirm mode) -->
+      <div id="pendingSection" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="font-size:13px;font-weight:700;color:var(--text)">📋 Pending Items (<span id="pendingCount">0</span>)</div>
+          <button onclick="clearPending()" class="btn btn-sm" style="font-size:12px;background:rgba(239,68,68,.1);color:var(--danger);border:1px solid rgba(239,68,68,.2)">Clear All</button>
+        </div>
+        <div style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px">
+          <table class="wu-pending-table">
+            <thead><tr><th>Product</th><th>Qty</th><th>Cost</th><th></th></tr></thead>
+            <tbody id="pendingBody"></tbody>
+          </table>
+        </div>
+        <div style="margin-top:6px;text-align:right;font-size:13px;color:var(--muted)">
+          Total: <strong id="pendingTotal" style="color:var(--text)">Rs. 0.00</strong>
+        </div>
+      </div>
+
+      <!-- Buttons -->
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button id="confirmBtn" onclick="confirmPending()" class="btn btn-primary" style="display:none;width:100%;padding:12px;font-size:15px;font-weight:700">
+          ✅ Confirm Workshop Usage
+        </button>
+        <button onclick="resetForm()" class="btn btn-sm" style="width:100%;background:rgba(100,116,139,.1);color:var(--muted);border:1px solid var(--border)">
+          🔄 Reset Form
+        </button>
+      </div>
+    </div>
+
+    <!-- RIGHT: Recent usage & history -->
+    <div class="wu-right-panel">
+      <!-- Recent usage summary -->
+      <div class="wu-card">
+        <div class="wu-card-title">⚡ Recent Usage (Today)</div>
+        <div id="recentUsageArea">
+          <div class="empty-state-sm">Loading…</div>
+        </div>
+      </div>
+
+      <!-- History with filters -->
+      <div class="wu-card">
+        <div class="wu-card-title">📜 Usage History</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:14px">
+          <div class="wu-form-group">
+            <label>From</label>
+            <input type="date" id="filterFrom">
+          </div>
+          <div class="wu-form-group">
+            <label>To</label>
+            <input type="date" id="filterTo">
+          </div>
+          <div class="wu-form-group">
+            <label>Mechanic</label>
+            <input type="text" id="filterMechanic" placeholder="Filter…">
+          </div>
+          <div class="wu-form-group">
+            <label>Barcode</label>
+            <input type="text" id="filterBarcode" placeholder="Filter…">
+          </div>
+          <div class="wu-form-group" style="justify-content:flex-end">
+            <label>&nbsp;</label>
+            <button onclick="loadHistory()" class="btn btn-primary btn-sm" style="padding:9px">Search</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>Date/Time</th>
+                <th>Product</th>
+                <th>Barcode</th>
+                <th>Qty</th>
+                <th>Cost</th>
+                <th>Mechanic</th>
+                <th>Job</th>
+                <th>Reason</th>
+              </tr>
+            </thead>
+            <tbody id="historyBody">
+              <tr><td colspan="8" class="empty-state-sm">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="historyPager" style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-size:13px;color:var(--muted)"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- Settings Modal -->
+<div id="settingsModal" style="display:none;position:fixed;inset:0;z-index:9000;background:var(--overlay-dark);align-items:center;justify-content:center">
+  <div style="background:var(--card);border-radius:16px;padding:28px;width:500px;max-width:95vw;box-shadow:var(--shadowL)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <h2 style="font-size:18px;font-weight:700;margin:0">⚙️ Barcode Scanner Settings</h2>
+      <button onclick="closeSettings()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted)">✕</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <label style="display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer">
+        <span style="font-size:14px;font-weight:600">Enable Dual Scanner Mode (prefix routing)</span>
+        <input type="checkbox" id="settingDualMode" style="width:18px;height:18px">
+      </label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px" id="prefixFields">
+        <div class="wu-form-group">
+          <label>Sales Scanner Prefix</label>
+          <input type="text" id="settingSalesPrefix" placeholder="SALE-" style="font-family:monospace">
+        </div>
+        <div class="wu-form-group">
+          <label>Workshop Scanner Prefix</label>
+          <input type="text" id="settingWorkshopPrefix" placeholder="WORK-" style="font-family:monospace">
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer">
+        <span style="font-size:14px;font-weight:600">Deduct Immediately on Scan</span>
+        <input type="checkbox" id="settingDeductImmediately" style="width:18px;height:18px">
+      </label>
+      <label style="display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer">
+        <span style="font-size:14px;font-weight:600">Play Scan Sound</span>
+        <input type="checkbox" id="settingPlaySound" style="width:18px;height:18px">
+      </label>
+      <div class="wu-form-group">
+        <label>Prevent Duplicate Scan (ms)</label>
+        <input type="number" id="settingDedupMs" value="300" min="0" max="5000">
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:22px;justify-content:flex-end">
+      <button onclick="closeSettings()" class="btn btn-sm" style="background:var(--hover)">Cancel</button>
+      <button onclick="saveSettings()" class="btn btn-primary">Save Settings</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── state ───────────────────────────────────────────────────────────────────
+let pageSettings = {
+  deduct_immediately: true,
+  play_scan_sound: true,
+  duplicate_scan_ms: 300,
+  dual_scanner_mode: false,
+  sales_prefix: 'SALE-',
+  workshop_prefix: 'WORK-',
+};
+let pendingItems = [];  // [{barcode, product_id, product_name, quantity, unit_cost, total_cost}]
+let _lastScanCode = '';
+let _lastScanTime  = 0;
+let scanLock = false;
+let historyPage = 1;
+const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+// ── init ─────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const today = new Date().toISOString().slice(0, 10);
+  document.getElementById('filterFrom').value = today;
+  document.getElementById('filterTo').value = today;
+  initPage();
+  // autofocus on scanner input
+  document.getElementById('barcodeInput').focus();
+
+  // keep scanner input focused
+  document.addEventListener('click', e => {
+    const el = e.target;
+    const focusable = ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'];
+    if (!focusable.includes(el.tagName)) {
+      setTimeout(() => document.getElementById('barcodeInput').focus(), 50);
+    }
+  });
+});
+
+async function initPage() {
+  try {
+    const res = await fetch('/api/workshop-usage/page-data', {
+      headers: { 'X-CSRFToken': csrfToken }
+    });
+    const data = await res.json();
+    if (data.ok) {
+      pageSettings = { ...pageSettings, ...data.settings };
+      applySettings();
+      renderRecentUsage(data.recent_usage);
+    }
+  } catch (_) {}
+  loadHistory();
+}
+
+function applySettings() {
+  const badge = document.getElementById('deductModeBadge');
+  const pendingSection = document.getElementById('pendingSection');
+  const confirmBtn = document.getElementById('confirmBtn');
+  if (pageSettings.deduct_immediately) {
+    badge.textContent = 'INSTANT DEDUCT';
+    badge.className = 'wu-badge instant';
+    pendingSection.style.display = 'none';
+    confirmBtn.style.display = 'none';
+  } else {
+    badge.textContent = 'CONFIRM MODE';
+    badge.className = 'wu-badge confirm';
+    pendingSection.style.display = '';
+    confirmBtn.style.display = '';
+  }
+  const soundDot = document.getElementById('soundDot');
+  soundDot.className = 'scan-sound-dot ' + (pageSettings.play_scan_sound ? 'on' : 'off');
+  soundDot.title = 'Scan sound: ' + (pageSettings.play_scan_sound ? 'ON' : 'OFF');
+}
+
+// ── scanner input handling ────────────────────────────────────────────────
+function onBarcodeKeydown(e) {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const value = (e.target.value || '').trim();
+  e.target.value = '';
+  handleScan(value);
+}
+
+async function handleScan(raw) {
+  if (!raw || scanLock) return;
+
+  const now = Date.now();
+  if (raw === _lastScanCode && (now - _lastScanTime) < pageSettings.duplicate_scan_ms) {
+    flashInput('warn');
+    showAlert('warn', `Duplicate scan ignored (within ${pageSettings.duplicate_scan_ms}ms)`);
+    return;
+  }
+  _lastScanCode = raw;
+  _lastScanTime = now;
+
+  // Prefix routing
+  const rawUpper = raw.toUpperCase();
+  const workshopPfx = (pageSettings.workshop_prefix || 'WORK-').toUpperCase();
+  const salesPfx = (pageSettings.sales_prefix || 'SALE-').toUpperCase();
+
+  if (pageSettings.dual_scanner_mode) {
+    if (rawUpper.startsWith(salesPfx)) {
+      flashInput('warn');
+      showAlert('warn', `SALE- prefix detected. This scan belongs to the billing page.`);
+      return;
+    }
+  }
+
+  // Strip WORK- prefix if present
+  let barcode = raw;
+  if (rawUpper.startsWith(workshopPfx)) {
+    barcode = raw.slice(workshopPfx.length);
+  }
+
+  scanLock = true;
+  try {
+    const qty = parseFloat(document.getElementById('qtyInput').value) || 1;
+
+    if (pageSettings.deduct_immediately) {
+      await scanAndDeduct(barcode, qty);
+    } else {
+      await scanForPending(barcode, qty);
+    }
+  } finally {
+    setTimeout(() => {
+      scanLock = false;
+      document.getElementById('barcodeInput').focus();
+    }, 200);
+  }
+}
+
+async function scanAndDeduct(barcode, qty) {
+  const payload = {
+    barcode,
+    quantity: qty,
+    job_id: document.getElementById('jobSelect').value || null,
+    mechanic_name: document.getElementById('mechanicInput').value || null,
+    reason: document.getElementById('reasonInput').value || null,
+  };
+  try {
+    const res = await fetch('/api/workshop-usage/scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      flashInput('ok');
+      playSound('ok');
+      showAlert('ok', `✅ ${data.message}`);
+      refreshRecentAndHistory();
+    } else {
+      flashInput('err');
+      playSound('err');
+      showAlert('err', `❌ ${data.error}`);
+    }
+  } catch (err) {
+    flashInput('err');
+    showAlert('err', '❌ Network error. Check connection.');
+  }
+}
+
+async function scanForPending(barcode, qty) {
+  // Validate barcode exists first via scan endpoint (instant=false returns product only)
+  const payload = { barcode, quantity: qty };
+  try {
+    const res = await fetch('/api/workshop-usage/scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (data.ok && !data.deducted) {
+      // Check for duplicate in pending
+      const dup = pendingItems.find(i => i.barcode === barcode);
+      if (dup) {
+        dup.quantity += qty;
+        dup.total_cost = dup.unit_cost * dup.quantity;
+        flashInput('warn');
+        playSound('warn');
+        showAlert('warn', `⚠️ '${dup.product_name}' quantity updated to ${dup.quantity}`);
+      } else {
+        const p = data.product;
+        pendingItems.push({
+          barcode,
+          product_id: p.id,
+          product_name: p.name,
+          quantity: qty,
+          unit_cost: p.buy_price || 0,
+          total_cost: (p.buy_price || 0) * qty,
+        });
+        flashInput('ok');
+        playSound('ok');
+        showAlert('ok', `✅ '${p.name}' added to pending list`);
+      }
+      renderPending();
+    } else if (!data.ok) {
+      flashInput('err');
+      playSound('err');
+      showAlert('err', `❌ ${data.error}`);
+    }
+  } catch (_) {
+    flashInput('err');
+    showAlert('err', '❌ Network error');
+  }
+}
+
+function renderPending() {
+  const tbody = document.getElementById('pendingBody');
+  document.getElementById('pendingCount').textContent = pendingItems.length;
+  if (pendingItems.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:16px">No items yet</td></tr>';
+    document.getElementById('pendingTotal').textContent = 'Rs. 0.00';
+    return;
+  }
+  let total = 0;
+  tbody.innerHTML = pendingItems.map((item, idx) => {
+    total += item.total_cost;
+    return `<tr>
+      <td style="font-weight:600">${esc(item.product_name)}</td>
+      <td><span class="qty-badge">${item.quantity}</span></td>
+      <td><span class="cost-badge">Rs. ${fmt(item.total_cost)}</span></td>
+      <td><button class="btn-icon" onclick="removePending(${idx})" title="Remove">✕</button></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('pendingTotal').textContent = `Rs. ${fmt(total)}`;
+}
+
+function removePending(idx) {
+  pendingItems.splice(idx, 1);
+  renderPending();
+}
+
+function clearPending() {
+  pendingItems = [];
+  renderPending();
+}
+
+async function confirmPending() {
+  if (pendingItems.length === 0) {
+    showAlert('warn', 'No pending items to confirm');
+    return;
+  }
+  const btn = document.getElementById('confirmBtn');
+  btn.disabled = true;
+  btn.textContent = 'Confirming…';
+  try {
+    const payload = {
+      items: pendingItems.map(i => ({ barcode: i.barcode, quantity: i.quantity })),
+      job_id: document.getElementById('jobSelect').value || null,
+      mechanic_name: document.getElementById('mechanicInput').value || null,
+      reason: document.getElementById('reasonInput').value || null,
+    };
+    const res = await fetch('/api/workshop-usage/confirm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showAlert('ok', `✅ ${data.message}`);
+      playSound('ok');
+      clearPending();
+      refreshRecentAndHistory();
+    } else {
+      showAlert('err', `❌ ${data.error}`);
+      playSound('err');
+    }
+  } catch (_) {
+    showAlert('err', '❌ Network error during confirm');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✅ Confirm Workshop Usage';
+    document.getElementById('barcodeInput').focus();
+  }
+}
+
+function resetForm() {
+  document.getElementById('barcodeInput').value = '';
+  document.getElementById('qtyInput').value = '1';
+  document.getElementById('mechanicInput').value = '';
+  document.getElementById('jobSelect').value = '';
+  document.getElementById('reasonInput').value = '';
+  clearPending();
+  hideAlert();
+  document.getElementById('barcodeInput').focus();
+}
+
+// ── recent usage render ───────────────────────────────────────────────────
+function renderRecentUsage(records) {
+  const area = document.getElementById('recentUsageArea');
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayRecs = records.filter(r => r.created_at && r.created_at.startsWith(todayStr));
+  if (todayRecs.length === 0) {
+    area.innerHTML = '<div class="empty-state-sm">No workshop usage recorded today</div>';
+    return;
+  }
+  area.innerHTML = `<div style="overflow-x:auto"><table class="history-table">
+    <thead><tr><th>Time</th><th>Product</th><th>Qty</th><th>Cost</th><th>Mechanic</th></tr></thead>
+    <tbody>${todayRecs.slice(0, 10).map(r => `<tr>
+      <td style="color:var(--muted);font-size:12px">${(r.created_at || '').slice(11, 16)}</td>
+      <td style="font-weight:600">${esc(r.product_name_snapshot)}</td>
+      <td><span class="qty-badge">${r.quantity}</span></td>
+      <td><span class="cost-badge">Rs. ${fmt(r.total_cost)}</span></td>
+      <td>${esc(r.mechanic_name || '—')}</td>
+    </tr>`).join('')}</tbody>
+  </table></div>`;
+}
+
+// ── history ───────────────────────────────────────────────────────────────
+async function loadHistory(page) {
+  historyPage = page || 1;
+  const params = new URLSearchParams({
+    page: historyPage, per_page: 30,
+    from: document.getElementById('filterFrom').value || '',
+    to: document.getElementById('filterTo').value || '',
+    mechanic: document.getElementById('filterMechanic').value || '',
+    barcode: document.getElementById('filterBarcode').value || '',
+  });
+  const tbody = document.getElementById('historyBody');
+  tbody.innerHTML = '<tr><td colspan="8" class="empty-state-sm">Loading…</td></tr>';
+  try {
+    const res = await fetch('/api/workshop-usage/history?' + params, {
+      headers: { 'X-CSRFToken': csrfToken }
+    });
+    const data = await res.json();
+    if (!data.ok || data.records.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" class="empty-state-sm">No records found</td></tr>';
+      document.getElementById('historyPager').innerHTML = '';
+      return;
+    }
+    tbody.innerHTML = data.records.map(r => `<tr>
+      <td style="color:var(--muted);font-size:12px;white-space:nowrap">${r.created_at || ''}</td>
+      <td style="font-weight:600">${esc(r.product_name_snapshot)}</td>
+      <td style="font-size:12px;font-family:monospace">${esc(r.barcode)}</td>
+      <td><span class="qty-badge">${r.quantity}</span></td>
+      <td><span class="cost-badge">Rs. ${fmt(r.total_cost)}</span></td>
+      <td>${esc(r.mechanic_name || '—')}</td>
+      <td>${r.job_number ? `<a href="/repairs" style="color:var(--accent);font-size:12px">${esc(r.job_number)}</a>` : '—'}</td>
+      <td style="font-size:12px;color:var(--muted)">${esc(r.reason || '')}</td>
+    </tr>`).join('');
+
+    const total = data.total;
+    const pages = Math.ceil(total / data.per_page);
+    document.getElementById('historyPager').innerHTML = `
+      <span>${total} record(s)</span>
+      <div style="display:flex;gap:6px">
+        ${historyPage > 1 ? `<button onclick="loadHistory(${historyPage - 1})" class="btn btn-sm">← Prev</button>` : ''}
+        <span style="padding:5px 12px;background:var(--hover);border-radius:6px">${historyPage} / ${pages}</span>
+        ${historyPage < pages ? `<button onclick="loadHistory(${historyPage + 1})" class="btn btn-sm">Next →</button>` : ''}
+      </div>`;
+  } catch (_) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-state-sm">Error loading history</td></tr>';
+  }
+}
+
+async function refreshRecentAndHistory() {
+  try {
+    const res = await fetch('/api/workshop-usage/page-data', {
+      headers: { 'X-CSRFToken': csrfToken }
+    });
+    const data = await res.json();
+    if (data.ok) renderRecentUsage(data.recent_usage);
+  } catch (_) {}
+  loadHistory(1);
+}
+
+// ── settings modal ────────────────────────────────────────────────────────
+function openSettings() {
+  document.getElementById('settingDualMode').checked = pageSettings.dual_scanner_mode;
+  document.getElementById('settingSalesPrefix').value = pageSettings.sales_prefix || 'SALE-';
+  document.getElementById('settingWorkshopPrefix').value = pageSettings.workshop_prefix || 'WORK-';
+  document.getElementById('settingDeductImmediately').checked = pageSettings.deduct_immediately;
+  document.getElementById('settingPlaySound').checked = pageSettings.play_scan_sound;
+  document.getElementById('settingDedupMs').value = pageSettings.duplicate_scan_ms;
+  document.getElementById('settingsModal').style.display = 'flex';
+}
+
+function closeSettings() {
+  document.getElementById('settingsModal').style.display = 'none';
+}
+
+async function saveSettings() {
+  const payload = {
+    workshop_dual_scanner_mode: document.getElementById('settingDualMode').checked,
+    workshop_sales_prefix: document.getElementById('settingSalesPrefix').value.trim(),
+    workshop_scanner_prefix: document.getElementById('settingWorkshopPrefix').value.trim(),
+    workshop_deduct_immediately: document.getElementById('settingDeductImmediately').checked,
+    workshop_play_scan_sound: document.getElementById('settingPlaySound').checked,
+    workshop_duplicate_scan_ms: document.getElementById('settingDedupMs').value,
+  };
+  try {
+    const res = await fetch('/api/workshop-usage/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      pageSettings.dual_scanner_mode = payload.workshop_dual_scanner_mode;
+      pageSettings.sales_prefix = payload.workshop_sales_prefix;
+      pageSettings.workshop_prefix = payload.workshop_scanner_prefix;
+      pageSettings.deduct_immediately = payload.workshop_deduct_immediately;
+      pageSettings.play_scan_sound = payload.workshop_play_scan_sound;
+      pageSettings.duplicate_scan_ms = parseInt(payload.workshop_duplicate_scan_ms) || 300;
+      applySettings();
+      closeSettings();
+      pendingItems = [];
+      renderPending();
+    } else {
+      alert('Save failed: ' + (data.error || 'Unknown error'));
+    }
+  } catch (_) {
+    alert('Network error saving settings');
+  }
+}
+
+// ── visual feedback ───────────────────────────────────────────────────────
+function flashInput(type) {
+  const inp = document.getElementById('barcodeInput');
+  inp.className = '';
+  void inp.offsetWidth;
+  inp.classList.add(`scan-flash-${type}`);
+  setTimeout(() => inp.classList.remove(`scan-flash-${type}`), 600);
+}
+
+function showAlert(type, msg) {
+  const el = document.getElementById('scanAlert');
+  el.className = `wu-alert ${type}`;
+  el.textContent = msg;
+  el.style.display = 'block';
+  clearTimeout(el._timer);
+  el._timer = setTimeout(hideAlert, 4000);
+}
+
+function hideAlert() {
+  const el = document.getElementById('scanAlert');
+  el.style.display = 'none';
+}
+
+// ── audio ─────────────────────────────────────────────────────────────────
+function playSound(type) {
+  if (!pageSettings.play_scan_sound) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    if (type === 'ok') {
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.setValueAtTime(1100, ctx.currentTime + 0.06);
+      gain.gain.setValueAtTime(0.2, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+      osc.start(); osc.stop(ctx.currentTime + 0.18);
+    } else if (type === 'err') {
+      osc.frequency.setValueAtTime(330, ctx.currentTime);
+      osc.frequency.setValueAtTime(220, ctx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.25, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+      osc.start(); osc.stop(ctx.currentTime + 0.3);
+    } else {
+      osc.frequency.setValueAtTime(660, ctx.currentTime);
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+      osc.start(); osc.stop(ctx.currentTime + 0.12);
+    }
+  } catch (_) {}
+}
+
+// ── utils ─────────────────────────────────────────────────────────────────
+function esc(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function fmt(n) {
+  return Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+</script>
+{% endblock %}

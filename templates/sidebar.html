@@ -21,6 +21,7 @@
     {% set nav_items = [
       ('dashboard',           'dashboard',        '📊', 'Dashboard'),
       ('billing',             'billing',          '🧾', 'Billing / Parts Sale'),
+      ('workshop_usage_page', 'workshop_usage',   '🔧', 'Workshop Stock Use'),
       ('repairs_page',        'repairs',          '🚗', 'Service Jobs'),
       ('products_page',       'products',         '🔩', 'Parts & Products'),
       ('inventory',           'inventory',        '🗃️', 'Inventory'),
@@ -39,7 +40,7 @@
     {% set _cu = current_user if current_user is defined else None %}
     {% set _is_cashier = _cu and _cu.is_authenticated and _cu.role in ['Cashier'] %}
     {% for route, page, icon, label in nav_items %}
-      {% if _is_cashier and page in ['products','reports','settings','wholesale','suppliers','purchases','returns','profit','repairs','vehicle_history','brokers','expenses'] %}
+      {% if _is_cashier and page in ['products','reports','settings','wholesale','suppliers','purchases','returns','profit','repairs','vehicle_history','brokers','expenses','workshop_usage'] %}
         {# hidden for cashier #}
       {% else %}
         <a href="{{ url_for(route) }}" class="nav-item {{ 'active' if active == page else '' }}">
