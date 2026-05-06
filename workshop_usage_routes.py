@@ -96,6 +96,8 @@ def register_workshop_usage_routes(app, *, db, Product, ProductBarcode,
 
     # ── page route ───────────────────────────────────────────────────────────
 
+    @app.route('/workshop')
+    @app.route('/workshop-stock')
     @app.route('/workshop-usage')
     @login_required
     def workshop_usage_page():
