@@ -128,6 +128,19 @@ class LabelRenderer:
 
         return img
 
+    def render_to_bytes(self, *, format: str = 'PNG', **kwargs) -> bytes:
+        """Render the label and return it as raw image bytes.
+
+        All keyword arguments are forwarded to render(). The format parameter
+        controls the image format (default: 'PNG').
+        """
+        import io
+        img = self.render(**kwargs)
+        buf = io.BytesIO()
+        img.save(buf, format=format.upper())
+        buf.seek(0)
+        return buf.read()
+
     def _draw_barcode(
         self,
         *,

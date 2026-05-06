@@ -14,6 +14,19 @@ from services.printing.domain.constants import (
 )
 
 
+def _load_keys(store_settings: Any, keys: list[str], defaults: dict[str, str]) -> dict[str, str]:
+    """Load settings using the correct None-check pattern.
+
+    NEVER use `val or default` — that collapses '' to default, preventing
+    users from clearing text fields (e.g. rcpt_footer_text) to blank.
+    """
+    result: dict[str, str] = {}
+    for k in keys:
+        val = store_settings.get(k, None)
+        result[k] = str(val) if val is not None else str(defaults.get(k, ''))
+    return result
+
+
 @dataclass
 class ReceiptPrinterSettingsRepository:
     """Loads and saves receipt printer hardware settings."""
@@ -21,10 +34,7 @@ class ReceiptPrinterSettingsRepository:
     store_settings: Any
 
     def load(self) -> dict[str, str]:
-        return {
-            k: str(self.store_settings.get(k, RECEIPT_PRINTER_DEFAULTS.get(k, '')) or RECEIPT_PRINTER_DEFAULTS.get(k, ''))
-            for k in RECEIPT_PRINTER_KEYS
-        }
+        return _load_keys(self.store_settings, RECEIPT_PRINTER_KEYS, RECEIPT_PRINTER_DEFAULTS)
 
     def save(self, payload: dict[str, Any]) -> int:
         clean = {k: v for k, v in payload.items() if k in RECEIPT_PRINTER_KEYS}
@@ -39,10 +49,7 @@ class ReceiptLayoutSettingsRepository:
     store_settings: Any
 
     def load(self) -> dict[str, str]:
-        return {
-            k: str(self.store_settings.get(k, RECEIPT_LAYOUT_DEFAULTS.get(k, '')) or RECEIPT_LAYOUT_DEFAULTS.get(k, ''))
-            for k in RECEIPT_LAYOUT_KEYS
-        }
+        return _load_keys(self.store_settings, RECEIPT_LAYOUT_KEYS, RECEIPT_LAYOUT_DEFAULTS)
 
     def save(self, payload: dict[str, Any]) -> int:
         clean = {k: v for k, v in payload.items() if k in RECEIPT_LAYOUT_KEYS}
@@ -51,7 +58,8 @@ class ReceiptLayoutSettingsRepository:
 
     def paper_width_chars(self) -> int:
         """Derive canonical paper width (characters per line) from rcpt_cpl."""
-        raw = self.store_settings.get('rcpt_cpl', RECEIPT_LAYOUT_DEFAULTS['rcpt_cpl'])
+        val = self.store_settings.get('rcpt_cpl', None)
+        raw = val if val is not None else RECEIPT_LAYOUT_DEFAULTS['rcpt_cpl']
         try:
             cpl = int(raw)
         except (TypeError, ValueError):
@@ -61,15 +69,12 @@ class ReceiptLayoutSettingsRepository:
 
 @dataclass
 class ServiceReceiptLayoutSettingsRepository:
-    """Loads and saves service/job receipt layout settings (NEW configurable domain)."""
+    """Loads and saves service/job receipt layout settings."""
 
     store_settings: Any
 
     def load(self) -> dict[str, str]:
-        return {
-            k: str(self.store_settings.get(k, SERVICE_RECEIPT_LAYOUT_DEFAULTS.get(k, '')) or SERVICE_RECEIPT_LAYOUT_DEFAULTS.get(k, ''))
-            for k in SERVICE_RECEIPT_LAYOUT_KEYS
-        }
+        return _load_keys(self.store_settings, SERVICE_RECEIPT_LAYOUT_KEYS, SERVICE_RECEIPT_LAYOUT_DEFAULTS)
 
     def save(self, payload: dict[str, Any]) -> int:
         clean = {k: v for k, v in payload.items() if k in SERVICE_RECEIPT_LAYOUT_KEYS}
@@ -77,8 +82,8 @@ class ServiceReceiptLayoutSettingsRepository:
         return len(clean)
 
     def paper_width_chars(self) -> int:
-        """Derive paper width from svc_rcpt_cpl setting."""
-        raw = self.store_settings.get('svc_rcpt_cpl', SERVICE_RECEIPT_LAYOUT_DEFAULTS['svc_rcpt_cpl'])
+        val = self.store_settings.get('svc_rcpt_cpl', None)
+        raw = val if val is not None else SERVICE_RECEIPT_LAYOUT_DEFAULTS['svc_rcpt_cpl']
         try:
             cpl = int(raw)
         except (TypeError, ValueError):
@@ -86,6 +91,6 @@ class ServiceReceiptLayoutSettingsRepository:
         return max(24, min(cpl, 96))
 
     def as_bool(self, key: str) -> bool:
-        """Load a single boolean-valued setting."""
-        raw = self.store_settings.get(key, SERVICE_RECEIPT_LAYOUT_DEFAULTS.get(key, 'false'))
+        val = self.store_settings.get(key, None)
+        raw = val if val is not None else SERVICE_RECEIPT_LAYOUT_DEFAULTS.get(key, 'false')
         return str(raw).strip().lower() in {'1', 'true', 'yes', 'on'}

@@ -33,7 +33,12 @@ def register_printing_settings_routes(
             abort(403)
 
     def _load(keys, defaults_map):
-        return {k: str(StoreSettings.get(k, defaults_map.get(k, '')) or defaults_map.get(k, '')) for k in keys}
+        # None-check pattern — never `val or default` (breaks clearing text fields to blank)
+        result: dict = {}
+        for k in keys:
+            val = StoreSettings.get(k, None)
+            result[k] = str(val) if val is not None else str(defaults_map.get(k, ''))
+        return result
 
     def _save_keys(request_data, allowed_keys, label):
         payload = {k: v for k, v in (request_data or {}).items() if k in set(allowed_keys)}
@@ -49,7 +54,12 @@ def register_printing_settings_routes(
             return jsonify({'ok': False, 'msg': f'Failed to save {label}: {exc}'}), 500
 
     def _save_layout_with_version(request_data, allowed_keys, label, version_prefix: str):
-        """Save layout keys and bump the layout version counter + timestamp."""
+        """Save layout keys and bump the layout version counter in ONE commit.
+
+        CRITICAL: all set() calls use _commit=False so we commit exactly once.
+        Bug avoided: calling set(..., _commit=True) before db.session.commit()
+        would produce multiple partial commits corrupting concurrent requests.
+        """
         from datetime import datetime, timezone
         payload = {k: v for k, v in (request_data or {}).items() if k in set(allowed_keys)}
         if not payload:
@@ -57,17 +67,18 @@ def register_printing_settings_routes(
         try:
             StoreSettings.set_many(payload)
 
-            # Bump version counter and record timestamp
+            # Read current version BEFORE the commit (set_many didn't commit yet)
             version_key = f'{version_prefix}_layout_version'
             updated_key = f'{version_prefix}_layout_updated_at'
             try:
                 current_version = int(StoreSettings.get(version_key, '0') or '0')
             except (TypeError, ValueError):
                 current_version = 0
-            StoreSettings.set(version_key, str(current_version + 1))
-            StoreSettings.set(updated_key, datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'))
+            # _commit=False — ONE commit for everything at the end
+            StoreSettings.set(version_key, str(current_version + 1), _commit=False)
+            StoreSettings.set(updated_key, datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'), _commit=False)
 
-            db.session.commit()
+            db.session.commit()   # single commit covering set_many + two set() calls
             log_action(
                 f'{label} updated',
                 target_type='printer_settings',

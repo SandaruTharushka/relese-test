@@ -18,10 +18,11 @@ class ScannerSettingsRepository:
     store_settings: Any
 
     def load(self) -> dict[str, str]:
-        return {
-            k: str(self.store_settings.get(k, SCANNER_DEFAULTS.get(k, '')) or SCANNER_DEFAULTS.get(k, ''))
-            for k in SCANNER_KEYS
-        }
+        result: dict[str, str] = {}
+        for k in SCANNER_KEYS:
+            val = self.store_settings.get(k, None)
+            result[k] = str(val) if val is not None else str(SCANNER_DEFAULTS.get(k, ''))
+        return result
 
     def save(self, payload: dict[str, Any]) -> int:
         clean = {k: v for k, v in payload.items() if k in SCANNER_KEYS}

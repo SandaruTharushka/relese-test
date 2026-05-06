@@ -11,6 +11,55 @@ import re
 
 SUPPORTED_BARCODE_TYPES = frozenset({'ean13', 'ean8', 'code39', 'code128'})
 
+# Code39 allowed characters: A-Z, 0-9, and - . * $ / + % (space also allowed)
+_CODE39_PATTERN = re.compile(r'^[0-9A-Z\-\. \*\$/\+%]+$')
+
+# Code128 printable ASCII range: 0x20–0x7E
+_CODE128_PATTERN = re.compile(r'^[\x20-\x7E]+$')
+
+
+def _ean_check_digit(digits: str) -> int:
+    """Compute the EAN check digit for the first N digits (N = 12 for EAN-13, 7 for EAN-8)."""
+    total = 0
+    for i, ch in enumerate(digits):
+        weight = 3 if i % 2 else 1
+        total += int(ch) * weight
+    return (10 - (total % 10)) % 10
+
+
+def _validate_ean13(value: str) -> tuple[str, str | None]:
+    """Validate/normalise EAN-13: accept 12 or 13 digits, validate check digit.
+
+    Returns (normalised_13_digit_string, None) on success, or (value, error) on failure.
+    """
+    digits = value.strip()
+    if not digits.isdigit():
+        return digits, 'EAN-13 must contain digits only.'
+    if len(digits) == 12:
+        # Pad to 13 by appending computed check digit
+        digits = digits + str(_ean_check_digit(digits))
+    if len(digits) != 13:
+        return value, f'EAN-13 requires 12 or 13 digits (got {len(value)}).'
+    expected = _ean_check_digit(digits[:12])
+    if int(digits[12]) != expected:
+        return value, f'EAN-13 check digit is invalid (expected {expected}, got {digits[12]}).'
+    return digits, None
+
+
+def _validate_ean8(value: str) -> tuple[str, str | None]:
+    """Validate EAN-8: accept 7 or 8 digits, validate check digit."""
+    digits = value.strip()
+    if not digits.isdigit():
+        return digits, 'EAN-8 must contain digits only.'
+    if len(digits) == 7:
+        digits = digits + str(_ean_check_digit(digits))
+    if len(digits) != 8:
+        return value, f'EAN-8 requires 7 or 8 digits (got {len(value)}).'
+    expected = _ean_check_digit(digits[:7])
+    if int(digits[7]) != expected:
+        return value, f'EAN-8 check digit is invalid (expected {expected}, got {digits[7]}).'
+    return digits, None
+
 
 def validate_barcode(value: str | None, barcode_type: str | None = 'code128') -> tuple[bool, str]:
     """Validate a barcode value against the specified type.
@@ -21,41 +70,54 @@ def validate_barcode(value: str | None, barcode_type: str | None = 'code128') ->
     btype = (barcode_type or 'code128').strip().lower()
 
     if not barcode:
-        return False, 'Barcode value is required'
+        return False, 'Barcode value is required.'
 
     if btype not in SUPPORTED_BARCODE_TYPES:
-        return False, f'Unsupported barcode type: {btype}. Supported: {", ".join(sorted(SUPPORTED_BARCODE_TYPES))}'
+        return False, (
+            f'Unsupported barcode type: {btype}. '
+            f'Supported: {", ".join(sorted(SUPPORTED_BARCODE_TYPES))}'
+        )
 
     if btype == 'ean13':
-        if not re.fullmatch(r'\d{13}', barcode):
-            return False, 'EAN-13 requires exactly 13 digits'
+        _, err = _validate_ean13(barcode)
+        if err:
+            return False, err
 
     elif btype == 'ean8':
-        if not re.fullmatch(r'\d{8}', barcode):
-            return False, 'EAN-8 requires exactly 8 digits'
+        _, err = _validate_ean8(barcode)
+        if err:
+            return False, err
 
     elif btype == 'code39':
-        if not re.fullmatch(r'[0-9A-Z\-\. \$/\+%]+', barcode):
-            return False, 'CODE39 supports uppercase letters, digits, and - . space $ / + %'
+        if not _CODE39_PATTERN.match(barcode):
+            return False, (
+                'Code39 supports uppercase letters (A-Z), digits (0-9), '
+                'and the characters: - . * $ / + % (space).'
+            )
+        if len(barcode) > 48:
+            return False, f'Code39 value is too long ({len(barcode)} chars; max 48).'
 
     elif btype == 'code128':
-        if len(barcode) < 2 or len(barcode) > 48:
-            return False, 'CODE128 should be between 2 and 48 characters'
+        if not _CODE128_PATTERN.match(barcode):
+            return False, 'Code128 requires printable ASCII characters (0x20–0x7E).'
+        if len(barcode) > 80:
+            return False, f'Code128 value is too long ({len(barcode)} chars; max 80).'
 
     return True, ''
 
 
 def validate_barcode_or_fallback(value: str | None, barcode_type: str | None) -> tuple[str, str]:
-    """Validate barcode; if type fails, try code128 fallback.
+    """Validate barcode; if requested type fails, try code128 as fallback.
 
-    Returns (resolved_type, error). error=='' means success.
+    Returns (resolved_type, error). error == '' means success.
     """
     btype = (barcode_type or 'code128').strip().lower()
     ok, err = validate_barcode(value, btype)
     if ok:
         return btype, ''
-    # Try code128 fallback
-    ok2, err2 = validate_barcode(value, 'code128')
-    if ok2:
-        return 'code128', ''
+    # Attempt code128 fallback (only if original type wasn't already code128)
+    if btype != 'code128':
+        ok2, _ = validate_barcode(value, 'code128')
+        if ok2:
+            return 'code128', ''
     return btype, err

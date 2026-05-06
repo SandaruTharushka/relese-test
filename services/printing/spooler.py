@@ -49,12 +49,19 @@ class PrintSpooler:
         return target_printer
 
     def send_raw_to_network_printer(self, ip: str, port: int, payload: bytes) -> str:
-        from escpos.printer import Network
+        """Send raw bytes to a network-attached ESC/POS printer via plain TCP socket."""
+        import socket
 
         if self.logger:
-            self.logger.info('spooler_dispatch_start mode=network ip=%s port=%s bytes=%s', ip, int(port), len(payload or b''))
-        printer = Network(ip, port=int(port), timeout=5)
-        printer._raw(payload)
+            self.logger.info(
+                'spooler_dispatch_start mode=network ip=%s port=%s bytes=%s',
+                ip, int(port), len(payload or b''),
+            )
+        with socket.create_connection((ip, int(port)), timeout=10) as sock:
+            sock.sendall(payload)
         if self.logger:
-            self.logger.info('spooler_dispatch_success mode=network ip=%s port=%s bytes=%s', ip, int(port), len(payload or b''))
+            self.logger.info(
+                'spooler_dispatch_success mode=network ip=%s port=%s bytes=%s',
+                ip, int(port), len(payload or b''),
+            )
         return ip

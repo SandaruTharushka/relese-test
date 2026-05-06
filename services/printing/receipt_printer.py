@@ -1,33 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
 from services.print_templates import build_escpos_payload
-from .models import ResolvedPrinter
+from .domain_models import ReceiptPrintOutcome, ResolvedPrinter
 from .printer_config import normalize_receipt_config
 from .spooler import PrintSpooler
-
-
-@dataclass(frozen=True)
-class ReceiptPrintOutcome:
-    ok: bool
-    target: str
-    copies: int
-    resolved: ResolvedPrinter
-    error_code: str | None = None
-    error: str | None = None
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            'ok': self.ok,
-            'target': self.target,
-            'copies': self.copies,
-            'resolved': self.resolved.to_dict(),
-            'error_code': self.error_code,
-            'error': self.error,
-        }
 
 
 class ReceiptPrintExecutionService:

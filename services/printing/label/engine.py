@@ -11,22 +11,13 @@ from __future__ import annotations
 import logging
 import os
 import socket
-from dataclasses import dataclass
 from typing import Any
 
+from services.printing.domain_models import LabelPrintOutcome, ResolvedPrinter
 from services.printing.label.validator import validate_barcode_or_fallback
 from services.printing.label.zpl_builder import build_label_zpl
-from services.printing.models import ResolvedPrinter
 
 _log = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class LabelPrintOutcome:
-    ok: bool
-    code: str
-    message: str
-    resolved_size_mm: dict[str, float] | None = None
 
 
 class LabelPrintEngine:

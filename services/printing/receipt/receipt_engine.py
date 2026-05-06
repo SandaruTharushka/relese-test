@@ -81,6 +81,7 @@ class ReceiptEngine:
     # ── Settings loaders ──────────────────────────────────────────────────────
 
     def _load_store(self) -> dict[str, str]:
+        # `or ''` is intentional here: None → empty is fine for display fields.
         return {
             'store_name':       str(self._ss.get('store_name', '') or ''),
             'store_branch':     str(self._ss.get('store_branch', '') or ''),
@@ -91,31 +92,28 @@ class ReceiptEngine:
         }
 
     def _load_sales_layout(self) -> dict[str, str]:
-        return {
-            k: str(
-                self._ss.get(k, RECEIPT_LAYOUT_DEFAULTS.get(k, ''))
-                or RECEIPT_LAYOUT_DEFAULTS.get(k, '')
-            )
-            for k in RECEIPT_LAYOUT_KEYS
-        }
+        # None-check pattern: must not use `val or default` — 'false' is truthy
+        # and would survive, but '' would silently revert to default, preventing
+        # users from clearing rcpt_footer_text to blank.
+        result: dict[str, str] = {}
+        for k in RECEIPT_LAYOUT_KEYS:
+            val = self._ss.get(k, None)
+            result[k] = str(val) if val is not None else str(RECEIPT_LAYOUT_DEFAULTS.get(k, ''))
+        return result
 
     def _load_service_layout(self) -> dict[str, str]:
-        return {
-            k: str(
-                self._ss.get(k, SERVICE_RECEIPT_LAYOUT_DEFAULTS.get(k, ''))
-                or SERVICE_RECEIPT_LAYOUT_DEFAULTS.get(k, '')
-            )
-            for k in SERVICE_RECEIPT_LAYOUT_KEYS
-        }
+        result: dict[str, str] = {}
+        for k in SERVICE_RECEIPT_LAYOUT_KEYS:
+            val = self._ss.get(k, None)
+            result[k] = str(val) if val is not None else str(SERVICE_RECEIPT_LAYOUT_DEFAULTS.get(k, ''))
+        return result
 
     def _load_printer_settings(self) -> dict[str, str]:
-        return {
-            k: str(
-                self._ss.get(k, RECEIPT_PRINTER_DEFAULTS.get(k, ''))
-                or RECEIPT_PRINTER_DEFAULTS.get(k, '')
-            )
-            for k in RECEIPT_PRINTER_KEYS
-        }
+        result: dict[str, str] = {}
+        for k in RECEIPT_PRINTER_KEYS:
+            val = self._ss.get(k, None)
+            result[k] = str(val) if val is not None else str(RECEIPT_PRINTER_DEFAULTS.get(k, ''))
+        return result
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 

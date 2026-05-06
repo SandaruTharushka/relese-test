@@ -13,17 +13,17 @@ from typing import Any
 
 # ── Single source of truth: all keys and defaults ────────────────────────────
 from services.printing.domain.constants import (
-    RECEIPT_PRINTER_KEYS as RECEIPT_KEYS,
-    RECEIPT_PRINTER_DEFAULTS as RECEIPT_DEFAULTS,
-    RECEIPT_LAYOUT_KEYS,
-    RECEIPT_LAYOUT_DEFAULTS,
-    SERVICE_RECEIPT_LAYOUT_KEYS,
-    SERVICE_RECEIPT_LAYOUT_DEFAULTS,
-    LABEL_PRINTER_KEYS as LABEL_KEYS,
-    LABEL_PRINTER_DEFAULTS as LABEL_DEFAULTS,
-    SCANNER_KEYS,
-    SCANNER_DEFAULTS,
     ALL_DEFAULTS,
+    LABEL_PRINTER_DEFAULTS as LABEL_DEFAULTS,
+    LABEL_PRINTER_KEYS as LABEL_KEYS,
+    RECEIPT_LAYOUT_DEFAULTS,
+    RECEIPT_LAYOUT_KEYS,
+    RECEIPT_PRINTER_DEFAULTS as RECEIPT_DEFAULTS,
+    RECEIPT_PRINTER_KEYS as RECEIPT_KEYS,
+    SCANNER_DEFAULTS,
+    SCANNER_KEYS,
+    SERVICE_RECEIPT_LAYOUT_DEFAULTS,
+    SERVICE_RECEIPT_LAYOUT_KEYS,
 )
 
 # ── Backward-compat re-exports (old imports still work) ───────────────────────
@@ -45,7 +45,12 @@ class PrintSettingsService:
     store_settings: Any
 
     def load(self, keys: list[str]) -> dict[str, str]:
-        return {k: str(self.store_settings.get(k, ALL_DEFAULTS.get(k, '')) or ALL_DEFAULTS.get(k, '')) for k in keys}
+        """Generic loader — None-check pattern, never `val or default`."""
+        result: dict[str, str] = {}
+        for k in keys:
+            val = self.store_settings.get(k, None)
+            result[k] = str(val) if val is not None else str(ALL_DEFAULTS.get(k, ''))
+        return result
 
     def save(self, payload: dict[str, Any]) -> int:
         self.store_settings.set_many(payload)
@@ -61,16 +66,18 @@ class PrintSettingsService:
         return self.load(SCANNER_KEYS)
 
     def load_receipt_layout(self) -> dict[str, str]:
-        return {
-            k: str(self.store_settings.get(k, RECEIPT_LAYOUT_DEFAULTS.get(k, '')) or RECEIPT_LAYOUT_DEFAULTS.get(k, ''))
-            for k in RECEIPT_LAYOUT_KEYS
-        }
+        result: dict[str, str] = {}
+        for k in RECEIPT_LAYOUT_KEYS:
+            val = self.store_settings.get(k, None)
+            result[k] = str(val) if val is not None else str(RECEIPT_LAYOUT_DEFAULTS.get(k, ''))
+        return result
 
     def load_service_receipt_layout(self) -> dict[str, str]:
-        return {
-            k: str(self.store_settings.get(k, SERVICE_RECEIPT_LAYOUT_DEFAULTS.get(k, '')) or SERVICE_RECEIPT_LAYOUT_DEFAULTS.get(k, ''))
-            for k in SERVICE_RECEIPT_LAYOUT_KEYS
-        }
+        result: dict[str, str] = {}
+        for k in SERVICE_RECEIPT_LAYOUT_KEYS:
+            val = self.store_settings.get(k, None)
+            result[k] = str(val) if val is not None else str(SERVICE_RECEIPT_LAYOUT_DEFAULTS.get(k, ''))
+        return result
 
     def cleanup_legacy_overlap(self) -> None:
         """Remove legacy label_printer_selection key that was incorrectly owned by scanner settings."""
