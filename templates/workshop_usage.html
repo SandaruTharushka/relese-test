@@ -47,12 +47,11 @@
 .scan-sound-dot.off{background:#94a3b8}
 </style>
 {% endblock %}
-{% block content %}
+{% block body %}
+<div class="app-layout">
 {{ sidebar('workshop_usage') }}
-<main class="main-content">
-  <div id="workshopPageDebug" class="wu-alert ok" style="display:block;margin-bottom:10px">
-    Workshop Page Loaded
-  </div>
+<div class="main-area">
+<div class="page-content">
   <div class="page-header" style="margin-bottom:18px">
     <div>
       <h1 class="page-title">🔧 Workshop Stock Use</h1>
@@ -199,7 +198,9 @@
       </div>
     </div>
   </div>
-</main>
+</div><!-- page-content -->
+</div><!-- main-area -->
+</div><!-- app-layout -->
 
 <!-- Settings Modal -->
 <div id="settingsModal" style="display:none;position:fixed;inset:0;z-index:9000;background:var(--overlay-dark);align-items:center;justify-content:center">
@@ -726,4 +727,4 @@ function fmt(n) {
   return Number(n || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 </script>
-{% endblock %}
+{% endblock %} {# body #}
