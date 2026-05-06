@@ -2101,7 +2101,8 @@ def api_categories_search():
     query = ' '.join((request.args.get('q') or '').strip().split())
     if not query:
         return jsonify({'ok': True, 'categories': []})
-    term = f"%{query.replace('%', '\\%').replace('_', '\\_')}%"
+    escaped_query = query.replace('%', r'\%').replace('_', r'\_')
+    term = f"%{escaped_query}%"
     cats = (Category.query
             .filter(Category.name.ilike(term, escape='\\'))
             .order_by(Category.name.asc())
