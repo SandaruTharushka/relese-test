@@ -1699,9 +1699,9 @@ function getSaleErrorMessage(data) {
     case 'sale_validation_failed':
       return data?.error || 'Please review the payment details and try again.';
     case 'sale_commit_failed':
-      return 'The sale could not be saved right now. Please try again.';
+      return (data?.error || data?.details?.reason?.message || 'The sale could not be saved right now. Please try again.');
     case 'sale_create_failed':
-      return 'Sale could not be completed. Please try again.';
+      return (data?.error || data?.details?.reason?.message || 'Sale could not be completed. Please try again.');
     default:
       return data?.error || data?.message || 'Sale could not be completed. Please try again.';
   }

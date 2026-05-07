@@ -959,9 +959,8 @@ def _recover_database_schema_if_needed():
 def validate_sale_items(items_data):
     """Validate cart items before creating a sale. Returns list of error strings (empty = OK).
 
-    Stock quantity is always enforced to prevent overselling.
-    The noNegStock setting controls whether the system allows negative stock at the
-    adjustment level; at point-of-sale we always block selling more than available stock.
+    AVAILABILITY_ONLY products bypass the stock-qty check (they use availability_status
+    instead of stock_qty); for all other products stock_qty must cover the requested qty.
     """
     errors = []
     for item in items_data:
@@ -973,13 +972,17 @@ def validate_sale_items(items_data):
         if not p or p.status != 'active':
             errors.append(f'Product #{pid} not found or inactive')
             continue
-        requested_qty = float(item.get('qty', 1))
-        if p.stock_qty < requested_qty:
-            errors.append(
-                f'Not enough stock for "{p.name}". '
-                f'Available: {p.stock_qty}, Requested: {requested_qty}'
-            )
-            continue
+        is_availability_only = (getattr(p, 'stock_tracking_type', None) == 'AVAILABILITY_ONLY')
+        if is_availability_only:
+            if (getattr(p, 'availability_status', None) or 'IN_STOCK') != 'IN_STOCK':
+                errors.append(f'"{p.name}" is currently out of stock.')
+        else:
+            requested_qty = float(item.get('qty', 1))
+            if p.stock_qty < requested_qty:
+                errors.append(
+                    f'Not enough stock for "{p.name}". '
+                    f'Available: {p.stock_qty}, Requested: {requested_qty}'
+                )
     return errors
 
 def barcode_in_use(barcode, exclude_product_id=None):
@@ -3703,6 +3706,13 @@ def auto_migrate():
         ('stock_movements', 'quantity_after',   "ALTER TABLE stock_movements ADD COLUMN quantity_after FLOAT NULL"),
         ('stock_movements', 'reference_type',   "ALTER TABLE stock_movements ADD COLUMN reference_type VARCHAR(40) NULL"),
         ('stock_movements', 'reference_id',     "ALTER TABLE stock_movements ADD COLUMN reference_id INT NULL"),
+        # v8.3 — auto-discount metadata on sale_items (safety net mirrors services/migrations.py migration 21)
+        ('sale_items', 'discount_percent',    "ALTER TABLE sale_items ADD COLUMN discount_percent NUMERIC(5,2) DEFAULT 0"),
+        ('sale_items', 'discount_source',     "ALTER TABLE sale_items ADD COLUMN discount_source VARCHAR(20) DEFAULT 'none'"),
+        ('sale_items', 'auto_discount_rule_id', "ALTER TABLE sale_items ADD COLUMN auto_discount_rule_id INTEGER NULL"),
+        ('sale_items', 'discount_type',       "ALTER TABLE sale_items ADD COLUMN discount_type VARCHAR(20) DEFAULT 'amount'"),
+        ('sale_items', 'discount_value',      "ALTER TABLE sale_items ADD COLUMN discount_value FLOAT DEFAULT 0"),
+        ('sale_items', 'discount_amount',     "ALTER TABLE sale_items ADD COLUMN discount_amount FLOAT DEFAULT 0"),
     ]
     money_type_migrations = [
         ('sales', 'total_amount'),
