@@ -55,20 +55,36 @@ def save_printer_settings(data: Dict[str, Any]) -> int:
 
 def list_available_printers() -> Dict[str, Any]:
     printers = list_printers_with_status()
-    log.info("printer list loaded count=%d", len(printers))
+    online = [p for p in printers if p.get("status") == "online"]
+    log.info("printer list loaded count=%d online=%d", len(printers), len(online))
+    printer_log.info("available_printers total=%d online=%d", len(printers), len(online))
     return {
         "ok": True,
         "printers": printers,
         "count": len(printers),
+        "online_count": len(online),
+        "warning": "No connected receipt printer detected" if not online else None,
     }
 
 
 def validate_printer_exists(printer_name: Optional[str]) -> Dict[str, Any]:
+    """Validate printer exists and provide detailed status."""
     if not printer_name:
         return {"ok": False, "msg": "No printer selected"}
+
     info = get_printer_status(printer_name)
+    printer_log.info(
+        "printer_validation printer=%s status=%s driver=%s connected=%s",
+        printer_name,
+        info.get("status"),
+        info.get("driver_installed"),
+        info.get("connected")
+    )
+
     if info["status"] in ("offline", "unknown") and not info.get("driver_installed", False):
         return {"ok": False, "msg": info.get("message", "Printer not found")}
+
+    # Return detailed status even if not ready, so UI can show helpful message
     return {"ok": True, "info": info}
 
 
@@ -98,7 +114,7 @@ def preview_receipt(receipt_type: str, source_id: int) -> Dict[str, Any]:
 
 
 def print_receipt(receipt_type: str, source_id: int) -> Dict[str, Any]:
-    """Full print pipeline."""
+    """Full print pipeline with real connectivity validation."""
     settings = PrinterSettings.load()
     printer_name = settings.get("printer_receipt_name") or ""
     log.info(
@@ -112,10 +128,22 @@ def print_receipt(receipt_type: str, source_id: int) -> Dict[str, Any]:
 
     status = validate_printer_ready(printer_name)
     log.info("printer status=%s can_print=%s", status.get("status"), status.get("can_print"))
+    printer_log.info(
+        "print_attempt printer=%s status=%s can_print=%s port_validated=%s",
+        printer_name,
+        status.get("status"),
+        status.get("can_print"),
+        status.get("port_validated")
+    )
     if not status.get("can_print"):
+        msg = status.get("message") or f"Printer {printer_name!r} not ready"
+        if status.get("connected") is False:
+            msg = f"Printer {printer_name!r} is not physically connected. Please verify the USB/Network connection."
+        elif status.get("status") == "offline":
+            msg = f"Printer {printer_name!r} is offline. Check power and connections."
         return {
             "ok": False,
-            "msg": status.get("message") or f"Printer {printer_name!r} not ready",
+            "msg": msg,
             "status": status,
         }
 
@@ -155,12 +183,17 @@ def test_receipt_print() -> Dict[str, Any]:
     settings = PrinterSettings.load()
     name = settings.get("printer_receipt_name") or ""
     if not name:
+        printer_log.warning("test_print attempted with no printer selected")
         return {"ok": False, "msg": "No receipt printer selected"}
     status = validate_printer_ready(name)
+    printer_log.info("test_receipt_print printer=%s status=%s can_print=%s", name, status.get("status"), status.get("can_print"))
     if not status.get("can_print"):
+        msg = status.get("message") or "Printer not ready"
+        if status.get("connected") is False:
+            msg = f"Printer {name!r} is not connected. {msg}"
         return {
             "ok": False,
-            "msg": status.get("message") or "Printer not ready",
+            "msg": msg,
             "status": status,
         }
     layout = ReceiptLayoutSettings.load()
@@ -215,12 +248,17 @@ def test_label_print() -> Dict[str, Any]:
     settings = PrinterSettings.load()
     name = settings.get("printer_label_name") or ""
     if not name:
+        printer_log.warning("test_label_print attempted with no printer selected")
         return {"ok": False, "msg": "No label printer selected"}
     status = validate_printer_ready(name)
+    printer_log.info("test_label_print printer=%s status=%s can_print=%s", name, status.get("status"), status.get("can_print"))
     if not status.get("can_print"):
+        msg = status.get("message") or "Printer not ready"
+        if status.get("connected") is False:
+            msg = f"Printer {name!r} is not connected. {msg}"
         return {
             "ok": False,
-            "msg": status.get("message") or "Printer not ready",
+            "msg": msg,
             "status": status,
         }
     payload = b"--- Label Test ---\nGarage POS\n\n\n"
