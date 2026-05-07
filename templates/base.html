@@ -297,13 +297,13 @@ a{text-decoration:none;color:inherit}
 
 .app-dialog-overlay{position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;z-index:2500;opacity:0;pointer-events:none;transition:opacity .2s ease}
 .app-dialog-overlay.show{opacity:1;pointer-events:auto}
-.app-dialog{width:min(460px,94vw);background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadowL);transform:translateY(12px);transition:transform .2s ease}
+.app-dialog{width:min(460px,94vw);max-height:min(88vh,900px);display:flex;flex-direction:column;background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadowL);transform:translateY(12px);transition:transform .2s ease}
 .app-dialog-overlay.show .app-dialog{transform:translateY(0)}
 .app-dialog-header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 10px;border-bottom:1px solid var(--border)}
 .app-dialog-title{font-size:17px;font-weight:700}
 .app-dialog-close{border:none;background:transparent;color:var(--muted);font-size:20px;line-height:1;cursor:pointer;padding:2px 4px}
 .app-dialog-close:hover{color:var(--text)}
-.app-dialog-body{padding:14px 18px;color:var(--text);font-size:14px;line-height:1.55;white-space:pre-line}
+.app-dialog-body{padding:14px 18px;color:var(--text);font-size:14px;line-height:1.55;white-space:pre-line;overflow-y:auto;overscroll-behavior:contain}
 .app-dialog-footer{display:flex;justify-content:flex-end;gap:8px;padding:0 18px 16px}
 
 /* Progress */
