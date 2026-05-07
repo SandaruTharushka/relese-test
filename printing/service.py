@@ -151,7 +151,7 @@ def print_receipt(receipt_type: str, source_id: int) -> Dict[str, Any]:
 
 
 def test_receipt_print() -> Dict[str, Any]:
-    """Send a tiny diagnostic receipt to the configured printer."""
+    """Send a diagnostic receipt rendered by the canonical receipt engine."""
     settings = PrinterSettings.load()
     name = settings.get("printer_receipt_name") or ""
     if not name:
@@ -163,20 +163,48 @@ def test_receipt_print() -> Dict[str, Any]:
             "msg": status.get("message") or "Printer not ready",
             "status": status,
         }
-    sample = (
-        b"\x1b@"
-        b"\x1ba\x01"
-        b"--- Test Receipt ---\n"
-        b"Garage POS\n"
-        b"Printer OK\n\n\n"
-        b"\x1dV\x00"
-    )
+    layout = ReceiptLayoutSettings.load()
+    company = CompanyProfile.load()
+    sample_ctx = {
+        "type": "billing",
+        "type_title": "TEST RECEIPT",
+        "doc_number": "TEST-PRINT",
+        "doc_label": "Receipt No",
+        "datetime": "Test Print",
+        "cashier": "System",
+        "customer_name": "Test Customer",
+        "customer_phone": "",
+        "vehicle": "",
+        "items": [{
+            "name": "Printer Diagnostic Item",
+            "qty": 1,
+            "qty_str": "1",
+            "price_str": "0.00",
+            "value_str": "0.00",
+        }],
+        "subtotal": 0,
+        "discount": 0,
+        "tax": 0,
+        "grand_total": 0,
+        "paid": 0,
+        "balance": 0,
+        "payment_method": "test",
+        "items_count": 1,
+        "extra": {},
+    }
+    mode = settings.get("printer_print_mode", "windows_raw")
+    if mode == "escpos":
+        sample = escpos_renderer.render_escpos("billing", sample_ctx, layout, company)
+        renderer_used = "canonical_escpos_renderer"
+    else:
+        sample = render_receipt_text("billing", sample_ctx, layout, company).encode("cp437", errors="replace")
+        renderer_used = "canonical_text_renderer"
     result = send_raw(name, sample, doc_name="Printer Test")
     out = {
         **result,
         "printer_name": name,
         "print_mode": settings.get("printer_print_mode", "windows_raw"),
-        "renderer_used": "raw_escpos_test_payload",
+        "renderer_used": renderer_used,
         "spooler_result": result.get("msg"),
     }
     printer_log.info("test_print kind=receipt printer=%s ok=%s result=%s", name, out.get("ok"), out.get("msg"))

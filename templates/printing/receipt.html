@@ -22,6 +22,7 @@
   </style>
 </head>
 <body class="rcpt-{{ layout.rcpt_layout_template_style }} rcpt-{{ layout.rcpt_layout_paper_width }}">
+  {% set show_divider = layout.rcpt_layout_divider_style != 'none' %}
   <div class="rcpt-paper" id="receipt">
     <header class="rcpt-header">
       {% if layout.rcpt_layout_show_logo and company.company_logo_path %}
@@ -54,7 +55,7 @@
       {% endif %}
     </header>
 
-    <div class="rcpt-divider"></div>
+    {% if show_divider %}<div class="rcpt-divider"></div>{% endif %}
 
     <div class="rcpt-doc-title">{{ ctx.type_title }}</div>
 
@@ -81,7 +82,7 @@
       {% endif %}
     </div>
 
-    <div class="rcpt-divider"></div>
+    {% if show_divider %}<div class="rcpt-divider"></div>{% endif %}
 
     <table class="rcpt-items">
       <thead>
@@ -106,7 +107,7 @@
       </tbody>
     </table>
 
-    <div class="rcpt-divider"></div>
+    {% if show_divider %}<div class="rcpt-divider"></div>{% endif %}
 
     {% if receipt_type == 'job' and (ctx.extra.issue_reported or ctx.extra.diagnosis) %}
       <div class="rcpt-notes">
@@ -120,7 +121,7 @@
           <div><strong>Odometer:</strong> {{ ctx.extra.odometer_in }} km</div>
         {% endif %}
       </div>
-      <div class="rcpt-divider"></div>
+      {% if show_divider %}<div class="rcpt-divider"></div>{% endif %}
     {% endif %}
 
     {% if receipt_type == 'return' and ctx.extra.reason %}
@@ -128,7 +129,7 @@
         <div><strong>Reason:</strong> {{ ctx.extra.reason }}</div>
         <div><strong>Type:</strong> {{ ctx.extra.return_type }}</div>
       </div>
-      <div class="rcpt-divider"></div>
+      {% if show_divider %}<div class="rcpt-divider"></div>{% endif %}
     {% endif %}
 
     {% if layout.rcpt_layout_show_payment_summary %}
@@ -148,7 +149,7 @@
           <div><span>Payment:</span><strong>{{ ctx.payment_method }}</strong></div>
         {% endif %}
       </div>
-      <div class="rcpt-divider"></div>
+      {% if show_divider %}<div class="rcpt-divider"></div>{% endif %}
     {% endif %}
 
     {% if layout.rcpt_layout_show_barcode and ctx.doc_number %}
@@ -160,7 +161,7 @@
         </div>
         <div class="rcpt-barcode-text">{{ ctx.doc_number }}</div>
       </div>
-      <div class="rcpt-divider"></div>
+      {% if show_divider %}<div class="rcpt-divider"></div>{% endif %}
     {% endif %}
 
     {% if layout.rcpt_layout_show_footer %}

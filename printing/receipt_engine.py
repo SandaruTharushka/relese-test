@@ -341,8 +341,18 @@ def render_receipt_text(
     company = company_profile or CompanyProfile.load()
     width = 32 if (layout.get("rcpt_layout_paper_width") == "58mm") else 48
 
+    divider_style = str(layout.get("rcpt_layout_divider_style") or "dashed").strip().lower()
+    divider_enabled = divider_style != "none"
+
     def line(ch: str = "-") -> str:
+        if not divider_enabled:
+            return ""
         return ch * width
+
+    def append_divider(out: List[str], ch: str = "-") -> None:
+        div = line(ch)
+        if div:
+            out.append(div)
 
     def center(s: str) -> str:
         s = (s or "").strip()
@@ -367,9 +377,9 @@ def render_receipt_text(
         out.append(center(f"Tel: {company['company_phone']}"))
     if layout.get("rcpt_layout_show_email") and company.get("company_email"):
         out.append(center(company["company_email"]))
-    out.append(line())
+    append_divider(out)
     out.append(center(context["type_title"]))
-    out.append(line())
+    append_divider(out)
     out.append(kv(f"{context['doc_label']}:", context["doc_number"]))
     out.append(kv("Date:", context["datetime"]))
     if layout.get("rcpt_layout_show_cashier") and context.get("cashier"):
@@ -378,10 +388,10 @@ def render_receipt_text(
         out.append(kv("Customer:", context["customer_name"]))
     if layout.get("rcpt_layout_show_vehicle") and context.get("vehicle"):
         out.append(kv("Vehicle:", context["vehicle"]))
-    out.append(line())
+    append_divider(out)
     if width >= 42:
         out.append(f"{'Item':<22}{'Price':>8}{'Qty':>4}{'Value':>10}"[:width])
-        out.append(line())
+        append_divider(out)
         for it in context["items"]:
             name = it["name"]
             for chunk in [name[i:i + 22] for i in range(0, len(name), 22)] or [""]:
@@ -398,7 +408,7 @@ def render_receipt_text(
                 f"  {it['price_str']} x {it['qty_str']}",
                 it["value_str"],
             ))
-    out.append(line())
+    append_divider(out)
     if layout.get("rcpt_layout_show_payment_summary"):
         out.append(kv("Sub Total:", _money(context["subtotal"])))
         if context.get("discount"):
@@ -408,7 +418,7 @@ def render_receipt_text(
         out.append(kv("Grand Total:", _money(context["grand_total"])))
         out.append(kv("Total Paid:", _money(context["paid"])))
         out.append(kv("Balance:", _money(context["balance"])))
-        out.append(line())
+        append_divider(out)
     if layout.get("rcpt_layout_show_footer"):
         footer = company.get("company_footer_text") or "Thank you!"
         out.append(center(footer))
