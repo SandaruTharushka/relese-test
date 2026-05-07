@@ -967,11 +967,17 @@ async function api(url, opts = {}) {
       }
     }
     if (!res.ok) {
+      const details = (data && typeof data === 'object') ? data : { error: `Request failed (${res.status})` };
+      const endpoint = details.endpoint || url;
+      const issue = details.validation_issue || details.import_issue || details.error || details.details || 'Unknown API error';
+      const warning = details.corrupted_item_warning ? ` Corrupted item warning: ${details.corrupted_item_warning}` : '';
       console.error('API request failed', { url, status: res.status, response: data });
       return {
         ok: false,
         _http_status: res.status,
-        ...(data && typeof data === 'object' ? data : { error: `Request failed (${res.status})` })
+        endpoint,
+        error: `API ${endpoint}: ${issue}${warning}`,
+        ...details
       };
     }
     return data;

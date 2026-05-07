@@ -1,4 +1,4 @@
-import os, sys, json, subprocess, threading, webbrowser, random, tempfile, re, shutil, secrets, time, math, zipfile, hashlib, unicodedata, csv, io
+import os, sys, json, subprocess, threading, webbrowser, random, tempfile, re, shutil, secrets, time, math, zipfile, hashlib, unicodedata, csv, io, logging, traceback
 from pathlib import Path
 from typing import Any
 from datetime import datetime, timedelta, date as date_type, timezone
@@ -36,6 +36,7 @@ from payhere import build_payment_data, verify_notify, PAYHERE_ENDPOINT, is_sand
 from backup import backup_bp, start_auto_backup_scheduler
 from database import configure_sqlite_app, inspect_sqlite_database
 from runtime_paths import ensure_persistent_app_structure, persistent_app_dir, persistent_path, resource_path
+from logging.handlers import RotatingFileHandler
 from logging_setup import configure_app_logging
 from reset_utils import delete_all_rows, ordered_delete_tables
 from startup_checks import run_startup_checks
@@ -1800,6 +1801,86 @@ def inventory():
         products=prods, low_stock=low, low_stock_count=len(low),
         total_val=total_val, movements=movements)
 
+def _products_error_logger():
+    logger = logging.getLogger('products_diagnostics')
+    if logger.handlers:
+        return logger
+    logger.setLevel(logging.INFO)
+    handler = RotatingFileHandler('logs/products_errors.log', maxBytes=1_000_000, backupCount=3, encoding='utf-8')
+    handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
+    logger.addHandler(handler)
+    return logger
+
+
+def _log_products_issue(route, api_name, issue_type, **details):
+    payload = {'route': route, 'api_name': api_name, 'issue_type': issue_type, **details}
+    _products_error_logger().error(json.dumps(payload, default=str))
+
+
+def _safe_decimal(value, default=0):
+    try:
+        if value in (None, ''):
+            return float(default)
+        return float(value)
+    except (TypeError, ValueError):
+        return float(default)
+
+
+def _repair_and_validate_products():
+    uncategorized = Category.query.filter(func.lower(func.trim(Category.name)) == 'uncategorized').first()
+    if not uncategorized:
+        uncategorized = Category(name='Uncategorized', description='Auto-created for repaired products')
+        db.session.add(uncategorized)
+        db.session.flush()
+
+    repaired, invalid = [], []
+    rows = Product.query.all()
+    barcode_seen = {}
+    for p in rows:
+        changed = False
+        reasons = []
+        if not p.name or not str(p.name).strip():
+            invalid.append({'id': p.id, 'issue': 'missing required fields:name'})
+            continue
+        if p.category_id and not Category.query.get(p.category_id):
+            p.category_id = uncategorized.id
+            changed = True
+            reasons.append('invalid category references -> Uncategorized')
+        if p.category_id is None:
+            p.category_id = uncategorized.id
+            changed = True
+            reasons.append('missing category -> Uncategorized')
+        if p.stock_qty is None:
+            p.stock_qty = 0
+            changed = True
+            reasons.append('null qty -> 0')
+        stock = _safe_decimal(p.stock_qty, default=0)
+        if stock < 0:
+            p.stock_qty = 0
+            changed = True
+            reasons.append('invalid stock -> 0')
+        elif stock != p.stock_qty:
+            p.stock_qty = stock
+            changed = True
+            reasons.append('non-numeric qty normalized')
+        if p.barcode:
+            bid = str(p.barcode).strip()
+            if bid in barcode_seen and barcode_seen[bid] != p.id:
+                invalid.append({'id': p.id, 'issue': f'duplicate barcode:{bid}', 'duplicate_of': barcode_seen[bid]})
+                continue
+            barcode_seen[bid] = p.id
+        if changed:
+            repaired.append({'id': p.id, 'actions': reasons})
+
+    for bad in invalid:
+        _log_products_issue('/api/products', 'products API', 'invalid DB rows', invalid_row=bad)
+    if repaired:
+        db.session.commit()
+        for r in repaired:
+            _log_products_issue('/api/products', 'products API', 'repair action', repair=r)
+    return repaired, invalid
+
+
 # ── API: PRODUCTS ─────────────────────────────────────────────────────────────
 @app.route('/api/products', methods=['GET'])
 @login_required
@@ -1821,7 +1902,18 @@ def api_products():
         query = query.filter(Product.category_id == cat)
     if product_type:
         query = query.filter(Product.product_type == product_type)
-    return jsonify([p.to_dict() for p in query.all()])
+    try:
+        repaired, invalid = _repair_and_validate_products()
+        out = []
+        for p in query.all():
+            try:
+                out.append(p.to_dict())
+            except Exception as row_exc:
+                _log_products_issue('/api/products', 'products API', 'malformed product records', product_id=getattr(p, 'id', None), stack_trace=traceback.format_exc())
+        return jsonify({'ok': True, 'items': out, 'repaired': repaired, 'invalid_records': invalid})
+    except Exception as exc:
+        _log_products_issue('/api/products', 'products API', 'sql query errors', error=str(exc), stack_trace=traceback.format_exc())
+        return jsonify({'ok': False, 'error': 'products API failed', 'endpoint': '/api/products', 'details': str(exc)}), 500
 
 @app.route('/api/products/search')
 @login_required
