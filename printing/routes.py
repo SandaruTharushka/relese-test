@@ -92,28 +92,49 @@ def register_printing_routes(app, *, db, log_action=None):
     @login_required
     def page_printer_settings():
         _require_admin()
-        return render_template(
-            "settings/printer_settings.html",
-            settings=PrinterSettings.load(),
-        )
+        try:
+            return render_template(
+                "settings/printer_settings.html",
+                settings=PrinterSettings.load(),
+            )
+        except Exception:
+            log.exception(
+                "Printer settings page render failed user=%s",
+                getattr(current_user, "username", "?"),
+            )
+            raise
 
     @app.route("/settings/receipt-layout")
     @login_required
     def page_receipt_layout():
         _require_admin()
-        return render_template(
-            "settings/receipt_layout.html",
-            layout=ReceiptLayoutSettings.load(),
-        )
+        try:
+            return render_template(
+                "settings/receipt_layout.html",
+                layout=ReceiptLayoutSettings.load(),
+            )
+        except Exception:
+            log.exception(
+                "Receipt layout page render failed user=%s",
+                getattr(current_user, "username", "?"),
+            )
+            raise
 
     @app.route("/settings/company-intro")
     @login_required
     def page_company_intro():
         _require_admin()
-        return render_template(
-            "settings/company_intro.html",
-            company=CompanyProfile.load(),
-        )
+        try:
+            return render_template(
+                "settings/company_intro.html",
+                company=CompanyProfile.load(),
+            )
+        except Exception:
+            log.exception(
+                "Company intro page render failed user=%s",
+                getattr(current_user, "username", "?"),
+            )
+            raise
 
     # ── PRINTER SETTINGS API ───────────────────────────────────────────────
 
