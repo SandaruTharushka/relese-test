@@ -281,6 +281,13 @@ MIGRATIONS: list[Migration] = [
         "ALTER TABLE sale_items ADD COLUMN discount_value FLOAT DEFAULT 0",
         "ALTER TABLE sale_items ADD COLUMN discount_amount FLOAT DEFAULT 0",
     ]),
+    Migration(22, 'v8.4 stock movement quantity tracking columns', [
+        "ALTER TABLE stock_movements ADD COLUMN quantity_before FLOAT NULL",
+        "ALTER TABLE stock_movements ADD COLUMN quantity_change FLOAT NULL",
+        "ALTER TABLE stock_movements ADD COLUMN quantity_after FLOAT NULL",
+        "ALTER TABLE stock_movements ADD COLUMN reference_type VARCHAR(40) NULL",
+        "ALTER TABLE stock_movements ADD COLUMN reference_id INT NULL",
+    ]),
 ]
 
 
