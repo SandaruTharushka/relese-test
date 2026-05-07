@@ -187,7 +187,7 @@ class ReceiptLayoutSettings:
 
     PAPER_WIDTHS = ("58mm", "80mm")
     ALIGNMENTS = ("left", "center", "right")
-    DIVIDER_STYLES = ("dashed", "solid", "dotted", "double")
+    DIVIDER_STYLES = ("none", "dashed", "solid", "dotted", "double")
     ROW_STYLES = ("standard", "compact")
     TEMPLATE_STYLES = ("modern_garage", "compact", "classic")
 
