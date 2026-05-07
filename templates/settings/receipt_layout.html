@@ -12,7 +12,8 @@
       </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:minmax(320px,420px) 1fr;gap:16px;padding:16px;align-items:start">
+    <div class="page-content">
+      <div style="display:grid;grid-template-columns:minmax(320px,420px) minmax(0,1fr);gap:16px;align-items:start;min-width:0">
 
       <!-- ─── form ─── -->
       <div class="card" style="padding:16px">
@@ -100,7 +101,7 @@
       </div>
 
       <!-- ─── preview ─── -->
-      <div class="card" style="padding:16px">
+      <div class="card" style="padding:16px;min-width:0">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
           <div>
             <div style="font-size:16px;font-weight:700">Live Preview</div>
@@ -112,9 +113,10 @@
             <option value="return">Return Receipt</option>
           </select>
         </div>
-        <div style="background:#f1f5f9;padding:12px;border-radius:8px;overflow:auto;min-height:600px">
-          <iframe id="previewFrame" style="width:100%;min-height:760px;border:0;background:transparent"></iframe>
+        <div style="background:#f1f5f9;padding:12px;border-radius:8px;overflow:auto;overflow-x:hidden;min-height:600px">
+          <iframe id="previewFrame" style="width:100%;max-width:100%;min-height:760px;border:0;background:transparent"></iframe>
         </div>
+      </div>
       </div>
     </div>
   </div>

@@ -83,6 +83,7 @@
   color-scheme: dark;
 }
 *{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
 body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;transition:background var(--theme-transition),color var(--theme-transition);overflow-x:hidden}
 a{text-decoration:none;color:inherit}
 ::-webkit-scrollbar{width:5px;height:5px}
@@ -90,10 +91,10 @@ a{text-decoration:none;color:inherit}
 
 /* Layout */
 .app-layout{display:flex;height:100vh;height:100dvh;max-height:100vh;max-height:100dvh;overflow:hidden}
-.sidebar{width:230px;height:100vh;height:100dvh;background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:20px 14px;flex-shrink:0;position:sticky;top:0;overflow:hidden;transition:width .3s ease,padding .3s ease}
+.sidebar{width:230px;height:100vh;height:100dvh;background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:20px 14px;flex-shrink:0;position:sticky;top:0;overflow-y:auto;overflow-x:hidden;transition:width .3s ease,padding .3s ease}
 .main-area{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 .topbar{background:var(--sidebar);border-bottom:1px solid var(--border);padding:14px 28px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
-.page-content{flex:1;min-height:0;overflow:auto;padding:24px}
+.page-content{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:24px;padding-bottom:max(96px,calc(96px + env(safe-area-inset-bottom,0px)))}
 
 /* Sidebar */
 .sidebar-top,.sidebar-bottom{flex-shrink:0}
@@ -336,7 +337,7 @@ a{text-decoration:none;color:inherit}
 
 /* ── Aliases used by repairs / installments / trade-ins / imei / customers ── */
 /* Content wrapper */
-.content-area{flex:1;min-height:0;overflow:auto;padding:24px}
+.content-area{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:24px;padding-bottom:max(96px,calc(96px + env(safe-area-inset-bottom,0px)))}
 
 /* Modal backdrop (mirrors .modal-overlay) */
 .modal-backdrop{position:fixed;inset:0;background:var(--overlay-dark);display:flex;align-items:center;justify-content:center;z-index:200;opacity:0;pointer-events:none;transition:opacity .2s ease;will-change:opacity;transform:translateZ(0);backface-visibility:hidden;-webkit-backface-visibility:hidden}
