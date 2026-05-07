@@ -9,11 +9,11 @@
     <div class="settings-shell">
       <aside class="settings-nav" aria-label="Settings navigation">
         <div class="settings-nav-group">GENERAL</div>
-        <a class="settings-nav-item {{ 'is-active' if active_key == 'company_intro' else '' }}" href="{{ url_for('settings_company_intro') }}">🏪 Company Intro</a>
+        <a class="settings-nav-item {{ 'is-active' if active_key == 'company_intro' else '' }}" href="{{ url_for('page_company_intro') }}">🏪 Company Intro</a>
 
         <div class="settings-nav-group">HARDWARE</div>
-        <a class="settings-nav-item {{ 'is-active' if active_key == 'printer_settings' else '' }}" href="{{ url_for('settings_printers_page') }}">🖨️ Printer Settings</a>
-        <a class="settings-nav-item {{ 'is-active' if active_key == 'receipt_layout' else '' }}" href="{{ url_for('settings_receipt_layout') }}">🧾 Receipt Layout</a>
+        <a class="settings-nav-item {{ 'is-active' if active_key == 'printer_settings' else '' }}" href="{{ url_for('page_printer_settings') }}">🖨️ Printer Settings</a>
+        <a class="settings-nav-item {{ 'is-active' if active_key == 'receipt_layout' else '' }}" href="{{ url_for('page_receipt_layout') }}">🧾 Receipt Layout</a>
         <a class="settings-nav-item" href="{{ url_for('settings') }}#card">💳 Card Payment</a>
         <a class="settings-nav-item" href="{{ url_for('settings') }}#drawer">💰 Cash Drawer</a>
 
