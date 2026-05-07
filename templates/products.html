@@ -571,12 +571,8 @@ async function handleBulkImportSelection(event) {
     const response = await fetch('/api/items/bulk-import', { method: 'POST', body: formData });
     const data = await response.json();
     if (!response.ok || !data.success) throw new Error(data.error || 'Import failed');
-    let msg = `Bulk import completed\nCreated: ${data.created}\nQty Updated: ${data.updated}\nSkipped: ${data.skipped}`;
-    if (Array.isArray(data.errors) && data.errors.length) {
-      msg += '\n\nView Import Errors:\n' + data.errors.map(e => `Row ${e.row}: ${e.reason}`).join('\n');
-    }
-    await AppDialog.alert(msg, { title: 'Bulk Import Items' });
-    location.reload();
+    await showImportReviewModal(data, file.name);
+    if ((data.summary?.error_count || 0) === 0) location.reload();
   } catch (err) {
     toast(err.message || 'Bulk import failed', 'error');
   } finally {
@@ -608,5 +604,35 @@ async function downloadSampleImportFile() {
 function escHtml(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+
+
+async function showImportReviewModal(data, fileName) {
+  const onlyErrors = (data.review || []).filter(r => r.status === 'error');
+  const rows = onlyErrors.length ? onlyErrors : (data.review || []);
+  const summary = data.summary || {};
+  const text = rows.map(r => {
+    if (r.error) return `Row ${r.row}, ${r.error.column}, ${r.error.value}, ${r.error.error}`;
+    return `Row ${r.row}, ${r.status}, ${r.message}`;
+  }).join('\n');
+  const table = rows.map(r => {
+    const badge = r.status === 'error' ? '🟥 ERROR' : (r.status === 'warning' ? '🟨 WARNING' : '🟩 SUCCESS');
+    if (r.error) {
+      return `Row ${r.row} | ${badge}\nColumn: ${r.error.column}\nValue: "${r.error.value}"\nError: ${r.error.error}\nExpected: ${r.error.expected}\nSuggested Fix: ${r.error.suggestion}`;
+    }
+    return `Row ${r.row} | ${badge}\n${r.message}`;
+  }).join('\n\n');
+  await AppDialog.alert(
+`File: ${fileName}
+Total: ${summary.total_rows || 0} | Success: ${summary.successful_rows || 0} | Updated: ${summary.updated_rows || 0} | Skipped: ${summary.skipped_rows || 0}
+Warnings: ${summary.warning_count || 0} | Errors: ${summary.error_count || 0}
+
+Show Only Errors: ON
+
+${table}
+
+(Use browser console copy helper below for report export)`, { title: 'Import Review', confirmText: 'Close' });
+  window.__lastImportErrorReport = text;
+}
+
 </script>
 {% endblock %}

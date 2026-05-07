@@ -20,6 +20,9 @@ def test_bulk_import_creates_updates_and_supplier(auth_client, flask_app):
     assert body['updated'] == 1
     assert body['skipped'] == 1
     assert len(body['errors']) == 1
+    assert body['errors'][0]['column'] == 'buy_price'
+    assert 'numeric' in body['errors'][0]['error']
+    assert body['summary']['error_count'] == 1
 
     with flask_app.app_context():
         oil = Product.query.filter_by(barcode='343423423').first()
@@ -53,3 +56,13 @@ def test_products_import_sample_download(auth_client):
     assert 'attachment; filename=products_import_sample.csv' == res.headers.get('Content-Disposition')
     body = res.data.decode('utf-8')
     assert body.splitlines()[0] == 'name,buy_price,sell_price,qty,barcode,category'
+
+
+def test_bulk_import_sell_price_less_than_buy_price(auth_client):
+    payload = "name,buy_price,sell_price,qty\nPart A,100,50,2\n"
+    res = auth_client.post('/api/items/bulk-import', data={'file': (io.BytesIO(payload.encode('utf-8-sig')), 'items.csv')}, content_type='multipart/form-data')
+    assert res.status_code == 200
+    body = res.get_json()
+    assert body['skipped'] == 1
+    assert body['errors'][0]['column'] == 'sell_price'
+    assert 'greater than or equal' in body['errors'][0]['error']
