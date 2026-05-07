@@ -46,6 +46,7 @@ from sales_routes import register_sales_routes
 from broker_routes import register_broker_routes
 from expense_routes import register_expense_routes, seed_default_expense_categories
 from workshop_usage_routes import register_workshop_usage_routes
+from printing import register_printing_routes
 from update_routes import update_bp
 from version import __version__
 import license as lic_module
@@ -1620,6 +1621,8 @@ register_service_analytics_routes(
     SaleItem=SaleItem,
     Product=Product,
 )
+
+register_printing_routes(app, db=db, log_action=log_action)
 
 
 @app.route('/forgot-password', methods=['POST'])

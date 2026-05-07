@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %} — Printer Settings{% endblock %}
+{% block body %}
+<div class="app-layout">
+  {{ sidebar('settings') }}
+  <div class="main-area">
+    <div class="topbar">
+      <div style="font-size:18px;font-weight:700">🖨️ Printer Settings</div>
+      <div class="flex items-center gap-2">
+        <a class="btn btn-ghost btn-sm" href="{{ url_for('settings') }}">← Settings</a>
+      </div>
+    </div>
+
+    <div class="container" style="max-width:880px;margin:18px auto;padding:0 16px">
+
+      <div class="card" style="padding:18px;margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+          <div>
+            <div style="font-size:16px;font-weight:700">Connected Printers</div>
+            <div class="text-muted text-sm">Real status pulled from the OS spooler — driver alone is not enough.</div>
+          </div>
+          <div class="flex gap-2">
+            <button class="btn btn-ghost btn-sm" onclick="refreshPrinters()">🔄 Refresh List</button>
+            <button class="btn btn-ghost btn-sm" onclick="refreshStatus()">🔁 Refresh Status</button>
+          </div>
+        </div>
+        <div id="printerList" class="text-sm text-muted">Loading…</div>
+      </div>
+
+      <div class="card" style="padding:18px;margin-bottom:16px">
+        <div style="font-size:16px;font-weight:700;margin-bottom:12px">Configuration</div>
+
+        <div class="form-group">
+          <label class="form-label">Receipt Printer</label>
+          <select class="form-input" id="receiptPrinter">
+            <option value="">— Select a printer —</option>
+          </select>
+          <div id="receiptStatus" class="text-sm" style="margin-top:6px"></div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Label Printer</label>
+          <select class="form-input" id="labelPrinter">
+            <option value="">— Select a printer —</option>
+          </select>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+          <div class="form-group">
+            <label class="form-label">Default Paper Width</label>
+            <select class="form-input" id="paperWidth">
+              <option value="80mm">80 mm</option>
+              <option value="58mm">58 mm</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Connection Type</label>
+            <select class="form-input" id="connectionType">
+              <option value="windows">Windows (spooler)</option>
+              <option value="usb">USB</option>
+              <option value="network">Network</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Print Mode</label>
+            <select class="form-input" id="printMode">
+              <option value="html">HTML (browser dialog)</option>
+              <option value="escpos">ESC/POS (raw bytes)</option>
+              <option value="windows_raw">Windows Raw (text)</option>
+            </select>
+          </div>
+        </div>
+
+        <label class="cfg-row" style="cursor:pointer">
+          <span><strong>Auto-detect printers</strong><div class="text-muted text-sm">Refresh the list automatically when this page opens.</div></span>
+          <input type="checkbox" id="autoDetect" checked>
+        </label>
+        <label class="cfg-row" style="cursor:pointer">
+          <span><strong>Printing enabled</strong><div class="text-muted text-sm">Disable to suppress all print dispatches without changing buttons.</div></span>
+          <input type="checkbox" id="printingEnabled" checked>
+        </label>
+
+        <div class="flex gap-2" style="margin-top:14px">
+          <button class="btn btn-primary" onclick="savePrinterSettings()">💾 Save Settings</button>
+          <button class="btn btn-ghost" onclick="testPrint('receipt')">🧾 Test Receipt Print</button>
+          <button class="btn btn-ghost" onclick="testPrint('label')">🏷️ Test Label Print</button>
+        </div>
+        <div id="saveMsg" class="text-sm" style="margin-top:10px"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<style>
+  .badge-status { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; }
+  .badge-online  { background:#d1fae5; color:#065f46; }
+  .badge-offline { background:#fee2e2; color:#991b1b; }
+  .badge-paused  { background:#fef3c7; color:#92400e; }
+  .badge-error   { background:#fee2e2; color:#991b1b; }
+  .badge-unknown { background:#e5e7eb; color:#374151; }
+  .printer-row { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px dashed var(--border-color); }
+  .printer-row:last-child { border-bottom: 0; }
+</style>
+
+<script>
+window.__SAVED_PRINTER_SETTINGS__ = {{ settings | tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/printer_settings.js') }}"></script>
+{% endblock %}

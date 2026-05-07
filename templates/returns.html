@@ -742,6 +742,33 @@ function filterTable() {
   document.querySelectorAll('#returnsBody tr').forEach(row => { row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none'; });
 }
 
+// ── Print return receipt via central engine ───────────────────────────────
+async function printReturnReceipt(returnId) {
+  if (!returnId) return;
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+  try {
+    const res = await fetch(`/api/receipts/return/${returnId}/print`, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrf },
+    });
+    const data = await res.json();
+    if (data.mode === 'html' && data.preview_url) {
+      window.open(data.preview_url, '_blank', 'width=420,height=720');
+      return;
+    }
+    if (!res.ok || !data.ok) {
+      toast(data.msg || 'Print failed', 'error');
+    } else {
+      toast(data.msg || 'Sent to printer', 'success');
+    }
+  } catch (e) {
+    toast(`Print error: ${e.message}`, 'error');
+  }
+}
+document.querySelectorAll('.js-print-return').forEach(btn => {
+  btn.addEventListener('click', () => printReturnReceipt(btn.dataset.returnId));
+});
+
 (function() {
   const now = new Date();
   let monthCount = 0, totalRefunded = 0, totalItems = 0;

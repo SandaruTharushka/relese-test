@@ -1,0 +1,182 @@
+{#
+  Central thermal-receipt template.
+  Used for billing / job / return — only ctx body data differs.
+  Layout knobs come from `layout` (ReceiptLayoutSettings.load()).
+#}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{{ ctx.type_title }} — {{ ctx.doc_number }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/receipt_preview.css') }}">
+  <style>
+    :root {
+      --paper-width: {{ '58mm' if layout.rcpt_layout_paper_width == '58mm' else '80mm' }};
+      --paper-px: {{ '220px' if layout.rcpt_layout_paper_width == '58mm' else '300px' }};
+      --rcpt-font-size: {{ layout.rcpt_layout_font_size }}px;
+      --rcpt-font-family: {{ layout.rcpt_layout_font_family|safe }};
+      --rcpt-divider: {{ layout.rcpt_layout_divider_style }};
+      --rcpt-header-align: {{ layout.rcpt_layout_header_alignment }};
+      --rcpt-footer-align: {{ layout.rcpt_layout_footer_alignment }};
+    }
+  </style>
+</head>
+<body class="rcpt-{{ layout.rcpt_layout_template_style }} rcpt-{{ layout.rcpt_layout_paper_width }}">
+  <div class="rcpt-paper" id="receipt">
+    <header class="rcpt-header">
+      {% if layout.rcpt_layout_show_logo and company.company_logo_path %}
+        <img class="rcpt-logo" src="{{ company.company_logo_path }}" alt="logo"
+             onerror="this.style.display='none'">
+      {% endif %}
+      {% if layout.rcpt_layout_show_company_name and company.company_name %}
+        <div class="rcpt-company">{{ company.company_name }}</div>
+      {% endif %}
+      {% if company.company_slogan %}
+        <div class="rcpt-slogan">{{ company.company_slogan }}</div>
+      {% endif %}
+      {% if layout.rcpt_layout_show_address and company.company_address %}
+        <div class="rcpt-line muted">{{ company.company_address }}</div>
+      {% endif %}
+      {% if layout.rcpt_layout_show_phone and company.company_phone %}
+        <div class="rcpt-line muted">Tel: {{ company.company_phone }}</div>
+      {% endif %}
+      {% if layout.rcpt_layout_show_email and company.company_email %}
+        <div class="rcpt-line muted">{{ company.company_email }}</div>
+      {% endif %}
+      {% if company.company_website %}
+        <div class="rcpt-line muted">{{ company.company_website }}</div>
+      {% endif %}
+      {% if company.company_registration_number %}
+        <div class="rcpt-line muted">Reg: {{ company.company_registration_number }}</div>
+      {% endif %}
+      {% if company.company_tax_number and layout.rcpt_layout_show_tax_info %}
+        <div class="rcpt-line muted">Tax: {{ company.company_tax_number }}</div>
+      {% endif %}
+    </header>
+
+    <div class="rcpt-divider"></div>
+
+    <div class="rcpt-doc-title">{{ ctx.type_title }}</div>
+
+    <div class="rcpt-meta">
+      <div><span>{{ ctx.doc_label }}:</span><strong>{{ ctx.doc_number }}</strong></div>
+      <div><span>Date:</span><strong>{{ ctx.datetime }}</strong></div>
+      {% if layout.rcpt_layout_show_cashier and ctx.cashier %}
+        <div><span>Cashier:</span><strong>{{ ctx.cashier }}</strong></div>
+      {% endif %}
+      {% if layout.rcpt_layout_show_customer and ctx.customer_name %}
+        <div><span>Customer:</span><strong>{{ ctx.customer_name }}</strong></div>
+      {% endif %}
+      {% if ctx.customer_phone %}
+        <div><span>Phone:</span><strong>{{ ctx.customer_phone }}</strong></div>
+      {% endif %}
+      {% if layout.rcpt_layout_show_vehicle and ctx.vehicle %}
+        <div><span>Vehicle:</span><strong>{{ ctx.vehicle }}</strong></div>
+      {% endif %}
+      {% if receipt_type == 'job' and ctx.extra.service_type %}
+        <div><span>Service:</span><strong>{{ ctx.extra.service_type }}</strong></div>
+      {% endif %}
+      {% if receipt_type == 'return' and ctx.extra.original_invoice %}
+        <div><span>Original Invoice:</span><strong>{{ ctx.extra.original_invoice }}</strong></div>
+      {% endif %}
+    </div>
+
+    <div class="rcpt-divider"></div>
+
+    <table class="rcpt-items">
+      <thead>
+        <tr>
+          <th class="t-name">Item</th>
+          <th class="t-num">Price</th>
+          <th class="t-qty">Qty</th>
+          <th class="t-num">Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in ctx['items'] %}
+          <tr>
+            <td class="t-name">{{ it.name }}</td>
+            <td class="t-num">{{ it.price_str }}</td>
+            <td class="t-qty">{{ it.qty_str }}</td>
+            <td class="t-num">{{ it.value_str }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="4" class="muted center">— No items —</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="rcpt-divider"></div>
+
+    {% if receipt_type == 'job' and (ctx.extra.issue_reported or ctx.extra.diagnosis) %}
+      <div class="rcpt-notes">
+        {% if ctx.extra.issue_reported %}
+          <div><strong>Issue:</strong> {{ ctx.extra.issue_reported }}</div>
+        {% endif %}
+        {% if ctx.extra.diagnosis %}
+          <div><strong>Diagnosis:</strong> {{ ctx.extra.diagnosis }}</div>
+        {% endif %}
+        {% if ctx.extra.odometer_in %}
+          <div><strong>Odometer:</strong> {{ ctx.extra.odometer_in }} km</div>
+        {% endif %}
+      </div>
+      <div class="rcpt-divider"></div>
+    {% endif %}
+
+    {% if receipt_type == 'return' and ctx.extra.reason %}
+      <div class="rcpt-notes">
+        <div><strong>Reason:</strong> {{ ctx.extra.reason }}</div>
+        <div><strong>Type:</strong> {{ ctx.extra.return_type }}</div>
+      </div>
+      <div class="rcpt-divider"></div>
+    {% endif %}
+
+    {% if layout.rcpt_layout_show_payment_summary %}
+      <div class="rcpt-totals">
+        <div><span>Items:</span><strong>{{ ctx.items_count }}</strong></div>
+        <div><span>Sub Total:</span><strong>{{ money(ctx.subtotal) }}</strong></div>
+        {% if ctx.discount %}
+          <div><span>Discount:</span><strong>{{ money(ctx.discount) }}</strong></div>
+        {% endif %}
+        {% if ctx.tax and layout.rcpt_layout_show_tax_info %}
+          <div><span>Tax:</span><strong>{{ money(ctx.tax) }}</strong></div>
+        {% endif %}
+        <div class="grand"><span>Grand Total:</span><strong>{{ money(ctx.grand_total) }}</strong></div>
+        <div><span>Total Paid:</span><strong>{{ money(ctx.paid) }}</strong></div>
+        <div><span>Balance:</span><strong>{{ money(ctx.balance) }}</strong></div>
+        {% if ctx.payment_method %}
+          <div><span>Payment:</span><strong>{{ ctx.payment_method }}</strong></div>
+        {% endif %}
+      </div>
+      <div class="rcpt-divider"></div>
+    {% endif %}
+
+    {% if layout.rcpt_layout_show_barcode and ctx.doc_number %}
+      <div class="rcpt-barcode">
+        <div class="bars">
+          {% for ch in ctx.doc_number[:24] %}
+            <span class="bar bar-{{ loop.index0 % 4 }}"></span>
+          {% endfor %}
+        </div>
+        <div class="rcpt-barcode-text">{{ ctx.doc_number }}</div>
+      </div>
+      <div class="rcpt-divider"></div>
+    {% endif %}
+
+    {% if layout.rcpt_layout_show_footer %}
+      <footer class="rcpt-footer">
+        <div>{{ company.company_footer_text or 'Thank you!' }}</div>
+        {% if company.company_receipt_note %}
+          <div class="muted">{{ company.company_receipt_note }}</div>
+        {% endif %}
+      </footer>
+    {% endif %}
+  </div>
+
+  {% if auto_print or request.args.get('auto_print') in ('1','true','yes') %}
+    <script>
+      window.addEventListener('load', () => setTimeout(() => window.print(), 300));
+    </script>
+  {% endif %}
+</body>
+</html>

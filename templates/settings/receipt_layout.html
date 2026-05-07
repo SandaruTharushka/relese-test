@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %} — Receipt Layout{% endblock %}
+{% block body %}
+<div class="app-layout">
+  {{ sidebar('settings') }}
+  <div class="main-area">
+    <div class="topbar">
+      <div style="font-size:18px;font-weight:700">🧾 Receipt Layout</div>
+      <div class="flex items-center gap-2">
+        <a class="btn btn-ghost btn-sm" href="{{ url_for('settings') }}">← Settings</a>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:minmax(320px,420px) 1fr;gap:16px;padding:16px;align-items:start">
+
+      <!-- ─── form ─── -->
+      <div class="card" style="padding:16px">
+        <div style="font-size:16px;font-weight:700;margin-bottom:8px">Layout</div>
+        <div class="text-muted text-sm" style="margin-bottom:12px">
+          One layout drives Billing, Job, and Return receipts.
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Template Style</label>
+          <select class="form-input" id="lay_template_style">
+            <option value="modern_garage">Modern Garage</option>
+            <option value="compact">Compact</option>
+            <option value="classic">Classic</option>
+          </select>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div class="form-group">
+            <label class="form-label">Paper Width</label>
+            <select class="form-input" id="lay_paper_width">
+              <option value="80mm">80 mm</option>
+              <option value="58mm">58 mm</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Font Size</label>
+            <input class="form-input" id="lay_font_size" type="number" min="8" max="24">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Font Family</label>
+          <input class="form-input" id="lay_font_family" placeholder="ui-monospace, 'Courier New', monospace">
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div class="form-group">
+            <label class="form-label">Header Alignment</label>
+            <select class="form-input" id="lay_header_alignment">
+              <option value="center">Center</option><option value="left">Left</option><option value="right">Right</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Footer Alignment</label>
+            <select class="form-input" id="lay_footer_alignment">
+              <option value="center">Center</option><option value="left">Left</option><option value="right">Right</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Item Row Style</label>
+            <select class="form-input" id="lay_item_row_style">
+              <option value="standard">Standard</option><option value="compact">Compact</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Divider Style</label>
+            <select class="form-input" id="lay_divider_style">
+              <option value="dashed">Dashed</option><option value="solid">Solid</option>
+              <option value="dotted">Dotted</option><option value="double">Double</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="font-weight:700;margin:8px 0 4px">Show / Hide</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 8px;font-size:13px">
+          <label><input type="checkbox" id="lay_show_logo"> Logo</label>
+          <label><input type="checkbox" id="lay_show_company_name"> Company name</label>
+          <label><input type="checkbox" id="lay_show_address"> Address</label>
+          <label><input type="checkbox" id="lay_show_phone"> Phone</label>
+          <label><input type="checkbox" id="lay_show_email"> Email</label>
+          <label><input type="checkbox" id="lay_show_customer"> Customer</label>
+          <label><input type="checkbox" id="lay_show_vehicle"> Vehicle</label>
+          <label><input type="checkbox" id="lay_show_cashier"> Cashier</label>
+          <label><input type="checkbox" id="lay_show_barcode"> Barcode</label>
+          <label><input type="checkbox" id="lay_show_footer"> Footer</label>
+          <label><input type="checkbox" id="lay_show_tax_info"> Tax info</label>
+          <label><input type="checkbox" id="lay_show_payment_summary"> Payment summary</label>
+        </div>
+
+        <div class="flex gap-2" style="margin-top:14px">
+          <button class="btn btn-primary" onclick="saveLayout()">💾 Save Layout</button>
+          <button class="btn btn-ghost" onclick="resetLayout()">↺ Reset to Default</button>
+        </div>
+        <div id="layoutMsg" class="text-sm" style="margin-top:8px"></div>
+      </div>
+
+      <!-- ─── preview ─── -->
+      <div class="card" style="padding:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div>
+            <div style="font-size:16px;font-weight:700">Live Preview</div>
+            <div class="text-muted text-sm">Rendered by the same engine that prints real receipts.</div>
+          </div>
+          <select class="form-input" id="previewType" style="width:auto" onchange="refreshPreview()">
+            <option value="billing">Billing Receipt</option>
+            <option value="job">Job Receipt</option>
+            <option value="return">Return Receipt</option>
+          </select>
+        </div>
+        <div style="background:#f1f5f9;padding:12px;border-radius:8px;overflow:auto;min-height:600px">
+          <iframe id="previewFrame" style="width:100%;min-height:760px;border:0;background:transparent"></iframe>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+window.__INITIAL_LAYOUT__ = {{ layout | tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/receipt_layout.js') }}"></script>
+{% endblock %}
