@@ -403,6 +403,7 @@
       <pre id="receiptTextRaw" style="display:none"></pre>
     </div>
     <div class="receipt-modal-footer">
+      <button class="btn btn-ghost" id="receiptPreviewBtn" onclick="previewCurrentReceipt()">👁️ Preview</button>
       <button class="btn btn-ghost" id="receiptPrintBtn" onclick="printCurrentReceipt()">🖨️ Print Receipt</button>
       <button class="btn btn-primary" id="newSaleAutoBtn" onclick="_clearAutoCloseTimers();newSale()">➕ New Sale</button>
     </div>
@@ -2707,60 +2708,79 @@ function bindReceiptPrintButton() {
   btn.textContent = '🖨️ Print Receipt';
 }
 
+// In-flight guard prevents duplicate clicks queuing two prints for the same sale.
+const _billingPrintInFlight = new Set();
+
 async function printCurrentReceipt() {
   _autoPrintArmed = false;
   const btn = document.getElementById('receiptPrintBtn');
-  const url = String(_currentReceiptUrl || '').trim();
+  const fallbackUrl = String(_currentReceiptUrl || '').trim();
 
   if (!_currentSaleId) {
     toast('Receipt is not ready yet. Please try again.', 'warning');
     return;
   }
+  if (_billingPrintInFlight.has(_currentSaleId)) {
+    console.debug('[billing] duplicate print prevented (in-flight)', _currentSaleId);
+    return;
+  }
+  _billingPrintInFlight.add(_currentSaleId);
 
   _clearAutoCloseTimers();
-  if (btn) btn.disabled = true;
+  const originalLabel = btn ? btn.textContent : '🖨️ Print Receipt';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Printing…';
+  }
 
   console.log('[billing] print receipt: sale_id=%s invoice=%s', _currentSaleId, _currentReceiptInvoice);
 
   try {
-    const response = await fetch('/api/printing/receipt/print-sale', {
+    const response = await fetch(`/api/receipts/billing/${encodeURIComponent(_currentSaleId)}/print`, {
       method: 'POST',
       headers: withCsrfHeaders({'Content-Type': 'application/json'}),
-      body: JSON.stringify({
-        sale_id: _currentSaleId,
-        copies: 1,
-      }),
+      body: JSON.stringify({ copies: 1 }),
     });
     const data = await response.json().catch(() => ({}));
-    console.log('[billing] print-sale response ok=%s code=%s', data?.ok, data?.code);
+    console.log('[billing] receipts/billing/<id>/print response ok=%s code=%s', data?.ok, data?.code);
+
     if (!response.ok || !data.ok) {
       const reason = data?.msg || data?.error || `Printer dispatch failed (${response.status})`;
-      if (data?.code === 'PRINTER_UNAVAILABLE' || data?.code === 'PRINTER_NOT_INSTALLED' || data?.code === 'MISSING_PRINTER') {
-        if (window.SuperMartReceiptPrint?.printFromUrl && url) {
-          await window.SuperMartReceiptPrint.printFromUrl({
-            url,
-            button: btn,
-            busyText: 'Printing…',
-          });
-          toast(`Printer unavailable (${reason}). Opened browser print dialog instead.`, 'warning');
-        } else {
-          throw new Error(reason);
-        }
+      const printerCodes = ['PRINTER_UNAVAILABLE', 'PRINTER_NOT_INSTALLED', 'MISSING_PRINTER',
+                            'PRINTER_NOT_CONFIGURED', 'PRINTER_OFFLINE'];
+      if (printerCodes.includes(data?.code) && window.SuperMartReceiptPrint?.printFromUrl && fallbackUrl) {
+        await window.SuperMartReceiptPrint.printFromUrl({
+          url: fallbackUrl,
+          button: btn,
+          busyText: 'Printing…',
+        });
+        toast(`Printer unavailable (${reason}). Opened browser print dialog instead.`, 'warning');
       } else {
         throw new Error(reason);
       }
     } else {
-      toast(data.msg || `Receipt queued for ${_currentReceiptInvoice || 'current invoice'}.`, 'success');
+      toast(data.msg || `Receipt queued for ${data.display_no || _currentReceiptInvoice || 'current invoice'}.`, 'success');
     }
   } catch (err) {
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = '🖨️ Print Receipt';
-    }
     toast(err?.message || 'Unable to print receipt right now.', 'error');
   } finally {
+    _billingPrintInFlight.delete(_currentSaleId);
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = originalLabel || '🖨️ Print Receipt';
+    }
     _startReceiptAutoClose(5);
   }
+}
+
+function previewCurrentReceipt() {
+  if (!_currentSaleId) {
+    toast('Receipt is not ready yet. Please try again.', 'warning');
+    return;
+  }
+  const url = `/api/receipts/billing/${encodeURIComponent(_currentSaleId)}/preview`;
+  const w = window.open(url, '_blank', 'noopener,noreferrer,width=440,height=720');
+  if (!w) toast('Popup blocked while opening preview.', 'warning');
 }
 
 function newSale() {

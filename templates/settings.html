@@ -360,6 +360,10 @@
                   <div class="printer-actions">
                     <button class="btn btn-ghost btn-sm" onclick="checkReceiptPrinterStatus()">🔍 Check Status</button>
                     <button class="btn btn-ghost btn-sm" onclick="testReceiptPrinter()">🧪 Test Print</button>
+                    <button class="btn btn-ghost btn-sm" onclick="testBillingReceipt()">🧾 Test Billing</button>
+                    <button class="btn btn-ghost btn-sm" onclick="testRepairReceipt()">🔧 Test Repair</button>
+                    <button class="btn btn-ghost btn-sm" onclick="previewBillingReceipt()">👁️ Preview Billing</button>
+                    <button class="btn btn-ghost btn-sm" onclick="previewRepairReceipt()">👁️ Preview Repair</button>
                   </div>
                 </div>
               </div>
@@ -2249,6 +2253,36 @@ async function testReceiptPrinter() {
     console.error('[printer] POST /api/printer/test/receipt error', e);
     toast('Test print error: ' + e.message, 'error');
   }
+}
+
+async function _runCanonicalReceiptTest(kind, label) {
+  const url = `/api/receipts/${kind}/test`;
+  toast(`Sending test ${label} receipt…`, 'info');
+  try {
+    const r = await fetch(url, { method: 'POST', headers: withCsrfHeaders({}) });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok && d.ok) {
+      toast(d.msg || `Test ${label} receipt sent!`, 'success');
+    } else {
+      toast(d.msg || `Test ${label} receipt failed (${r.status})`, 'error');
+    }
+  } catch (e) {
+    toast(`Test ${label} receipt error: ${e.message}`, 'error');
+  }
+}
+
+function testBillingReceipt() { return _runCanonicalReceiptTest('billing', 'billing'); }
+function testRepairReceipt()  { return _runCanonicalReceiptTest('repair',  'repair'); }
+
+function previewBillingReceipt() {
+  const w = window.open('/api/receipts/billing/test/preview', '_blank',
+    'noopener,noreferrer,width=440,height=720');
+  if (!w) toast('Popup blocked while opening preview.', 'warning');
+}
+function previewRepairReceipt() {
+  const w = window.open('/api/receipts/repair/test/preview', '_blank',
+    'noopener,noreferrer,width=440,height=720');
+  if (!w) toast('Popup blocked while opening preview.', 'warning');
 }
 
 async function testLabelPrinter() {

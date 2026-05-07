@@ -689,6 +689,7 @@ function renderJobs(jobs){
       <td style="white-space:nowrap">
         <button class="btn btn-ghost btn-sm" onclick="viewJob(${j.id})" title="View job details">View</button>
         <button class="btn btn-ghost btn-sm" onclick="openEditJobModal(${j.id})" title="Edit job">Edit</button>
+        <button class="btn btn-ghost btn-sm" onclick="previewServiceReceipt(${j.id})" title="Preview receipt">👁️</button>
         <button class="btn btn-ghost btn-sm" onclick="printJobReceipt(${j.id})" title="Print receipt">🧾 Receipt</button>
         <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="deleteJob(${j.id}, '${(j.job_number||'').replace(/'/g, '\\\'')}')">🗑</button>
       </td>
@@ -1153,16 +1154,17 @@ async function printServiceReceipt(jid, btn){
   if (triggerBtn) {
     triggerBtn.dataset.originalLabel = originalLabel;
     triggerBtn.disabled = true;
-    triggerBtn.textContent = 'Printing...';
+    triggerBtn.textContent = 'Printing…';
   }
   try {
     const receiptUrl = `/repairs/${encodeURIComponent(jid)}/receipt/print?auto_print=1`;
     let dispatchError = null;
     try {
-      const response = await fetch('/api/printing/receipt/print-job', {
+      // Canonical endpoint — POST /api/receipts/repair/<job_id>/print
+      const response = await fetch(`/api/receipts/repair/${encodeURIComponent(jid)}/print`, {
         method: 'POST',
         headers: csrfHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ job_id: jid, copies: 1 }),
+        body: JSON.stringify({ copies: 1 }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.ok) {
@@ -1170,7 +1172,7 @@ async function printServiceReceipt(jid, btn){
         dispatchError.code = data?.code || '';
         dispatchError.status = response.status;
       } else if (typeof toast === 'function') {
-        toast(data?.msg || `Receipt queued for ${data?.job_number || `job #${jid}`}.`, 'success');
+        toast(data?.msg || `Receipt queued for ${data?.display_no || data?.job_number || `job #${jid}`}.`, 'success');
       }
     } catch (err) {
       dispatchError = err instanceof Error ? err : new Error('Printer dispatch failed.');
@@ -1199,6 +1201,13 @@ async function printServiceReceipt(jid, btn){
       triggerBtn.textContent = originalLabel;
     }
   }
+}
+
+function previewServiceReceipt(jid){
+  if(!jid) return;
+  const url = `/api/receipts/repair/${encodeURIComponent(jid)}/preview`;
+  const w = window.open(url, '_blank', 'noopener,noreferrer,width=440,height=720');
+  if (!w && typeof toast === 'function') toast('Popup blocked while opening preview.', 'warning');
 }
 
 async function openEditJobModal(id){
