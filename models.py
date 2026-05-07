@@ -16,6 +16,7 @@ db = SQLAlchemy()
 
 MONEY_QUANTUM = Decimal('0.01')
 MONEY_ZERO = Decimal('0.00')
+DEFAULT_LOW_STOCK_ALERT = 2
 
 
 def money_to_decimal(value, default=MONEY_ZERO):
@@ -214,7 +215,7 @@ class Product(db.Model):
     rack_number     = db.Column(db.String(20), default='')
     section_number  = db.Column(db.String(20), default='')
     stock_qty       = db.Column(db.Float, default=0)
-    low_stock_lvl   = db.Column(db.Float, default=10)
+    low_stock_lvl   = db.Column(db.Float, default=DEFAULT_LOW_STOCK_ALERT)
     stock_tracking_type = db.Column(db.String(30), default=STOCK_TRACKING_QUANTITY, nullable=False)
     availability_status = db.Column(db.String(20), default=AVAILABILITY_IN_STOCK, nullable=False)
     stock_note      = db.Column(db.String(200))
@@ -1212,7 +1213,7 @@ class ProductVariant(db.Model):
     sell_price    = db.Column(MONEY, nullable=False)
     buy_price     = db.Column(MONEY, default=0)
     stock_qty     = db.Column(db.Integer, default=0)
-    low_stock_lvl = db.Column(db.Integer, default=5)
+    low_stock_lvl = db.Column(db.Integer, default=DEFAULT_LOW_STOCK_ALERT)
     status        = db.Column(db.String(10), default='active')
     product       = db.relationship('Product')
 

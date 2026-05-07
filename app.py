@@ -25,7 +25,8 @@ from models import (db, User, Category, Supplier, Product,
                     InstallmentPlan, Installment,
                     Broker, BrokerCommissionPayment,
                     ExpenseCategory, ExpenseEntry,
-                    WorkshopStockUsage)
+                    WorkshopStockUsage,
+                    DEFAULT_LOW_STOCK_ALERT)
 from customer_routes import register_customer_routes
 from variant_routes import register_variant_routes
 from repair_routes import register_repair_routes
@@ -101,6 +102,16 @@ _LOW_STOCK_CACHE_TTL_SECONDS = 60
 _low_stock_cache = {'count': 0, 'expires': 0}
 _low_stock_cache_lock = threading.Lock()
 HARDWARE_SETTINGS_FILE = persistent_path('config', 'hardware_settings.json')
+
+
+
+def _sanitize_low_stock_alert(value):
+    """Return a safe low-stock alert value using centralized default for invalid/unset inputs."""
+    try:
+        parsed = int(float(value))
+    except (TypeError, ValueError):
+        return DEFAULT_LOW_STOCK_ALERT
+    return parsed if parsed >= 0 else DEFAULT_LOW_STOCK_ALERT
 
 def _invalidate_low_stock_cache():
     with _low_stock_cache_lock:
@@ -1944,7 +1955,7 @@ def api_create_product_quick():
             sell_price=price,
             buy_price=0,
             stock_qty=0,
-            low_stock_lvl=10,
+            low_stock_lvl=DEFAULT_LOW_STOCK_ALERT,
             category_id=category_id,
             status='active',
             product_type=product_type,
@@ -2000,7 +2011,7 @@ def api_add_product():
         buy_price       = float(d.get('buy_price', 0) or 0)
         wholesale_price = float(d.get('wholesale_price', 0) or 0)
         stock_qty       = int(float(d.get('stock_qty', 0) or 0))
-        low_stock_lvl   = int(float(d.get('low_stock_lvl', 10) or 10))
+        low_stock_lvl   = _sanitize_low_stock_alert(d.get('low_stock_lvl'))
         price_per_kg    = float(d.get('price_per_kg', 0) or 0)
     except (TypeError, ValueError) as e:
         return jsonify({'error': f'Invalid numeric value: {str(e)}'}), 400
@@ -2323,7 +2334,7 @@ def api_bulk_import_items():
                 else:
                     product = Product(
                         name=name, barcode=barcode, buy_price=buy_price, sell_price=sell_price, stock_qty=qty,
-                        supplier_id=supplier_id, category_id=category_id, status='active', low_stock_lvl=10, product_type='normal',
+                        supplier_id=supplier_id, category_id=category_id, status='active', low_stock_lvl=DEFAULT_LOW_STOCK_ALERT, product_type='normal',
                         stock_tracking_type='QUANTITY_TRACKED', availability_status='IN_STOCK'
                     )
                     db.session.add(product)
