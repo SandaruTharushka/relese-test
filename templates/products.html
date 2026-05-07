@@ -32,7 +32,7 @@
             </tr></thead>
             <tbody>
               {% for p in products %}
-              <tr data-name="{{ p.name|lower }}" data-barcode="{{ p.barcode or '' }}" data-product-id="{{ p.id }}">
+              <tr data-name="{{ p.name|lower }}" data-barcode="{{ (p.barcode or '')|lower }}" data-category="{{ (p.cat.name if p.cat else '')|lower }}" data-product-id="{{ p.id }}">
                 <td class="text-xs text-muted">{{ p.barcode or '—' }}</td>
                 <td style="font-weight:600">
                   {{ p.name }}
@@ -237,11 +237,12 @@
 {% block scripts %}
 <script>
 function filterTable() {
-  const q = document.getElementById('prodSearch').value.toLowerCase();
+  const q = document.getElementById('prodSearch').value.trim().toLowerCase();
   document.querySelectorAll('#prodTable tbody tr').forEach(r => {
     const name = r.dataset.name || '';
     const bc   = r.dataset.barcode || '';
-    r.style.display = (name.includes(q) || bc.includes(q)) ? '' : 'none';
+    const category = r.dataset.category || '';
+    r.style.display = (!q || name.includes(q) || bc.includes(q) || category.includes(q)) ? '' : 'none';
   });
 }
 
@@ -584,17 +585,22 @@ async function handleBulkImportSelection(event) {
   }
 }
 
-function downloadSampleImportFile() {
-  const content = 'name,buy_price,sell_price,qty,barcode,supplier\nEngine Oil,2500,3200,10,890001,ABC Supplier\n';
-  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'sample_item_import.csv';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+async function downloadSampleImportFile() {
+  try {
+    const response = await fetch('/api/products/import/sample');
+    if (!response.ok) throw new Error(`Download failed (${response.status})`);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'products_import_sample.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    toast(err.message || 'Failed to download sample import file', 'error');
+  }
 }
 
 /** Simple HTML escape to prevent XSS in dynamically-built HTML. */
