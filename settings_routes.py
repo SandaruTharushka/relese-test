@@ -75,17 +75,6 @@ def register_settings_routes(
             app.logger.exception('Settings page render failed user=%s', current_user.username)
             raise
 
-    @app.route('/settings/barcode-scanner')
-    @login_required
-    def barcode_scanner_management():
-        allowed = user_has_any_role(current_user, 'Admin', 'Operator', 'Developer', 'Manager')
-        if not allowed:
-            abort(403)
-        return render_template(
-            'barcode_scanner_management.html',
-            products=Product.query.filter_by(status='active').order_by(Product.name.asc()).limit(500).all(),
-        )
-
     # ── Store settings API ────────────────────────────────────────────────────
 
     @app.route('/api/store-settings', methods=['GET'])

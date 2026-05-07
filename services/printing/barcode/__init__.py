@@ -1,1 +1,0 @@
-"""Barcode generation subpackage."""

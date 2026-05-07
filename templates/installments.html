@@ -334,16 +334,6 @@ async function loadPlans() {
   `).join('');
 }
 
-function printDoc(planId, type) {
-  // Open the proper print receipt page (auto-prints and closes on completion)
-  const url = `/api/installments/${planId}/print/${type}?auto_print=1`;
-  const w = window.open(url, '_blank', 'width=500,height=700,noopener');
-  if (!w) {
-    // Popup blocked fallback - open without auto_print so user can print manually
-    window.open(`/api/installments/${planId}/print/${type}`, '_blank', 'noopener');
-  }
-}
-
 function openPayModal(plan) {
   currentPlan = plan;
   document.getElementById('payPlanId').value = plan.id;
@@ -415,12 +405,6 @@ async function viewPlan(id) {
           <button class="btn btn-ghost" onclick="runPlanAction(${p.id},'mark_defaulted')">Mark Defaulted</button>
           <button class="btn btn-ghost" onclick="runPlanAction(${p.id},'reopen')">Reopen</button>
           <button class="btn btn-ghost" onclick="runPlanAction(${p.id},'mark_repossessed')">Mark Repossessed</button>` : ''}
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-ghost" onclick="printDoc(${p.id},'agreement')">Print Agreement</button>
-          <button class="btn btn-ghost" onclick="printDoc(${p.id},'receipt')">Print Receipt</button>
-          <button class="btn btn-ghost" onclick="printDoc(${p.id},'statement')">Print Statement</button>
-          <button class="btn btn-ghost" onclick="printDoc(${p.id},'overdue_notice')">Print Overdue Notice</button>
         </div>
       </div>
 

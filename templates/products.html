@@ -256,22 +256,8 @@ async function validateBarcodeInput(inputId, helpId, excludeProductId = null) {
   const input = document.getElementById(inputId);
   const help = document.getElementById(helpId);
   if (!input || !help) return true;
-  const barcode = (input.value || '').trim();
-  if (!barcode) { help.textContent = ''; return true; }
-  try {
-    const params = new URLSearchParams({ barcode });
-    if (excludeProductId) params.set('exclude_product_id', String(excludeProductId));
-    const res = await fetch(`/api/barcode/validate?${params.toString()}`);
-    const data = await res.json();
-    const available = !!data.available;
-    help.textContent = available ? '✅ Barcode is available.' : '❌ Barcode is already used by another product.';
-    help.style.color = available ? 'var(--success)' : 'var(--danger)';
-    return available;
-  } catch (_error) {
-    help.textContent = '⚠ Barcode validation unavailable.';
-    help.style.color = 'var(--warning)';
-    return true;
-  }
+  help.textContent = '';
+  return true;
 }
 
 function wireBarcodeValidation(inputId, helpId, excludeProductIdProvider = null) {

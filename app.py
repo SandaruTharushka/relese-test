@@ -46,19 +46,9 @@ from sales_routes import register_sales_routes
 from broker_routes import register_broker_routes
 from expense_routes import register_expense_routes, seed_default_expense_categories
 from workshop_usage_routes import register_workshop_usage_routes
-# ── New canonical printing route modules ──────────────────────────────
-from routes.printing_settings_routes import register_printing_settings_routes
-from routes.receipt_print_routes import register_receipt_print_routes
-from routes.receipt_routes import register_receipt_routes
-from routes.label_print_routes import register_label_print_routes
-from routes.barcode_routes import register_barcode_routes
-from routes.diagnostics_routes import register_diagnostics_routes
 from update_routes import update_bp
 from version import __version__
 import license as lic_module
-from services.printer_service import PrinterService
-from services.printing.label_printer import LabelPrintExecutionService
-from services.barcode_scanner_service import BarcodeService, ScannerService, ProductFillService, LabelLayoutService
 from utils.timezone import now_utc, now_sl, format_sl_datetime
 
 from shared_helpers import (
@@ -67,7 +57,6 @@ from shared_helpers import (
     _quote_env_value,
     _summarize_audit_metadata,
     contains_sql_like,
-    decode_barcode,
     validate_password_strength,
     is_admin_role,
     is_pos_operator_role,
@@ -90,7 +79,6 @@ OTP_EXPIRY_MINUTES            = 5
 OTP_MAX_ATTEMPTS              = 5
 AUDIT_LOGS_DEFAULT_PER_PAGE   = 50
 DB_HEALTH_RECHECK_INTERVAL    = 50
-BARCODE_EAN13_ATTEMPTS        = 10
 RECENT_SALES_LIMIT            = 8
 RECENT_MOVEMENTS_LIMIT        = 30
 TOP_PRODUCTS_LIMIT            = 5
@@ -397,41 +385,10 @@ app.config.setdefault('WTF_CSRF_TIME_LIMIT', None)
 configure_app_logging(app)
 app.logger.info('UTC now: %s', now_utc().strftime('%Y-%m-%d %H:%M:%S %Z'))
 app.logger.info('SL now: %s', now_sl().strftime('%Y-%m-%d %H:%M:%S %Z'))
-printer_service = PrinterService(app.logger)
-label_print_service = LabelPrintExecutionService(app.logger)
-
 from services.settings_service import get_settings_service
 from services.card_terminal_service import get_card_terminal_service, CardConfig
 _settings_svc = get_settings_service()
 _card_terminal_svc = get_card_terminal_service()
-
-def _attempt_printer_autoconnect_on_startup():
-    try:
-        # Batch-load all settings once instead of 8+ individual queries
-        all_settings = _settings_svc.get_all()
-        receipt_cfg = {
-            'printer_type': all_settings.get('printer_type', 'windows') or 'windows',
-            'printer_name': all_settings.get('printer_name', '') or '',
-            'printer_ip': all_settings.get('printer_ip', '') or '',
-            'printer_port': all_settings.get('printer_port', '9100') or '9100',
-        }
-        label_cfg = {
-            'label_printer_type': all_settings.get('label_printer_type', 'windows') or 'windows',
-            'label_printer_name': all_settings.get('label_printer_name', '') or '',
-            'label_printer_ip': all_settings.get('label_printer_ip', '') or '',
-            'label_printer_port': all_settings.get('label_printer_port', '9100') or '9100',
-        }
-        receipt = printer_service.resolve_receipt_printer(receipt_cfg)
-        label = printer_service.resolve_label_printer(label_cfg)
-        app.logger.info(
-            'printer_autoconnect_startup receipt_connected=%s receipt_name=%s label_connected=%s label_name=%s',
-            receipt.connected,
-            receipt.name,
-            label.connected,
-            label.name,
-        )
-    except Exception:
-        app.logger.warning('Printer startup auto-connect check failed', exc_info=True)
 
 def _attempt_card_terminal_autoconnect():
     """Auto-connect card terminal if enabled and auto_connect setting is on."""
@@ -454,7 +411,6 @@ app.logger.info(
 
 db.init_app(app)
 with app.app_context():
-    _attempt_printer_autoconnect_on_startup()
     _attempt_card_terminal_autoconnect()
 app.register_blueprint(backup_bp)
 app.register_blueprint(update_bp)
@@ -1078,14 +1034,6 @@ def normalize_product_type(raw_value, fallback='normal'):
         return value
     return fallback
 
-def gen_ean13(product_id):
-    """Generate a valid EAN-13 barcode: prefix 200 + 5-digit product id + 4 random + 1 check digit."""
-    body = f'200{product_id:05d}{random.randint(0, 9999):04d}'
-    odds  = sum(int(body[i]) for i in range(0, 12, 2))
-    evens = sum(int(body[i]) for i in range(1, 12, 2))
-    check = (10 - ((odds + evens * 3) % 10)) % 10
-    return body + str(check)
-
 def gen_invoice(retry_offset=0):
     """Generate a unique, race-condition-free invoice number using atomic DB sequence."""
     from services.atomic_sequence import next_sequence as _next_seq
@@ -1576,83 +1524,6 @@ register_settings_routes(
     requires_password_change=requires_password_change,
 )
 
-# ── New canonical printing routes ────────────────────────────────────────
-from services.printing.settings_service import PrintSettingsService
-from services.printing.domain_service import PrintingDomainService
-_printer_settings_svc = PrintSettingsService(StoreSettings)
-_print_domain_svc = PrintingDomainService(
-    printer_service=printer_service,
-    settings=_printer_settings_svc,
-    logger=app.logger,
-    log_action=log_action,
-    user_log_model=UserLog,
-)
-
-register_printing_settings_routes(
-    app,
-    db=db,
-    StoreSettings=StoreSettings,
-    printer_service=printer_service,
-    log_action=log_action,
-    user_has_any_role=user_has_any_role,
-)
-
-register_receipt_print_routes(
-    app,
-    db=db,
-    StoreSettings=StoreSettings,
-    printer_service=printer_service,
-    print_domain=_print_domain_svc,
-    log_action=log_action,
-    user_has_any_role=user_has_any_role,
-    Sale=Sale,
-    RepairJob=RepairJob,
-    UserLog=UserLog,
-    ProductReturn=ProductReturn,
-)
-
-# Canonical /api/receipts/<billing|repair>/<id>/{preview,text,print}
-# routes — single source of truth used by billing.html and repairs.html.
-register_receipt_routes(
-    app,
-    StoreSettings=StoreSettings,
-    print_domain=_print_domain_svc,
-    log_action=log_action,
-    user_has_any_role=user_has_any_role,
-    Sale=Sale,
-    RepairJob=RepairJob,
-)
-
-register_label_print_routes(
-    app,
-    db=db,
-    StoreSettings=StoreSettings,
-    printer_service=printer_service,
-    print_domain=_print_domain_svc,
-    log_action=log_action,
-    user_has_any_role=user_has_any_role,
-    Product=Product,
-)
-
-register_barcode_routes(
-    app,
-    db=db,
-    StoreSettings=StoreSettings,
-    log_action=log_action,
-    user_has_any_role=user_has_any_role,
-    Product=Product,
-    barcode_in_use=barcode_in_use,
-)
-
-register_diagnostics_routes(
-    app,
-    printer_service=printer_service,
-    print_domain=_print_domain_svc,
-    settings=_printer_settings_svc,
-    user_has_any_role=user_has_any_role,
-    UserLog=UserLog,
-)
-
 register_reports_routes(
     app,
     db=db,
@@ -1721,7 +1592,7 @@ register_sales_routes(
 register_customer_routes(app, log_action=log_action)
 register_vehicle_routes(app, log_action=log_action)
 register_variant_routes(app, log_action=log_action)
-register_repair_routes(app, log_action=log_action, print_domain=_print_domain_svc)
+register_repair_routes(app, log_action=log_action)
 register_installment_routes(app, log_action=log_action)
 register_broker_routes(app, log_action=log_action)
 register_expense_routes(app, log_action=log_action)
@@ -1750,19 +1621,6 @@ register_service_analytics_routes(
     Product=Product,
 )
 
-
-@app.route('/print/receipt/<string:receipt_type>/<int:record_id>')
-@login_required
-def print_receipt_router(receipt_type, record_id):
-    "Unified receipt print entrypoint for POS modules."
-    normalized_type = (receipt_type or '').strip().lower()
-    if normalized_type in {'repair', 'repairs'}:
-        return redirect(url_for('repair_job_receipt', jid=record_id, auto_print=request.args.get('auto_print', '1')))
-    if normalized_type in {'return', 'returns', 'refund'}:
-        return redirect(url_for('refund_receipt_page', rid=record_id, auto_print=request.args.get('auto_print', '1')))
-    if normalized_type in {'sale', 'sales'}:
-        return redirect(url_for('sales_receipt_page', sid=record_id, auto_print=request.args.get('auto_print', '1')))
-    return jsonify({'ok': False, 'error': f'Unsupported receipt type: {normalized_type}'}), 404
 
 @app.route('/forgot-password', methods=['POST'])
 def forgot_password():
@@ -2012,39 +1870,6 @@ def api_inventory_parts_search():
     ])
 
 
-@app.route('/api/products/barcode/<path:barcode>')
-@login_required
-def api_product_barcode(barcode):
-    from services.barcode_normalizer import normalize_scanned_code
-    raw_code = barcode
-    code = normalize_scanned_code(raw_code)
-    if not code:
-        return jsonify({'ok': False, 'success': False, 'raw_code': raw_code,
-                        'normalized_code': '', 'message': 'Empty barcode'}), 400
-    # 1. Primary barcode field
-    p = Product.query.filter_by(barcode=code, status='active').first()
-    # 2. SKU (covers QR codes whose value equals the product SKU)
-    if not p:
-        p = Product.query.filter_by(sku=code, status='active').first()
-    # 3. Alias barcode table
-    if not p:
-        pb = ProductBarcode.query.filter_by(barcode=code).first()
-        if pb:
-            p = Product.query.filter_by(id=pb.product_id, status='active').first()
-    if not p:
-        return jsonify({
-            'ok': False, 'success': False,
-            'raw_code': raw_code, 'normalized_code': code,
-            'message': f'Item not found for scanned code: {code}',
-        }), 404
-    product_dict = p.to_dict()
-    return jsonify({
-        'ok': True, 'success': True,
-        'product': product_dict,
-        # Flat fields kept for backward-compat with billing.html checks
-        **product_dict,
-    }), 200
-
 @app.route('/api/products/create', methods=['POST'])
 @login_required
 def api_create_product_quick():
@@ -2194,14 +2019,6 @@ def api_add_product():
             stock_note=stock_note,
         )
         db.session.add(p)
-        db.session.flush()
-        # Auto-generate EAN-13 if no barcode provided
-        if not p.barcode:
-            for _ in range(BARCODE_EAN13_ATTEMPTS):
-                candidate = gen_ean13(p.id)
-                if not Product.query.filter_by(barcode=candidate).first():
-                    p.barcode = candidate
-                    break
         db.session.commit()
         _invalidate_low_stock_cache()
         log_action(f'Added product: {p.name}')
@@ -2510,124 +2327,6 @@ def api_stats():
         _log_stats_failure('low_stock_count', exc)
 
     return jsonify(stats)
-
-# ── API: PRINTER / DRAWER ─────────────────────────────────────────────────────
-def _printing_error(message: str, *, code: str, status: int, extra: dict[str, Any] | None = None):
-    payload = {'ok': False, 'code': code, 'error': message}
-    if extra:
-        payload.update(extra)
-    return jsonify(payload), status
-
-
-def _safe_int(value: Any, *, default: int, minimum: int, maximum: int) -> int:
-    try:
-        parsed = int(str(value).strip())
-    except (TypeError, ValueError):
-        return default
-    return max(minimum, min(parsed, maximum))
-
-
-def _get_label_printer_config() -> dict[str, Any]:
-    cfg: dict[str, Any] = {
-        'label_printer_type': (StoreSettings.get('label_printer_type', 'windows') or 'windows').strip().lower(),
-        'label_printer_name': (StoreSettings.get('label_printer_name', '') or '').strip(),
-        'label_printer_ip': (StoreSettings.get('label_printer_ip', '') or '').strip(),
-        'label_orientation': str(StoreSettings.get('label_orientation', 'portrait') or 'portrait').strip().lower(),
-        'label_text_align': str(StoreSettings.get('label_text_align', 'center') or 'center').strip().lower(),
-        'label_custom_footer': str(StoreSettings.get('label_custom_footer', '') or '').strip(),
-    }
-    for float_key, default in (
-        ('label_width_mm', 30.0),
-        ('label_height_mm', 20.0),
-        ('label_gap_mm', 3.0),
-        ('label_margin_top', 2.0),
-        ('label_margin_left', 2.0),
-        ('label_margin_right', 2.0),
-        ('label_margin_bottom', 2.0),
-        ('label_barcode_width_mm', 24.0),
-        ('label_barcode_height_mm', 8.0),
-    ):
-        try:
-            cfg[float_key] = float(StoreSettings.get(float_key, default) or default)
-        except (TypeError, ValueError):
-            cfg[float_key] = default
-    for int_key, default in (
-        ('label_printer_port', 9100),
-        ('label_dpi', 203),
-        ('label_font_size', 9),
-        ('label_darkness', 50),
-        ('label_speed', 2),
-    ):
-        try:
-            cfg[int_key] = int(StoreSettings.get(int_key, default) or default)
-        except (TypeError, ValueError):
-            cfg[int_key] = default
-    for bool_key, default in (
-        ('label_show_name', True),
-        ('label_show_price', True),
-        ('label_show_barcode', True),
-        ('label_show_wholesale_price', False),
-        ('label_show_sku', False),
-        ('label_show_rack', False),
-        ('label_show_section', False),
-        ('label_show_company', False),
-        ('label_show_footer', False),
-    ):
-        raw_value = StoreSettings.get(bool_key, 'true' if default else 'false')
-        cfg[bool_key] = str(raw_value).strip().lower() == 'true'
-    cfg['label_barcode_type'] = str(StoreSettings.get('label_barcode_type', 'code128') or 'code128').strip().lower()
-    return cfg
-
-
-def resolve_label_printer(cfg: dict[str, Any]) -> dict[str, Any]:
-    return printer_service.resolve_label_printer(cfg).to_dict()
-
-
-@app.route('/api/drawer/open', methods=['POST'])
-@login_required
-def api_drawer_open():
-    import socket as _socket
-
-    command = b'\x1b\x70\x00\x19\xfa'
-    printer_ip = (StoreSettings.get('printer_ip', '') or '').strip()
-    try:
-        printer_port = int(StoreSettings.get('printer_port', '9100') or 9100)
-    except (TypeError, ValueError):
-        printer_port = 9100
-
-    if printer_ip:
-        try:
-            with _socket.create_connection((printer_ip, printer_port), timeout=5) as sock:
-                sock.sendall(command)
-            return jsonify({'ok': True, 'msg': f'Cash drawer open signal sent to {printer_ip}:{printer_port}'})
-        except Exception as exc:
-            app.logger.exception(
-                'Cash drawer open via TCP failed user=%s printer_ip=%s printer_port=%s',
-                getattr(current_user, 'username', 'anonymous'),
-                printer_ip,
-                printer_port,
-            )
-            return jsonify({'ok': False, 'msg': f'Failed to open cash drawer via network printer: {exc}'}), 500
-
-    printer_name = (StoreSettings.get('printer_name', '') or '').strip()
-    if os.name == 'nt' and sys.platform == 'win32' and printer_name:
-        try:
-            payload_bytes = command.encode('utf-8') if isinstance(command, str) else command
-            target_printer = printer_service.send_raw_to_windows_printer(
-                printer_name,
-                payload_bytes,
-                document_name='Garage Management System Cash Drawer Open',
-            )
-            return jsonify({'ok': True, 'msg': f'Cash drawer open signal sent to {target_printer}'})
-        except Exception as exc:
-            app.logger.exception(
-                'Cash drawer open via Windows printer failed user=%s printer_name=%s',
-                getattr(current_user, 'username', 'anonymous'),
-                printer_name,
-            )
-            return jsonify({'ok': False, 'msg': f'Failed to open cash drawer via Windows printer: {exc}'}), 500
-
-    return jsonify({'ok': False, 'msg': 'Configure printer IP or printer name in Settings to open the cash drawer.'}), 400
 
 def _sniff_uploaded_backup_file(filepath: str, filename: str, declared_mimetype: str | None = None) -> tuple[bool, str | None]:
     ext = (os.path.splitext(filename or '')[1] or '').lower()
@@ -2990,241 +2689,6 @@ def api_system_status():
             'destructive_tools_enabled': True,
         }
     )
-
-@app.route('/api/barcode/scan/<path:barcode>')
-@login_required
-def api_barcode_scan(barcode):
-    from services.barcode_normalizer import normalize_scanned_code
-    code = normalize_scanned_code(barcode)
-    decoded = decode_barcode(code)
-    btype   = decoded['type']
-    if btype == 'normal':
-        product = Product.query.filter_by(barcode=code, status='active').first()
-        if not product:
-            product = Product.query.filter_by(sku=code, status='active').first()
-        if not product:
-            # Check alias barcodes table
-            pb = ProductBarcode.query.filter_by(barcode=code).first()
-            if pb:
-                product = Product.query.filter_by(id=pb.product_id, status='active').first()
-        if not product: return jsonify({'ok': False, 'msg': f'Product not found: {code}'})
-        return jsonify({'ok': True, 'type': 'normal', 'product': product.to_dict(),
-                        'quantity': 1, 'price': product.sell_price, 'total': product.sell_price, 'label': product.name})
-    elif btype == 'weight':
-        product_code = decoded['product_code']
-        weight_kg    = decoded['weight_kg']
-        term = contains_sql_like(product_code)
-        product = (Product.query.filter(Product.barcode.like(term, escape='\\'), Product.status == 'active').first()
-                   or Product.query.filter_by(id=int(product_code), status='active').first())
-        if not product: return jsonify({'ok': False, 'msg': f'Weight product not found (code: {product_code})'})
-        price_per_kg = product.price_per_kg or product.sell_price
-        total = round(weight_kg * price_per_kg, 2)
-        return jsonify({'ok': True, 'type': 'weight', 'product': product.to_dict(),
-                        'quantity': weight_kg, 'weight_kg': weight_kg, 'weight_g': decoded['weight_g'],
-                        'price_per_kg': price_per_kg, 'price': total, 'total': total,
-                        'label': f"{product.name} ({weight_kg:.3f}kg)"})
-    elif btype == 'price':
-        product_code = decoded['product_code']
-        price_lkr    = decoded['price_lkr']
-        term = contains_sql_like(product_code)
-        product = (Product.query.filter(Product.barcode.like(term, escape='\\'), Product.status == 'active').first()
-                   or Product.query.filter_by(id=int(product_code), status='active').first())
-        if not product: return jsonify({'ok': False, 'msg': f'Price product not found (code: {product_code})'})
-        return jsonify({'ok': True, 'type': 'price', 'product': product.to_dict(),
-                        'quantity': 1, 'price': price_lkr, 'total': price_lkr,
-                        'label': f"{product.name} (price-coded)"})
-    return jsonify({'ok': False, 'msg': 'Unknown barcode format'})
-
-# ── BARCODE ONLINE LOOKUP (OpenFoodFacts) ─────────────────────────────────────
-
-
-@app.route('/api/barcode-scanner/products')
-@login_required
-def api_barcode_scanner_products():
-    require_roles('Admin', 'Operator', 'Manager', 'Developer')
-    rows = Product.query.filter_by(status='active').order_by(Product.name.asc()).all()
-    payload = [
-        {
-            'id': p.id,
-            'name': p.name,
-            'barcode': p.barcode or '',
-            'sku': p.sku or '',
-            'sell_price': float(p.sell_price or 0),
-        }
-        for p in rows
-    ]
-    return jsonify({'ok': True, 'products': payload})
-
-
-@app.route('/api/barcode-scanner/product/<int:pid>')
-@login_required
-def api_barcode_scanner_product(pid):
-    require_roles('Admin', 'Operator', 'Manager', 'Developer')
-    product = db.session.get(Product, pid)
-    if not product or product.status != 'active':
-        return jsonify({'ok': False, 'error': 'Product not found'}), 404
-    return jsonify({'ok': True, 'product': ProductFillService.product_payload(product)})
-
-
-@app.route('/api/barcode-scanner/generate', methods=['POST'])
-@login_required
-def api_barcode_scanner_generate():
-    require_roles('Admin', 'Operator', 'Manager', 'Developer')
-    data = request.get_json(silent=True) or {}
-    product_id = int(data.get('product_id') or 0)
-    if not product_id:
-        return jsonify({'ok': False, 'error': 'Product is required'}), 400
-    product = db.session.get(Product, product_id)
-    if not product or product.status != 'active':
-        return jsonify({'ok': False, 'error': 'Product not found'}), 404
-
-    mode = data.get('mode') or StoreSettings.get('barcode_auto_mode', 'random')
-    barcode_type = data.get('barcode_type') or StoreSettings.get('label_barcode_type', 'code128')
-    prefix = data.get('prefix') or StoreSettings.get('barcode_prefix', 'SM')
-    manual = data.get('barcode') or ''
-
-    def _exists(candidate: str) -> bool:
-        return barcode_in_use(candidate, exclude_product_id=product.id)
-
-    try:
-        result = BarcodeService.generate(
-            product_id=product.id,
-            mode=mode,
-            barcode_type=barcode_type,
-            prefix=prefix,
-            manual_value=manual,
-            exists_fn=_exists,
-        )
-    except ValueError as exc:
-        return jsonify({'ok': False, 'error': str(exc)}), 400
-
-    preview = BarcodeService.build_preview_payload(barcode=result.barcode, barcode_type=result.barcode_type)
-    return jsonify({'ok': True, 'barcode': result.barcode, 'barcode_type': result.barcode_type, 'mode': result.mode, 'preview': preview})
-
-
-@app.route('/api/barcode-scanner/label-preview', methods=['POST'])
-@login_required
-def api_barcode_scanner_label_preview():
-    require_roles('Admin', 'Operator', 'Manager', 'Developer')
-    from io import BytesIO
-    import base64
-
-    data = request.get_json(silent=True) or {}
-    product = data.get('product') or {}
-
-    settings = _get_label_printer_config()
-    settings.update({k: v for k, v in data.get('settings', {}).items() if k in settings or k.startswith('label_')})
-
-    image = label_print_service.render_label_image(
-        barcode_value=str(product.get('barcode') or ''),
-        product_name=str(product.get('name') or ''),
-        price=str(product.get('sell_price') or ''),
-        sku=str(product.get('sku') or ''),
-        company_name=StoreSettings.get('store_name', '') or '',
-        custom_footer=str(settings.get('label_custom_footer') or ''),
-        width_mm=float(settings.get('label_width_mm', 30.0)),
-        height_mm=float(settings.get('label_height_mm', 20.0)),
-        dpi=int(settings.get('label_dpi', 203)),
-        barcode_type=str(settings.get('label_barcode_type', 'code128')),
-        barcode_width_mm=float(settings.get('label_barcode_width_mm', 24.0)),
-        barcode_height_mm=float(settings.get('label_barcode_height_mm', 8.0)),
-        font_size=int(settings.get('label_font_size', 9)),
-        text_align=str(settings.get('label_text_align', 'center')),
-        margin_top_mm=float(settings.get('label_margin_top', 2.0)),
-        margin_left_mm=float(settings.get('label_margin_left', 2.0)),
-        margin_right_mm=float(settings.get('label_margin_right', 2.0)),
-        margin_bottom_mm=float(settings.get('label_margin_bottom', 2.0)),
-        show_name=str(settings.get('label_show_name', 'true')).lower() == 'true',
-        show_price=str(settings.get('label_show_price', 'true')).lower() == 'true',
-        show_barcode=str(settings.get('label_show_barcode', 'true')).lower() == 'true',
-        show_wholesale_price=str(settings.get('label_show_wholesale_price', 'false')).lower() == 'true',
-        show_sku=str(settings.get('label_show_sku', 'false')).lower() == 'true',
-        show_rack=str(settings.get('label_show_rack', 'false')).lower() == 'true',
-        show_section=str(settings.get('label_show_section', 'false')).lower() == 'true',
-        show_footer=str(settings.get('label_show_footer', 'false')).lower() == 'true',
-    )
-    buffer = BytesIO()
-    image.save(buffer, format='PNG')
-    encoded = base64.b64encode(buffer.getvalue()).decode('ascii')
-    return jsonify({'ok': True, 'image_data_url': f'data:image/png;base64,{encoded}'})
-
-
-@app.route('/api/barcode-scanner/search', methods=['POST'])
-@login_required
-def api_barcode_scanner_search():
-    require_roles('Admin', 'Operator', 'Manager', 'Developer')
-    data = request.get_json(silent=True) or {}
-    value = str(data.get('value') or '').strip()
-    target = str(data.get('target') or StoreSettings.get('scanner_target', 'product')).strip().lower()
-    value = ScannerService.sanitize_scan_value(
-        value,
-        prefix=str(StoreSettings.get('scanner_prefix', '') or ''),
-        suffix=str(StoreSettings.get('scanner_suffix', '') or ''),
-    )
-    if not value:
-        return jsonify({'ok': False, 'error': 'Scanned value is required'}), 400
-
-    if target in {'product', 'both'}:
-        product = Product.query.filter_by(barcode=value, status='active').first()
-        if not product:
-            alias = ProductBarcode.query.filter_by(barcode=value).first()
-            if alias:
-                product = db.session.get(Product, alias.product_id)
-        if product and product.status == 'active':
-            return jsonify({'ok': True, 'type': 'product', 'product': ProductFillService.product_payload(product)})
-
-    if target in {'invoice', 'both'}:
-        sale = find_sale_by_scanned_value(value)
-        if sale:
-            return jsonify({'ok': True, 'type': 'invoice', 'invoice': {'id': sale.id, 'invoice_number': sale.invoice_number, 'total_amount': float(sale.total_amount or 0), 'sale_date': format_sl_datetime(sale.sale_date)}})
-
-    return jsonify({'ok': False, 'error': f'No product/invoice found for {value}'}), 404
-
-
-@app.route('/barcode_lookup/<path:barcode>')
-@login_required
-def barcode_lookup(barcode):
-    """Lookup barcode from OpenFoodFacts when not found in local DB.
-    Returns: { found, name, brand, category, barcode, image }
-    """
-    import requests as http_req
-    barcode = barcode.strip()
-    # Double-check local DB first (safety net)
-    local = Product.query.filter_by(barcode=barcode, status='active').first()
-    if not local:
-        pb = ProductBarcode.query.filter_by(barcode=barcode).first()
-        if pb:
-            local = Product.query.filter_by(id=pb.product_id, status='active').first()
-    if local:
-        return jsonify({'found': True, 'local': True, 'product': local.to_dict()})
-    # Call OpenFoodFacts API
-    try:
-        url = f'https://world.openfoodfacts.org/api/v0/product/{barcode}.json'
-        r = http_req.get(url, timeout=6, headers={'User-Agent': 'GarageManagementSystem/3.0'})
-        data = r.json()
-        if data.get('status') == 1 and data.get('product'):
-            p = data['product']
-            name     = (p.get('product_name') or p.get('product_name_en') or '').strip()
-            brand    = (p.get('brands') or '').strip()
-            # Best category guess from tags
-            cat_tags = p.get('categories_tags') or []
-            category = ''
-            for tag in cat_tags:
-                if tag.startswith('en:'):
-                    category = tag[3:].replace('-', ' ').title()
-                    break
-            return jsonify({
-                'found': True, 'local': False,
-                'barcode': barcode, 'name': name,
-                'brand': brand, 'category': category,
-                'image': p.get('image_front_small_url') or p.get('image_url') or '',
-                'nutriscore': p.get('nutriscore_grade', '').upper(),
-            })
-        return jsonify({'found': False, 'barcode': barcode,
-                        'msg': 'Not found in OpenFoodFacts database'})
-    except Exception as e:
-        return jsonify({'found': False, 'barcode': barcode, 'error': str(e)})
-
 
 # ── GOOGLE DRIVE BACKUP ───────────────────────────────────────────────────────
 def _gdrive_headers(token):
@@ -3875,54 +3339,6 @@ def api_full_factory_reset():
         'redirect': '/activation',
     })
 
-
-# ── PRODUCT BARCODE MANAGEMENT ────────────────────────────────────────────────
-
-@app.route('/api/products/<int:pid>/barcodes', methods=['GET', 'POST'])
-@login_required
-def api_product_barcodes(pid):
-    require_roles('Admin', 'Operator', 'Manager')
-    if request.method == 'POST':
-        d = request.get_json()
-        bc = d.get('barcode', '').strip()
-        if not bc:
-            return jsonify({'error': 'Barcode required'}), 400
-        if ProductBarcode.query.filter_by(barcode=bc).first():
-            return jsonify({'error': 'Barcode already exists'}), 409
-        pb = ProductBarcode(
-            product_id=pid,
-            barcode=bc,
-            barcode_type=d.get('barcode_type', 'normal'),
-            is_primary=int(d.get('is_primary', 0)))
-        db.session.add(pb)
-        db.session.commit()
-        return jsonify(pb.to_dict()), 201
-    barcodes = ProductBarcode.query.filter_by(product_id=pid).all()
-    return jsonify([b.to_dict() for b in barcodes])
-
-@app.route('/api/products/barcodes/<int:bid>', methods=['DELETE'])
-@login_required
-def api_delete_product_barcode(bid):
-    require_roles('Admin', 'Operator', 'Manager')
-    pb = ProductBarcode.query.get_or_404(bid)
-    db.session.delete(pb)
-    db.session.commit()
-    return jsonify({'ok': True})
-
-@app.route('/api/products/<int:pid>/generate-barcode')
-@login_required
-def api_generate_barcode(pid):
-    require_roles('Admin', 'Operator', 'Manager')
-    p = db.session.get(Product, pid)
-    if not p:
-        abort(404)
-    # Try up to BARCODE_EAN13_ATTEMPTS times to get a unique barcode
-    for _ in range(BARCODE_EAN13_ATTEMPTS):
-        candidate = gen_ean13(pid)
-        if not Product.query.filter_by(barcode=candidate).first() and \
-           not ProductBarcode.query.filter_by(barcode=candidate).first():
-            return jsonify({'barcode': candidate})
-    return jsonify({'error': 'Could not generate unique barcode'}), 500
 
 # ── BOOTSTRAP DIAGNOSTICS ─────────────────────────────────────────────────────
 def _print_startup_user_summary():

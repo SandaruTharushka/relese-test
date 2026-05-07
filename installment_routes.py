@@ -600,63 +600,6 @@ def register_installment_routes(app, log_action=None):
             'defaulted_plans': defaulted_plans,
         })
 
-    @app.route('/api/installments/<int:pid>/print/<string:doc_type>', methods=['GET'])
-    @login_required
-    def api_installment_print(pid, doc_type):
-        if not _can_view_plan(current_user):
-            return jsonify({'error': 'Not authorized.'}), 403
-        plan = InstallmentPlan.query.get_or_404(pid)
-        title_map = {
-            'agreement': 'Installment Agreement',
-            'receipt': 'Payment Receipt',
-            'statement': 'Customer Statement',
-            'overdue_notice': 'Overdue Notice',
-        }
-        title = title_map.get(doc_type, 'Installment Document')
-        store = {
-            'name': StoreSettings.get('store_name', 'Garage Management System'),
-            'branch': StoreSettings.get('store_branch', ''),
-            'phone': StoreSettings.get('store_phone', ''),
-            'address': StoreSettings.get('store_address', ''),
-            'email': StoreSettings.get('store_email', ''),
-        }
-        plan_dict = plan.to_dict()
-        # customer_name / customer_phone are stored directly on InstallmentPlan
-        plan_dict['customer_name'] = plan.customer_name or (plan.customer.name if plan.customer else 'Customer')
-        plan_dict['customer_phone'] = plan.customer_phone or (plan.customer.phone if plan.customer else '')
-        # Add sale invoice reference
-        if plan.sale:
-            plan_dict['sale_invoice'] = plan.sale.invoice_number
-        # Add last payment info for receipt doc_type
-        sorted_payments = sorted(plan.payments, key=lambda p: p.payment_date or datetime.min, reverse=True)
-        last_pay = sorted_payments[0] if sorted_payments else None
-        if last_pay:
-            plan_dict['last_payment'] = {
-                'amount': float(last_pay.amount or 0),
-                'date': last_pay.payment_date.strftime('%Y-%m-%d') if last_pay.payment_date else '',
-                'reference': last_pay.reference or '',
-            }
-        # Instalment schedule for agreement/statement
-        plan_dict['instalments'] = sorted([
-            {
-                'due_date': i.due_date.strftime('%Y-%m-%d') if i.due_date else '',
-                'amount': float(i.amount_due or 0),
-                'status': i.status or 'pending',
-            }
-            for i in plan.installments
-        ], key=lambda x: x['due_date'])
-        from flask import request as req
-        auto_print = req.args.get('auto_print', '0') == '1'
-        return render_template(
-            'installment_receipt.html',
-            doc_type=doc_type,
-            plan=plan_dict,
-            title=title,
-            store=store,
-            generated_at=datetime.now().strftime('%Y-%m-%d %H:%M'),
-            auto_print=auto_print,
-        )
-
 
 def _sync_all_overdue_statuses():
     plans = InstallmentPlan.query.filter(InstallmentPlan.status.in_(['active', 'defaulted', 'completed'])).all()

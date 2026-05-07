@@ -3,73 +3,6 @@
 {% block title %} — Billing{% endblock %}
 {% block extra_head %}
 <style>
-.receipt-shell{background:#fff;border:1px solid #d8d8d8;border-radius:14px;color:#111;box-shadow:0 4px 14px rgba(15,23,42,.08);font-family:'Segoe UI',Tahoma,Arial,sans-serif;font-size:12px;line-height:1.45}
-.receipt-shell *{box-sizing:border-box}
-.receipt-shell--thermal{max-width:360px;margin:0 auto;padding:14px 12px}
-.receipt-shell--a4{max-width:760px;margin:0 auto;padding:28px 30px;border-radius:10px}
-.receipt-header{text-align:center;padding-bottom:10px;border-bottom:1px solid #222}
-.receipt-logo{max-height:40px;max-width:72px;display:block;margin:0 auto 6px}
-.receipt-company{font-size:20px;font-weight:800;letter-spacing:.4px}
-.receipt-tagline{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:#444;margin-top:2px}
-.receipt-meta{margin-top:6px;font-size:11px;color:#222}
-.receipt-title{margin-top:10px;font-size:15px;font-weight:800;letter-spacing:.5px;text-transform:uppercase}
-.receipt-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;padding:10px 0;border-bottom:1px solid #b8b8b8}
-.receipt-info-grid .lbl,.receipt-customer .lbl{font-weight:700;color:#222}
-.receipt-customer{margin-top:10px;padding:8px 10px;border:1px solid #cfcfcf;border-radius:7px}
-.receipt-customer-title{font-weight:700;text-transform:uppercase;font-size:11px;letter-spacing:.35px;margin-bottom:4px}
-.receipt-table{width:100%;border-collapse:collapse;margin-top:10px}
-.receipt-table th{border-top:1px solid #222;border-bottom:1px solid #222;padding:6px 4px;font-size:11px;font-weight:800;text-transform:uppercase}
-.receipt-table td{padding:6px 4px;border-bottom:1px solid #d7d7d7;vertical-align:top}
-.receipt-table .num{text-align:right;font-variant-numeric:tabular-nums}
-.receipt-item-sub{display:block;font-size:10px;color:#4a4a4a;margin-top:2px;word-break:break-word}
-.receipt-totals{margin-top:10px;border-top:1px solid #999;padding-top:8px}
-.receipt-total-row{display:flex;justify-content:space-between;gap:10px;padding:2px 0;font-variant-numeric:tabular-nums}
-.receipt-total-row .k{color:#222}
-.receipt-total-row .v{text-align:right;font-weight:600;min-width:96px}
-.receipt-total-row.grand{border-top:1px solid #222;border-bottom:1px solid #222;padding:6px 0;margin:4px 0;font-size:14px;font-weight:800}
-.receipt-total-row.grand .v{font-size:15px;font-weight:900}
-.receipt-payment-meta{border-top:1px solid #bfbfbf;margin-top:8px;padding-top:6px}
-.receipt-footer{border-top:1px dashed #7c7c7c;margin-top:10px;padding-top:8px;text-align:center;font-size:10.5px;color:#2e2e2e}
-.receipt-footer .powered{margin-top:6px;font-size:9px;color:#666}
-.receipt-footer-branding{margin-top:8px;padding-top:6px;border-top:1px dashed #b8b8b8}
-.receipt-footer-branding .brand-name{font-size:10px;font-weight:700;letter-spacing:.2px}
-.receipt-footer-branding .brand-phone{font-size:9px;margin-top:2px;color:#3a3a3a}
-.receipt-signature{display:none}
-.receipt-shell--a4 .receipt-signature{display:flex;justify-content:flex-end;margin-top:20px}
-.receipt-shell--a4 .receipt-signature div{min-width:220px;padding-top:24px;border-top:1px solid #2f2f2f;text-align:center;font-size:11px}
-.receipt-shell--a4 .receipt-header{border-bottom:1px solid #111;padding-bottom:14px}
-.receipt-shell--a4 .receipt-company{font-size:26px}
-.receipt-shell--a4 .receipt-title{font-size:18px}
-.receipt-shell--a4 .receipt-table th{font-size:12px;padding:8px 6px}
-.receipt-shell--a4 .receipt-table td{padding:8px 6px;font-size:12px}
-.receipt-shell--a4 .receipt-footer{font-size:11px}
-@media print {
-  body * { visibility: hidden !important; }
-  #printArea, #printArea * { visibility: visible !important; }
-  #printArea {
-    display: block !important;
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 0;
-    background: #fff;
-    color: #000;
-  }
-  #printArea .receipt-shell{box-shadow:none;border-color:#111;border-radius:0}
-  #printArea .receipt-shell--thermal{width:var(--print-width,80mm);max-width:var(--print-width,80mm);margin:0 auto;padding:10px 8px;border:none}
-  #printArea .receipt-shell--a4{width:190mm;max-width:190mm;margin:0 auto;padding:14mm;border:1px solid #000}
-  .no-print { display: none !important; }
-}
-.receipt-shell--thermal.compact-58{font-size:11px;line-height:1.35;padding:10px 8px}
-.receipt-shell--thermal.compact-58 .receipt-company{font-size:17px}
-.receipt-shell--thermal.compact-58 .receipt-title{font-size:13px}
-.receipt-shell--thermal.compact-58 .receipt-info-grid{grid-template-columns:1fr;gap:4px;padding:8px 0}
-.receipt-shell--thermal.compact-58 .receipt-customer{padding:7px 8px}
-.receipt-shell--thermal.compact-58 .receipt-table th,
-.receipt-shell--thermal.compact-58 .receipt-table td{padding:5px 3px;font-size:10px}
-.receipt-shell--thermal.compact-58 .receipt-total-row .v{min-width:82px}
 .item-disc-btn{background:none;border:none;color:var(--warning);cursor:pointer;font-size:12px;padding:2px 4px}
 .item-disc-btn:hover{text-decoration:underline}
 .cart-action-col{display:flex;flex-direction:column;align-items:flex-end;gap:6px;margin-left:6px}
@@ -81,14 +14,12 @@
 .imei-tag{display:inline-block;background:rgba(79,108,246,.15);color:#4f6cf6;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700;letter-spacing:.4px}
 .imei-assigned{display:inline-block;background:rgba(16,185,129,.15);color:var(--accent2);padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700;font-family:'Courier New',monospace}
 .imei-missing{display:inline-block;color:var(--danger);font-size:10px;font-weight:700;cursor:pointer;text-decoration:underline;padding:2px 0}
-.receipt-modal{width:min(880px,96vw);max-height:88vh;padding:0;overflow:hidden;text-align:left;display:flex;flex-direction:column}
+.receipt-modal{width:min(440px,96vw);padding:0;overflow:hidden;text-align:left;display:flex;flex-direction:column}
 .receipt-modal-header{padding:24px 28px 14px;text-align:center;border-bottom:1px solid var(--border);background:var(--card)}
 .receipt-modal-icon{width:60px;height:60px;background:rgba(16,185,129,.18);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:28px;color:var(--accent2)}
 .receipt-modal-title{font-size:20px;font-weight:800;margin-bottom:6px}
 .receipt-modal-invoice{font-size:13px;color:var(--muted)}
-.receipt-modal-body{flex:1;min-height:0;padding:16px 24px;overflow-y:auto;background:var(--card)}
-.receipt-modal-preview{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:left}
-.receipt-modal-footer{position:sticky;bottom:0;z-index:2;display:flex;gap:10px;padding:14px 24px 20px;background:var(--card);border-top:1px solid var(--border);box-shadow:0 -8px 16px rgba(15,23,42,.08)}
+.receipt-modal-footer{display:flex;gap:10px;padding:14px 24px 20px;background:var(--card);border-top:1px solid var(--border)}
 .receipt-modal-footer .btn{flex:1}
 .shortcut-flash{animation:shortcutFlash .32s ease}
 @keyframes shortcutFlash{
@@ -97,7 +28,6 @@
 }
 @media (max-width:640px){
   .receipt-modal-header{padding:20px 16px 12px}
-  .receipt-modal-body{padding:12px 16px}
   .receipt-modal-footer{padding:12px 16px 16px}
 }
 </style>
@@ -390,7 +320,7 @@
   </div>
 </div>
 
-<!-- Receipt Modal -->
+<!-- Sale Confirmation Modal -->
 <div class="modal-overlay" id="receiptModal">
   <div class="modal receipt-modal">
     <div class="receipt-modal-header">
@@ -398,13 +328,7 @@
       <div class="receipt-modal-title">Payment Successful!</div>
       <div class="receipt-modal-invoice" id="receiptInvoice"></div>
     </div>
-    <div class="receipt-modal-body" id="receiptBodyScroller">
-      <div class="receipt-modal-preview" id="receiptItems"></div>
-      <pre id="receiptTextRaw" style="display:none"></pre>
-    </div>
     <div class="receipt-modal-footer">
-      <button class="btn btn-ghost" id="receiptPreviewBtn" onclick="previewCurrentReceipt()">👁️ Preview</button>
-      <button class="btn btn-ghost" id="receiptPrintBtn" onclick="printCurrentReceipt()">🖨️ Print Receipt</button>
       <button class="btn btn-primary" id="newSaleAutoBtn" onclick="_clearAutoCloseTimers();newSale()">➕ New Sale</button>
     </div>
   </div>
@@ -519,61 +443,7 @@
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 </form>
 
-<!-- Hidden print area -->
-<div id="printArea" style="display:none"></div>
-
-<!-- ── Online Product Modal (OpenFoodFacts auto-fill) ───────────────── -->
-<div class="modal-overlay" id="onlineProductModal">
-  <div class="modal" style="width:500px">
-    <div class="modal-title">🌐 Product Found Online</div>
-    <div style="background:rgba(79,108,246,.08);border:1px solid rgba(79,108,246,.25);
-                border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:12px;
-                color:var(--accent);display:flex;align-items:flex-start;gap:8px">
-      <span style="font-size:16px">📦</span>
-      <span>Product data fetched from <strong>OpenFoodFacts</strong>. Enter the selling price to add it to your inventory and cart.</span>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
-      <div class="form-group" style="grid-column:span 2">
-        <label class="form-label">Product Name <span style="color:var(--danger)">*</span></label>
-        <input class="form-input" id="opName" placeholder="Product name">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Barcode</label>
-        <input class="form-input" id="opBarcode" readonly style="opacity:.7">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Brand</label>
-        <input class="form-input" id="opBrand" placeholder="Brand name">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Category</label>
-        <input class="form-input" id="opCategory" placeholder="Category">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Selling Price (LKR) <span style="color:var(--danger)">*</span></label>
-        <input class="form-input" id="opPrice" type="number" min="0" step="0.01" placeholder="0.00">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Buy Price (LKR)</label>
-        <input class="form-input" id="opBuyPrice" type="number" min="0" step="0.01" placeholder="0.00">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Initial Stock Qty</label>
-        <input class="form-input" id="opStock" type="number" min="0" value="0">
-      </div>
-    </div>
-    <input type="hidden" id="opImageUrl">
-    <div style="background:var(--stat);border-radius:10px;padding:10px 14px;margin-bottom:16px;
-                font-size:12px;color:var(--muted)" id="opNutrition" style="display:none"></div>
-    <div class="flex gap-2">
-      <button class="btn btn-ghost" onclick="closeModal('onlineProductModal')" style="flex:1">Cancel</button>
-      <button class="btn btn-primary" id="btnSaveOnlineProduct" onclick="saveOnlineProduct()"
-              style="flex:2;padding:12px;font-size:14px">✚ Add to Inventory &amp; Cart</button>
-    </div>
-  </div>
-</div>
-
-<!-- ── Missing Product Modal (manual create from scanned barcode) ─────────── -->
+<!-- ── Missing Product Modal (manual create from search input) ─────────── -->
 <div class="modal-overlay" id="missingProductModal">
   <div class="modal" style="width:440px">
     <div class="modal-title">⚠️ Product Not Found</div>
@@ -652,7 +522,6 @@
      data-ws-customers="{{ wholesale_customers|tojson|escape }}"
      data-user-fullname="{{ current_user.full_name }}"></div>
 
-<script src="{{ url_for('static', filename='js/receipt_print.js') }}"></script>
 <script>
 let cart = [], allProducts = [], currentMethod = 'Cash';
 let storeSettings = {};
@@ -663,8 +532,6 @@ let cardSettings = {};
 let _currentCardTxn = null;
 let _currentSaleId = null;
 let _currentReceiptInvoice = '';
-let _currentReceiptUrl = '';
-let _autoPrintArmed = false;
 let scanBuffer = '';
 let scanTimer = null;
 let scanLock = false;
@@ -720,7 +587,6 @@ const WARRANTY_DAYS_JS = {
 };
 // Cache emptyCart reference immediately — survives innerHTML replacements on cartItems
 const _emptyCartEl = document.getElementById('emptyCart');
-bindReceiptPrintButton();
 
 // ── Customer Data & Search State ──
 let _wsCustomerData = [];
@@ -1585,31 +1451,23 @@ async function handleBarcodeValue(barcode) {
   const input = document.getElementById('barcodeInput');
   if (input) input.value = '';
 
-  console.log('[SCAN]', { rawCode: raw, normalizedCode: clean });
   try {
-    // Send raw to backend — server normalizes authoritatively
-    const res = await fetch(`/api/products/barcode/${encodeURIComponent(raw)}`);
-    // Session expired can come back either as HTTP 401 JSON or a redirect/login HTML.
+    const res = await fetch(`/api/products/search?q=${encodeURIComponent(raw)}&limit=1`);
     if (handleUnauthorizedResponse(res)) return;
     if (res.redirected || !(res.headers.get('content-type') || '').includes('application/json')) {
       window.location.href = '/login';
       return;
     }
-    const data = await res.json();
-
-    if (res.ok && data.success && data.product) {
-      const p = data.product;
-      console.log('[SCAN] product found:', p.name, '(id=' + p.id + ')');
+    const results = await res.json();
+    const p = Array.isArray(results) && results.length ? results[0] : null;
+    if (p) {
       if (!allProducts.find(x => x.id == p.id)) allProducts.push(p);
       addToCart(p.id);
       return;
     }
-
-    const normalizedCode = data.normalized_code || clean;
-    console.log('[SCAN] not found', { rawCode: raw, normalizedCode, attempted: `/api/products/barcode/${encodeURIComponent(raw)}` });
-    openMissingProductModal(raw, normalizedCode);
+    openMissingProductModal(raw, clean);
   } catch (_) {
-    toast('Scan error', 'error');
+    toast('Search error', 'error');
   } finally {
     setTimeout(() => document.getElementById('barcodeInput')?.focus(), 30);
   }
@@ -1779,104 +1637,6 @@ function chooseMissingCategory(cat) {
   input.value = cat.name || '';
   _missingCategorySelected = { id: cat.id, name: cat.name };
   resetMissingCategoryAutocomplete();
-}
-
-// ── Barcode Auto Product Detection (OpenFoodFacts) ──────────────────────────
-async function lookupOnlineProduct(barcode) {
-  const indicator = document.getElementById('barcodeInput');
-  if(indicator) indicator.placeholder = '🔍 Looking up online…';
-  try {
-    const res  = await fetch(`/barcode_lookup/${encodeURIComponent(barcode)}`);
-    if (res.redirected || !(res.headers.get('content-type') || '').includes('application/json')) {
-      if(indicator) indicator.placeholder = 'Scan barcode or type product code and press Enter…';
-      window.location.href = '/login';
-      return;
-    }
-    const data = await res.json();
-    if(indicator) indicator.placeholder = 'Scan barcode or type product code and press Enter…';
-    if (data.found && !data.local && data.name) {
-      showOnlineProductDialog(data);
-    } else if (data.found && data.local && data.product) {
-      // Was found locally by server safety-net
-      const p = data.product;
-      if (!allProducts.find(x => x.id == p.id)) allProducts.push(p);
-      addToCart(p.id);
-    } else {
-      toast(`❌ Barcode ${barcode} not found locally or online`, 'error');
-    }
-  } catch(e) {
-    if(indicator) indicator.placeholder = 'Scan barcode or type product code and press Enter…';
-    toast(`❌ Product not found: ${barcode}`, 'error');
-  }
-}
-
-function showOnlineProductDialog(productData) {
-  document.getElementById('opBarcode').value   = productData.barcode   || '';
-  document.getElementById('opName').value      = productData.name      || '';
-  document.getElementById('opBrand').value     = productData.brand     || '';
-  document.getElementById('opCategory').value  = productData.category  || '';
-  document.getElementById('opPrice').value     = '';
-  document.getElementById('opBuyPrice').value  = '';
-  document.getElementById('opStock').value     = '0';
-  document.getElementById('opImageUrl').value  = productData.image     || '';
-  const nutEl = document.getElementById('opNutrition');
-  if(productData.nutriscore) {
-    nutEl.textContent = `Nutri-Score: ${productData.nutriscore}`;
-    nutEl.style.display = 'block';
-  } else {
-    nutEl.style.display = 'none';
-  }
-  // Pre-fill category select if a match exists
-  openModal('onlineProductModal');
-  setTimeout(() => document.getElementById('opPrice').focus(), 200);
-}
-
-async function saveOnlineProduct() {
-  const name     = (document.getElementById('opName').value || '').trim();
-  const price    = parseFloat(document.getElementById('opPrice').value) || 0;
-  const buyPrice = parseFloat(document.getElementById('opBuyPrice').value) || 0;
-  const stock    = parseInt(document.getElementById('opStock').value)  || 0;
-  const barcode  = (document.getElementById('opBarcode').value || '').trim();
-  const brand    = (document.getElementById('opBrand').value  || '').trim();
-  const catName  = (document.getElementById('opCategory').value || '').trim();
-
-  if (!name)  { toast('Product name is required', 'error'); return; }
-  if (!price) { toast('Enter a selling price', 'error');    return; }
-
-  // Match category by name
-  let catId = null;
-  try {
-    const cats = await api('/api/categories');
-    if (cats && catName) {
-      const match = cats.find(c => c.name.toLowerCase() === catName.toLowerCase())
-                 || cats.find(c => catName.toLowerCase().includes(c.name.toLowerCase()));
-      if (match) catId = match.id;
-    }
-  } catch(e) {}
-
-  const btn = document.getElementById('btnSaveOnlineProduct');
-  btn.disabled = true; btn.textContent = 'Saving…';
-
-  const payload = {
-    barcode:    barcode || null,
-    name:       brand ? `${brand} ${name}`.trim() : name,
-    sell_price: price,
-    buy_price:  buyPrice,
-    stock_qty:  stock,
-    low_stock_lvl: 10,
-    category_id: catId,
-  };
-
-  const res = await api('/api/products', { method: 'POST', body: payload });
-  btn.disabled = false; btn.textContent = '✚ Add to Inventory & Cart';
-
-  if (!res || res.error) {
-    toast(res?.error || 'Failed to add product', 'error'); return;
-  }
-  toast(`✅ "${res.name}" added to inventory!`, 'success');
-  if (!allProducts.find(x => x.id == res.id)) allProducts.push(res);
-  addToCart(res.id);
-  closeModal('onlineProductModal');
 }
 
 function addWeightItem(product, quantityKg, totalPrice, label) {
@@ -2145,642 +1905,24 @@ async function confirmPayment() {
     return;
   }
 
-  // Success path — close pay modal, show receipt (which resets cart), open drawer
+  // Success path — close pay modal, show simple confirmation (which resets cart)
   closeModal('payModal');
   showReceipt(data);
   toast('Payment complete! 🎉', 'success');
   _currentCardTxn = null;
-  openCashDrawer();
-  // Guard released after receipt modal is shown; button state is irrelevant (modal closed)
+  // Guard released after confirmation modal is shown; button state is irrelevant (modal closed)
   _isProcessingPayment = false;
-  // ── Auto-reset: automatically start a new sale after 20 seconds ──────────
-  // Cashier can still click "New Sale" immediately, or "Print" to delay the timer.
+  // ── Auto-reset: automatically start a new sale after 5 seconds ──────────
   _startReceiptAutoClose(5);
-}
-
-function openCashDrawer() {
-  // Try pywebview bridge first (desktop mode)
-  if (window.pywebview && window.pywebview.api) {
-    try { window.pywebview.api.open_cash_drawer(); } catch(e) {}
-  }
-  // Also try server-side
-  fetch('/api/drawer/open', {method:'POST', headers:{'Content-Type':'application/json', ...(typeof __csrfToken !== 'undefined' && __csrfToken ? {'X-CSRFToken': __csrfToken} : {})}}).catch(()=>{});
-}
-
-/** Return the active receipt layout profile with safe fallback defaults. */
-function getRcptProfile() {
-  return {
-    type: 'thermal', cpl: 48,
-    show_store_name: true, show_branch: true, show_address: false,
-    show_phone: true, show_email: false, show_tax_number: false,
-    header_align: 'center',
-    show_invoice: true, show_datetime: true, show_cashier: true,
-    show_customer: true, show_customer_phone: false, show_payment_method: true,
-    show_product_name: true, show_qty: true, show_unit_price: true,
-    show_discount: true, show_line_total: true, show_sku: false,
-    wrap_product_names: true,
-    show_subtotal: true, show_discount_total: true, show_tax: true,
-    show_grand_total: true, show_paid: true, show_change: true,
-    footer_text: 'Thank you for shopping!', show_thankyou: true,
-    footer_align: 'center',
-  };
-}
-
-/** Center text within w chars. */
-function rcptCenter(text, w) {
-  if (!text || text.length >= w) return text;
-  return ' '.repeat(Math.floor((w - text.length) / 2)) + text;
-}
-
-/** Right-align text within w chars. */
-function rcptRight(text, w) {
-  if (!text || text.length >= w) return text;
-  return ' '.repeat(w - text.length) + text;
-}
-
-/** Pad a left/right pair to exactly w chars. */
-function rcptPad(left, right, w) {
-  const gap = Math.max(1, w - left.length - String(right).length);
-  return left + ' '.repeat(gap) + right;
-}
-
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function getCustomerSummary() {
-  const wsId = document.getElementById('wsCustomer')?.value || '';
-  if (!wsId) return { name: 'Walk-in Customer', phone: '', type: 'Retail' };
-  const found = _wsCustomerData.find(c => String(c.id) === String(wsId));
-  return {
-    name: found?.name || 'Wholesale Customer',
-    phone: found?.phone || '',
-    type: 'Wholesale',
-  };
-}
-
-function getReceiptMode(profile) {
-  const profileType = String(profile?.type || '').toLowerCase();
-  if (profileType === 'a4' || profileType === 'dot_matrix') return 'a4';
-  return 'thermal';
-}
-
-function getLockedReceiptBranding() {
-  const fallbackBrand = 'Cloud Crafters';
-  return {
-    companyName: String(storeSettings.store_name || fallbackBrand || '').trim() || fallbackBrand,
-    phone: '0788140255',
-  };
-}
-
-function resolveReceiptVisualProfile(profile) {
-  const normalized = profile || getRcptProfile();
-  const mode = getReceiptMode(normalized);
-  const cpl = parseInt(normalized?.cpl || 48, 10) || 48;
-  const paperSize = String(normalized?.paper_size || '').toLowerCase();
-  const compact = mode !== 'a4' && (paperSize === '58mm' || cpl <= 32 || normalized?.compact_mode === true);
-  const width = mode === 'a4' ? '210mm' : (compact ? '58mm' : '80mm');
-  return { mode, compact, width };
-}
-
-function renderReceiptHtml(model, visualProfile) {
-  const profile = visualProfile || resolveReceiptVisualProfile(getRcptProfile());
-  const show = model.show || {};
-  const mode = profile.mode || 'thermal';
-  const compactClass = profile.compact ? ' compact-58' : '';
-  const shellClass = mode === 'a4'
-    ? 'receipt-shell receipt-shell--a4'
-    : `receipt-shell receipt-shell--thermal${compactClass}`;
-  const storeLogo = storeSettings.store_logo_url ? `<img class="receipt-logo" src="${escapeHtml(storeSettings.store_logo_url)}" alt="Store Logo">` : '';
-  const showCustomerPhone = show.show_customer_phone !== false && model.customer.phone;
-  const customerPhone = showCustomerPhone ? `<div><span class="lbl">Phone:</span> ${escapeHtml(model.customer.phone)}</div>` : '';
-  const customerType = model.customer.type ? `<div><span class="lbl">Type:</span> ${escapeHtml(model.customer.type)}</div>` : '';
-  const paymentExtras = (model.paymentMeta || []).map(r => `<div class="receipt-total-row"><span class="k">${escapeHtml(r.label)}</span><span class="v">${escapeHtml(r.value)}</span></div>`).join('');
-  const footerLines = (model.footerLines || []).map(line => `<div>${escapeHtml(line)}</div>`).join('');
-  const lockedBranding = model.lockedBranding || getLockedReceiptBranding();
-  const itemRows = (model.items || []).map((item) => {
-    const metaLines = (item.meta || []).map((m) => `<span class="receipt-item-sub">${escapeHtml(m)}</span>`).join('');
-    const compactCols = profile.compact
-      ? `<td class="num">${escapeHtml(item.qty)}</td><td class="num">${escapeHtml(item.total)}</td>`
-      : `<td class="num">${escapeHtml(item.qty)}</td><td class="num">${escapeHtml(item.unitPrice)}</td><td class="num">${escapeHtml(item.discount)}</td><td class="num">${escapeHtml(item.total)}</td>`;
-    return `<tr>
-      <td>${escapeHtml(item.name)}${metaLines}</td>
-      ${compactCols}
-    </tr>`;
-  }).join('');
-  const tableHead = profile.compact
-    ? '<tr><th style="width:56%">Item</th><th style="width:14%" class="num">Qty</th><th style="width:30%" class="num">Total</th></tr>'
-    : '<tr><th style="width:43%">Item</th><th style="width:10%" class="num">Qty</th><th style="width:16%" class="num">Unit Price</th><th style="width:13%" class="num">Disc.</th><th style="width:18%" class="num">Total</th></tr>';
-
-  const infoGridRows = [
-    show.show_invoice  !== false ? `<div><span class="lbl">Invoice #:</span> ${escapeHtml(model.invoiceNo)}</div>` : '',
-    show.show_datetime !== false ? `<div><span class="lbl">Date:</span> ${escapeHtml(model.date)}</div>` : '',
-    show.show_datetime !== false ? `<div><span class="lbl">Time:</span> ${escapeHtml(model.time)}</div>` : '',
-    show.show_cashier  !== false ? `<div><span class="lbl">Cashier:</span> ${escapeHtml(model.cashier)}</div>` : '',
-  ].filter(Boolean).join('');
-
-  const showCustomer = show.show_customer !== false;
-  const customerBlock = showCustomer ? `
-      <div class="receipt-customer">
-        <div class="receipt-customer-title">Customer Details</div>
-        <div><span class="lbl">Name:</span> ${escapeHtml(model.customer.name)}</div>
-        ${customerPhone}
-        ${customerType}
-      </div>` : '';
-
-  const totalsRows = [
-    show.show_subtotal       !== false ? `<div class="receipt-total-row"><span class="k">Subtotal</span><span class="v">${escapeHtml(model.totals.subtotal)}</span></div>` : '',
-    show.show_discount_total !== false ? `<div class="receipt-total-row"><span class="k">Discount</span><span class="v">${escapeHtml(model.totals.discount)}</span></div>` : '',
-    show.show_tax            !== false ? `<div class="receipt-total-row"><span class="k">${escapeHtml(model.totals.taxLabel)}</span><span class="v">${escapeHtml(model.totals.tax)}</span></div>` : '',
-    show.show_grand_total    !== false ? `<div class="receipt-total-row grand"><span class="k">Grand Total</span><span class="v">${escapeHtml(model.totals.grandTotal)}</span></div>` : '',
-    show.show_paid           !== false ? `<div class="receipt-total-row"><span class="k">Paid Amount</span><span class="v">${escapeHtml(model.totals.paid)}</span></div>` : '',
-    show.show_change         !== false ? `<div class="receipt-total-row"><span class="k">${escapeHtml(model.totals.balanceLabel)}</span><span class="v">${escapeHtml(model.totals.balance)}</span></div>` : '',
-  ].filter(Boolean).join('');
-
-  return `
-    <div class="${shellClass}">
-      <div class="receipt-header">
-        ${storeLogo}
-        ${show.show_store_name !== false ? `<div class="receipt-company">${escapeHtml(model.storeName)}</div>` : ''}
-        ${show.show_branch !== false && model.tagline ? `<div class="receipt-tagline">${escapeHtml(model.tagline)}</div>` : ''}
-        <div class="receipt-meta">
-          ${show.show_address === true && model.address ? `<div>${escapeHtml(model.address)}</div>` : ''}
-          ${show.show_phone !== false && model.phone ? `<div>${escapeHtml(model.phone)}</div>` : ''}
-          ${show.show_email === true && model.email ? `<div>${escapeHtml(model.email)}</div>` : ''}
-        </div>
-        <div class="receipt-title">${escapeHtml(model.title)}</div>
-      </div>
-      ${infoGridRows ? `<div class="receipt-info-grid">${infoGridRows}</div>` : ''}
-      ${customerBlock}
-      <table class="receipt-table">
-        <thead>${tableHead}</thead>
-        <tbody>${itemRows}</tbody>
-      </table>
-      <div class="receipt-totals">
-        ${totalsRows}
-      </div>
-      ${paymentExtras ? `<div class="receipt-payment-meta">${paymentExtras}</div>` : ''}
-      <div class="receipt-footer">
-        ${show.show_thankyou !== false ? footerLines : ''}
-        <div class="receipt-footer-branding">
-          <div class="brand-name">${escapeHtml(lockedBranding.companyName)}</div>
-          <div class="brand-phone">Tel: ${escapeHtml(lockedBranding.phone)}</div>
-        </div>
-        ${model.poweredBy ? '<div class="powered">Powered by Garage Management System</div>' : ''}
-      </div>
-      <div class="receipt-signature"><div>Authorized Signature</div></div>
-    </div>`;
 }
 
 function showReceipt(data) {
   _currentSaleId = data?.sale_id || null;
   _currentReceiptInvoice = data?.invoice || '';
-  _currentReceiptUrl = String(
-    data?.receipt_url || (_currentSaleId ? `/sales/${_currentSaleId}/receipt?auto_print=1` : '')
-  ).trim();
-
-  const pf      = getRcptProfile();
-  const visualProfile = resolveReceiptVisualProfile(pf);
-  const w       = parseInt(pf.cpl || 48);
-  const lpad    = parseInt(pf.left_margin || 0);
-  const prefix  = ' '.repeat(lpad);
-  const avail   = w - lpad;
-
-  function hAlign(text) {
-    const a = pf.header_align || 'center';
-    if (a === 'right')  return prefix + rcptRight(text, avail);
-    if (a === 'center') return prefix + rcptCenter(text, avail);
-    return prefix + text;
-  }
-  function fAlign(text) {
-    const a = pf.footer_align || 'center';
-    if (a === 'right')  return prefix + rcptRight(text, avail);
-    if (a === 'center') return prefix + rcptCenter(text, avail);
-    return prefix + text;
-  }
-  function pl(left, right) { return prefix + left_right_line(left, right, avail); }
-
-  const d  = prefix + '-'.repeat(avail);
-  const eq = prefix + '='.repeat(avail);
-  const lockedBranding = getLockedReceiptBranding();
-
-  const storeName  = storeSettings.store_name    || 'Garage';
-  const storePhone = storeSettings.store_phone   || '';
-  const branch     = storeSettings.store_branch  || '';
-  const storeAddr  = storeSettings.store_address || '';
-  const storeEmail = storeSettings.store_email   || '';
-  const storeReg   = storeSettings.store_reg     || '';
-  const cUserEl = document.getElementById('currentUserFullName');
-  const cashier    = data.cashier || (cUserEl ? cUserEl.textContent : '') || 'Cashier';
-  const now        = new Date();
-  const dateOnly   = now.toLocaleDateString();
-  const timeOnly   = now.toLocaleTimeString();
-  const dateStr    = `${dateOnly} ${timeOnly}`;
-  const totalItems = cart.reduce((s, i) => s + (i.is_weight ? 1 : i.qty), 0);
-  const customerSummary = getCustomerSummary();
-  const wsName     = customerSummary.type === 'Wholesale' ? customerSummary.name : '';
-
-  const rawSub   = cart.reduce((s, i) => s + (i.is_weight ? i.total : i.price * i.qty), 0);
-  const itemDisc = cart.reduce((s, i) => s + getLineDiscount(i), 0);
-  const sub      = rawSub - itemDisc;
-  const discFlat = parseFloat(document.getElementById('discountInput')?.value || 0) || 0;
-  const discPct  = parseFloat(document.getElementById('discountPercent')?.value || 0) || 0;
-  const pctAmt   = sub * discPct / 100;
-  const totalDisc = discFlat + pctAmt;
-  const afterDisc = Math.max(0, sub - totalDisc);
-  const taxEnabled = isTaxEnabled();
-  const taxRate    = getTaxRate() / 100;
-  const tax  = taxEnabled && taxRate > 0 ? (afterDisc * taxRate) : 0;
-  const tot  = afterDisc + tax;
-
-  let receipt = '';
-
-  // ── Header ──
-  if (pf.show_store_name !== false) receipt += hAlign(sanitize_printable_text(storeName)) + '\n';
-  if (pf.show_branch     !== false && branch)     receipt += hAlign(sanitize_printable_text(branch)) + '\n';
-  if (pf.show_address    === true  && storeAddr)  receipt += hAlign(sanitize_printable_text(storeAddr)) + '\n';
-  if (pf.show_phone      !== false && storePhone) receipt += hAlign('Tel: ' + storePhone) + '\n';
-  if (pf.show_email      === true  && storeEmail) receipt += hAlign(storeEmail) + '\n';
-  if (pf.show_tax_number === true  && storeReg)   receipt += hAlign('VAT: ' + storeReg) + '\n';
-  receipt += d + '\n';
-
-  // ── Receipt info ──
-  if (pf.show_invoice  !== false) receipt += prefix + 'Invoice: ' + data.invoice + '\n';
-  if (pf.show_datetime !== false) receipt += prefix + 'Date: ' + dateStr + '\n';
-  if (pf.show_cashier  !== false) receipt += prefix + 'Cashier: ' + cashier + '\n';
-  receipt += prefix + 'Items: ' + totalItems + '\n';
-  if (pf.show_customer !== false && wsName) receipt += prefix + 'Customer: ' + wsName + ' (Wholesale)\n';
-  receipt += d + '\n';
-  receipt += pl('Item', 'Amount') + '\n';
-  receipt += d + '\n';
-
-  const lineItems = [];
-  const warrantyLines = [];
-  // ── Item lines ──
-  cart.forEach(i => {
-    const lineTotal = i.is_weight ? i.total : i.price * i.qty;
-    const qtyStr    = i.is_weight ? `${i.qty.toFixed(3)}kg` : `x${i.qty}`;
-    if (pf.show_product_name !== false) {
-      if (pf.wrap_product_names !== false) {
-        wrap_item_name(sanitize_printable_text(i.name || ''), avail).forEach(line => {
-          receipt += prefix + line + '\n';
-        });
-      } else {
-        receipt += prefix + sanitize_printable_text(i.name || '') + '\n';
-      }
-    }
-    const detail = format_item_row({
-      qty: pf.show_qty !== false ? qtyStr : '',
-      unit_price: pf.show_unit_price !== false ? i.price : null,
-      width: Math.max(8, avail - 10),
-    });
-    if (pf.show_line_total !== false) {
-      receipt += pl(detail || '  ', format_money(lineTotal)) + '\n';
-    } else if (detail.trim()) {
-      receipt += prefix + detail + '\n';
-    }
-    if (pf.show_discount !== false && i.discount > 0) {
-      receipt += pl('  Discount', '-' + format_money(i.discount)) + '\n';
-    }
-    // IMEI / Serial tracking
-    const imeiValues = Array.isArray(i.imeis) ? i.imeis.filter(Boolean) : (i.imei ? [i.imei] : []);
-    const imeiMeta   = i.imei_record_details || {};
-    const itemMeta = [];
-    imeiValues.forEach(v => { receipt += prefix + `  IMEI: ${v}\n`; });
-    imeiValues.forEach(v => itemMeta.push(`IMEI: ${v}`));
-    if (imeiMeta.imei2)          receipt += prefix + `  IMEI 2: ${imeiMeta.imei2}\n`;
-    if (imeiMeta.imei2)          itemMeta.push(`IMEI 2: ${imeiMeta.imei2}`);
-    if (imeiMeta.serial_number)  receipt += prefix + `  Serial: ${imeiMeta.serial_number}\n`;
-    if (imeiMeta.serial_number)  itemMeta.push(`Serial: ${imeiMeta.serial_number}`);
-    if (imeiMeta.warranty_period)receipt += prefix + `  Warranty Period: ${imeiMeta.warranty_period} months\n`;
-    if (imeiMeta.warranty_period)itemMeta.push(`Warranty: ${imeiMeta.warranty_period} months`);
-    if (i.barcode)               itemMeta.push(`Barcode: ${i.barcode}`);
-    // Warranty per item
-    const wp = i.warranty_period;
-    if (wp && wp !== 'none' && WARRANTY_LABELS[wp]) {
-      receipt += prefix + `  Warranty: ${WARRANTY_LABELS[wp]} Warranty\n`;
-      itemMeta.push(`Warranty: ${WARRANTY_LABELS[wp]}`);
-      warrantyLines.push(`${sanitize_printable_text(i.name || 'Item')}: ${WARRANTY_LABELS[wp]} warranty`);
-      const days = WARRANTY_DAYS_JS[wp];
-      if (days) {
-        const expiry = new Date(now);
-        expiry.setDate(expiry.getDate() + days);
-        receipt += prefix + `  Warranty Expiry: ${expiry.toLocaleDateString('en-CA')}\n`;
-        itemMeta.push(`Warranty Expiry: ${expiry.toLocaleDateString('en-CA')}`);
-      }
-    }
-    lineItems.push({
-      name: i.name || 'Item',
-      qty: qtyStr,
-      unitPrice: `LKR ${format_money(i.price)}`,
-      discount: i.discount > 0 ? `-LKR ${format_money(i.discount)}` : '—',
-      total: `LKR ${format_money(lineTotal - (i.discount || 0))}`,
-      meta: itemMeta,
-    });
-  });
-
-  // ── Totals ──
-  receipt += d + '\n';
-  if (pf.show_subtotal !== false) receipt += pl('Subtotal:', format_money(rawSub)) + '\n';
-  if (pf.show_discount_total !== false) {
-    if (itemDisc > 0) receipt += pl('Item Discounts:', '-' + format_money(itemDisc)) + '\n';
-    if (totalDisc > 0) {
-      const discLabel = discPct > 0 ? `Discount (${discPct}%):` : 'Discount:';
-      receipt += pl(discLabel, '-' + format_money(totalDisc)) + '\n';
-    }
-  }
-  if (pf.show_tax !== false && tax > 0) receipt += pl(`${getTaxName()} (${getTaxRate()}%):`, format_money(tax)) + '\n';
-  receipt += eq + '\n';
-  if (pf.show_grand_total !== false) receipt += pl('TOTAL:', 'LKR ' + format_money(tot)) + '\n';
-  receipt += eq + '\n';
-
-  // ── Payment ──
-  if (pf.show_paid !== false) {
-    const payLabel = pf.show_payment_method !== false ? `Paid (${currentMethod}):` : 'Paid:';
-    receipt += pl(payLabel, format_money(tot)) + '\n';
-  }
-  const cardTxn = data.card_transaction || null;
-  if (currentMethod === 'Card' && cardSettings.show_on_receipt && cardTxn) {
-    if (cardTxn.card_type) receipt += pl('Card Type:', String(cardTxn.card_type)) + '\n';
-    if (cardTxn.last4) receipt += pl('Last 4 Digits:', `**** ${cardTxn.last4}`) + '\n';
-    if (cardTxn.approval_code) receipt += pl('Approval Code:', String(cardTxn.approval_code)) + '\n';
-    if (cardTxn.rrn_reference) receipt += pl('Reference / RRN:', String(cardTxn.rrn_reference)) + '\n';
-    if (cardTxn.terminal_id) receipt += pl('Terminal ID:', String(cardTxn.terminal_id)) + '\n';
-  }
-  if (pf.show_change !== false && currentMethod === 'Cash') {
-    const given = parseFloat(document.getElementById('cashGiven')?.value || 0) || 0;
-    if (given > 0) {
-      receipt += pl('Cash Given:', format_money(given)) + '\n';
-      receipt += pl('Change:', format_money(given - tot)) + '\n';
-    }
-  }
-
-  receipt += d + '\n';
-  const footerLines = [];
-
-  // ── Footer ──
-  if (pf.show_thankyou !== false) {
-    const footerTxt = pf.footer_text || 'Thank you for shopping!';
-    footerTxt.split('\n').forEach(line => {
-      if (line.trim()) {
-        receipt += fAlign(line.trim()) + '\n';
-        footerLines.push(line.trim());
-      }
-    });
-  }
-  if (pf.show_return_policy) {
-    receipt += fAlign('Returns accepted within 7 days') + '\n';
-    footerLines.push('For exchanges/returns, keep this receipt safe.');
-  }
-  receipt += '\n';
-  receipt += fAlign(lockedBranding.companyName) + '\n';
-  receipt += fAlign(`Tel: ${lockedBranding.phone}`) + '\n';
-  if (warrantyLines.length) footerLines.push(...warrantyLines.slice(0, 2));
-  if (storePhone) footerLines.push(`Hotline: ${storePhone}`);
-  if (footerLines.length === 0) footerLines.push('Thank you for shopping with us!');
-  if (pf.show_powered_by) receipt += fAlign('Powered by Garage Management System') + '\n';
-
-  const paidAmount = currentMethod === 'Cash'
-    ? ((parseFloat(document.getElementById('cashGiven')?.value || 0) || 0) > 0
-      ? parseFloat(document.getElementById('cashGiven')?.value || 0)
-      : tot)
-    : tot;
-  const balanceAmount = currentMethod === 'Cash' ? Math.max(0, paidAmount - tot) : 0;
-  const paymentMeta = [];
-  paymentMeta.push({ label: 'Payment Method', value: currentMethod || 'Cash' });
-  if (customerSummary.type === 'Wholesale') paymentMeta.push({ label: 'Customer Type', value: 'Wholesale' });
-  if (currentMethod === 'Card' && cardSettings.show_on_receipt && cardTxn) {
-    if (cardTxn.card_type) paymentMeta.push({ label: 'Card Type', value: String(cardTxn.card_type) });
-    if (cardTxn.last4) paymentMeta.push({ label: 'Last 4 Digits', value: `**** ${cardTxn.last4}` });
-    if (cardTxn.approval_code) paymentMeta.push({ label: 'Approval Code', value: String(cardTxn.approval_code) });
-    if (cardTxn.rrn_reference) paymentMeta.push({ label: 'Reference / RRN', value: String(cardTxn.rrn_reference) });
-  }
-  const mode = getReceiptMode(pf);
-  const receiptModel = {
-    storeName,
-    tagline: branch || storeSettings.store_tagline || '',
-    address: storeAddr,
-    phone: storePhone ? `Tel: ${storePhone}` : '',
-    email: storeEmail,
-    title: mode === 'a4' ? 'Tax Invoice' : 'Sales Receipt',
-    invoiceNo: data.invoice || '—',
-    date: dateOnly,
-    time: timeOnly,
-    cashier,
-    customer: customerSummary,
-    items: lineItems,
-    totals: {
-      subtotal: `LKR ${format_money(rawSub)}`,
-      discount: `-LKR ${format_money(itemDisc + totalDisc)}`,
-      taxLabel: `${getTaxName()} (${getTaxRate()}%)`,
-      tax: `LKR ${format_money(tax)}`,
-      grandTotal: `LKR ${format_money(tot)}`,
-      paid: `LKR ${format_money(paidAmount)}`,
-      balanceLabel: currentMethod === 'Cash' ? 'Change' : 'Balance',
-      balance: `LKR ${format_money(balanceAmount)}`,
-    },
-    paymentMeta,
-    footerLines,
-    lockedBranding,
-    poweredBy: !!pf.show_powered_by,
-    show: pf,
-  };
-
-  document.getElementById('receiptInvoice').textContent = data.invoice;
-  document.getElementById('receiptItems').innerHTML = renderReceiptHtml(receiptModel, visualProfile);
-  const rawEl = document.getElementById('receiptTextRaw');
-  if (rawEl) rawEl.textContent = receipt;
-  document.getElementById('receiptItems').dataset.receiptMode = mode;
-  document.getElementById('receiptItems').dataset.receiptPaper = visualProfile.width;
-  bindReceiptPrintButton();
+  const invEl = document.getElementById('receiptInvoice');
+  if (invEl) invEl.textContent = _currentReceiptInvoice ? `Invoice ${_currentReceiptInvoice}` : '';
   openModal('receiptModal');
-  _autoPrintArmed = boolSetting(storeSettings.pref_auto_print_receipt, false);
-  if (_autoPrintArmed) {
-    window.setTimeout(() => {
-      if (_autoPrintArmed) printCurrentReceipt();
-    }, 260);
-  }
-
-  // Cart already captured above — reset now so the order panel is empty
   resetCartState();
-}
-
-function resetCartState() {
-  cart = [];
-  renderCart();
-  // Explicitly zero every financial display — ensures reset even if renderCart has an issue
-  const ids = ['subtotal','itemDiscLine','discountLine','taxLine'];
-  ids.forEach(id => { const el = document.getElementById(id); if(el) el.textContent = 'LKR 0.00'; });
-  const td = document.getElementById('totalDisplay'); if(td) td.textContent = 'LKR 0.00';
-  const mt = document.getElementById('modalTotal');   if(mt) mt.textContent = 'LKR 0.00';
-  // Clear input fields
-  const di = document.getElementById('discountInput');   if(di) di.value = '';
-  const dp = document.getElementById('discountPercent'); if(dp) dp.value = '';
-  const cg = document.getElementById('cashGiven');       if(cg) cg.value = '';
-  const cd = document.getElementById('changeDisplay');   if(cd) cd.style.display = 'none';
-  recalc();
-}
-
-function getReceiptTextWidth() {
-  return 48;
-}
-
-function sanitize_printable_text(value) {
-  return String(value || '')
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[\u200B-\u200D\uFEFF]/g, '')
-    .replace(/[^\x20-\x7E\n\r\t]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function wrap_item_name(value, width) {
-  const safeWidth = Math.max(16, parseInt(width || 32, 10));
-  const words = sanitize_printable_text(String(value || '')).split(/\s+/).filter(Boolean);
-  if (!words.length) return [];
-  const lines = [];
-  let current = '';
-  words.forEach((word) => {
-    if (!current) {
-      current = word;
-      return;
-    }
-    const candidate = `${current} ${word}`;
-    if (candidate.length <= safeWidth) {
-      current = candidate;
-      return;
-    }
-    lines.push(current.slice(0, safeWidth));
-    current = word;
-  });
-  if (current) lines.push(current.slice(0, safeWidth));
-  return lines.flatMap((line) => {
-    if (line.length <= safeWidth) return [line];
-    const chunks = [];
-    for (let i = 0; i < line.length; i += safeWidth) chunks.push(line.slice(i, i + safeWidth));
-    return chunks;
-  });
-}
-
-function format_money(value) {
-  const n = Number(value || 0);
-  return Number.isFinite(n) ? n.toFixed(2) : '0.00';
-}
-
-function center_line(text, width = getReceiptTextWidth()) {
-  const w = Math.max(16, width);
-  const content = sanitize_printable_text(String(text || '')).slice(0, w);
-  const pad = Math.max(0, Math.floor((w - content.length) / 2));
-  return ' '.repeat(pad) + content;
-}
-
-function left_right_line(left, right, width = getReceiptTextWidth()) {
-  const w = Math.max(16, width);
-  const rightText = sanitize_printable_text(String(right || ''));
-  const maxLeftWidth = Math.max(4, w - rightText.length - 1);
-  const leftWrapped = wrap_item_name(sanitize_printable_text(String(left || '')), maxLeftWidth);
-  const leftText = leftWrapped.length ? leftWrapped[0] : '';
-  const gap = Math.max(1, w - leftText.length - rightText.length);
-  return leftText + ' '.repeat(gap) + rightText;
-}
-
-function format_item_row({ name = '', qty = '', unit_price = null, total = null, width = getReceiptTextWidth() } = {}) {
-  const parts = [];
-  const cleanQty = sanitize_printable_text(String(qty || ''));
-  if (cleanQty) parts.push(cleanQty.startsWith('x') ? cleanQty : `x${cleanQty}`);
-  if (unit_price !== null && unit_price !== undefined && unit_price !== '') parts.push(`@ ${format_money(unit_price)}`);
-  if (name) parts.unshift(sanitize_printable_text(name));
-  const line = parts.join(' ').trim();
-  if (total !== null && total !== undefined && total !== '') return left_right_line(line, format_money(total), width);
-  return line.slice(0, Math.max(8, parseInt(width || 32, 10)));
-}
-
-function bindReceiptPrintButton() {
-  const btn = document.getElementById('receiptPrintBtn');
-  if (!btn) return;
-  btn.disabled = false;
-  btn.textContent = '🖨️ Print Receipt';
-}
-
-// In-flight guard prevents duplicate clicks queuing two prints for the same sale.
-const _billingPrintInFlight = new Set();
-
-async function printCurrentReceipt() {
-  _autoPrintArmed = false;
-  const btn = document.getElementById('receiptPrintBtn');
-  const fallbackUrl = String(_currentReceiptUrl || '').trim();
-
-  if (!_currentSaleId) {
-    toast('Receipt is not ready yet. Please try again.', 'warning');
-    return;
-  }
-  if (_billingPrintInFlight.has(_currentSaleId)) {
-    console.debug('[billing] duplicate print prevented (in-flight)', _currentSaleId);
-    return;
-  }
-  _billingPrintInFlight.add(_currentSaleId);
-
-  _clearAutoCloseTimers();
-  const originalLabel = btn ? btn.textContent : '🖨️ Print Receipt';
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = 'Printing…';
-  }
-
-  console.log('[billing] print receipt: sale_id=%s invoice=%s', _currentSaleId, _currentReceiptInvoice);
-
-  try {
-    const response = await fetch(`/api/receipts/billing/${encodeURIComponent(_currentSaleId)}/print`, {
-      method: 'POST',
-      headers: withCsrfHeaders({'Content-Type': 'application/json'}),
-      body: JSON.stringify({ copies: 1 }),
-    });
-    const data = await response.json().catch(() => ({}));
-    console.log('[billing] receipts/billing/<id>/print response ok=%s code=%s', data?.ok, data?.code);
-
-    if (!response.ok || !data.ok) {
-      const reason = data?.msg || data?.error || `Printer dispatch failed (${response.status})`;
-      const printerCodes = ['PRINTER_UNAVAILABLE', 'PRINTER_NOT_INSTALLED', 'MISSING_PRINTER',
-                            'PRINTER_NOT_CONFIGURED', 'PRINTER_OFFLINE'];
-      if (printerCodes.includes(data?.code) && window.SuperMartReceiptPrint?.printFromUrl && fallbackUrl) {
-        await window.SuperMartReceiptPrint.printFromUrl({
-          url: fallbackUrl,
-          button: btn,
-          busyText: 'Printing…',
-        });
-        toast(`Printer unavailable (${reason}). Opened browser print dialog instead.`, 'warning');
-      } else {
-        throw new Error(reason);
-      }
-    } else {
-      toast(data.msg || `Receipt queued for ${data.display_no || _currentReceiptInvoice || 'current invoice'}.`, 'success');
-    }
-  } catch (err) {
-    toast(err?.message || 'Unable to print receipt right now.', 'error');
-  } finally {
-    _billingPrintInFlight.delete(_currentSaleId);
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = originalLabel || '🖨️ Print Receipt';
-    }
-    _startReceiptAutoClose(5);
-  }
-}
-
-function previewCurrentReceipt() {
-  if (!_currentSaleId) {
-    toast('Receipt is not ready yet. Please try again.', 'warning');
-    return;
-  }
-  const url = `/api/receipts/billing/${encodeURIComponent(_currentSaleId)}/preview`;
-  const w = window.open(url, '_blank', 'noopener,noreferrer,width=440,height=720');
-  if (!w) toast('Popup blocked while opening preview.', 'warning');
 }
 
 function newSale() {

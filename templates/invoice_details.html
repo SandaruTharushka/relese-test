@@ -28,15 +28,6 @@
       </div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-      <a class="btn btn-ghost btn-sm" href="{{ url_for('sales_receipt_page', sid=sale.id) }}" target="_blank" rel="noopener">
-        🖨 View Receipt
-      </a>
-      <a class="btn btn-primary btn-sm" href="{{ url_for('sales_receipt_page', sid=sale.id) }}?auto_print=1" target="_blank" rel="noopener">
-        🖨 Reprint Receipt
-      </a>
-      <a class="btn btn-ghost btn-sm" href="{{ url_for('invoice_print_page', invoice_no=sale.invoice_number) }}?auto_print=1" target="_blank" rel="noopener">
-        🖨 Print Invoice
-      </a>
       <a class="btn btn-sm" href="{{ url_for('returns_page') }}?invoice={{ sale.invoice_number }}"
          style="background:rgba(245,158,11,.15);color:#b45309;border:1px solid rgba(245,158,11,.3);">
         🔄 Initiate Return
@@ -130,30 +121,6 @@
       </table>
     </div>
   </div>
-
-  <!-- Barcode / QR section -->
-  {% if barcode_url or qr_url %}
-  <div class="card" style="padding:18px;margin-top:16px;">
-    <div style="font-size:13px;font-weight:700;color:var(--muted,#6b7280);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;">Invoice Codes</div>
-    <div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;">
-      {% if barcode_url %}
-      <div>
-        <div style="font-size:12px;color:var(--muted,#6b7280);margin-bottom:6px;">Barcode — scan to reprint or return</div>
-        <img src="{{ barcode_url }}" alt="Invoice barcode"
-             style="max-width:300px;width:100%;height:auto;image-rendering:pixelated;border:1px solid var(--border,#e5e7eb);border-radius:6px;padding:8px;background:#fff;">
-        <div style="font-size:11px;color:var(--muted,#6b7280);margin-top:4px;letter-spacing:1px;">{{ sale.invoice_number }}</div>
-      </div>
-      {% endif %}
-      {% if qr_url %}
-      <div>
-        <div style="font-size:12px;color:var(--muted,#6b7280);margin-bottom:6px;">QR Code</div>
-        <img src="{{ qr_url }}" alt="Invoice QR code"
-             style="width:140px;height:140px;image-rendering:pixelated;border:1px solid var(--border,#e5e7eb);border-radius:6px;padding:4px;background:#fff;">
-      </div>
-      {% endif %}
-    </div>
-  </div>
-  {% endif %}
 
   {% endif %}
 </div>
