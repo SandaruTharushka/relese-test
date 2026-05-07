@@ -49,6 +49,7 @@ from workshop_usage_routes import register_workshop_usage_routes
 # ── New canonical printing route modules ──────────────────────────────
 from routes.printing_settings_routes import register_printing_settings_routes
 from routes.receipt_print_routes import register_receipt_print_routes
+from routes.receipt_routes import register_receipt_routes
 from routes.label_print_routes import register_label_print_routes
 from routes.barcode_routes import register_barcode_routes
 from routes.diagnostics_routes import register_diagnostics_routes
@@ -1608,6 +1609,18 @@ register_receipt_print_routes(
     RepairJob=RepairJob,
     UserLog=UserLog,
     ProductReturn=ProductReturn,
+)
+
+# Canonical /api/receipts/<billing|repair>/<id>/{preview,text,print}
+# routes — single source of truth used by billing.html and repairs.html.
+register_receipt_routes(
+    app,
+    StoreSettings=StoreSettings,
+    print_domain=_print_domain_svc,
+    log_action=log_action,
+    user_has_any_role=user_has_any_role,
+    Sale=Sale,
+    RepairJob=RepairJob,
 )
 
 register_label_print_routes(

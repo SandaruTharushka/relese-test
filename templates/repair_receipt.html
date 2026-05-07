@@ -248,10 +248,11 @@
     try {
       const headers = { 'Content-Type': 'application/json' };
       if (__csrfToken) { headers['X-CSRFToken'] = __csrfToken; }
-      const res = await fetch('/api/printing/receipt/print-job', {
+      // Canonical endpoint
+      const res = await fetch(`/api/receipts/repair/{{ job.id }}/print`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ job_id: {{ job.id }}, copies }),
+        body: JSON.stringify({ copies }),
         signal: controller.signal,
       });
       const d = await res.json();
