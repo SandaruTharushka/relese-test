@@ -113,21 +113,6 @@ def contains_sql_like(value, escape_char='\\'):
     return f"%{escape_sql_like(value, escape_char=escape_char)}%"
 
 
-def decode_barcode(barcode):
-    b = barcode.strip()
-    try:
-        if len(b) == 13 and b[:2] in ('20', '21', '29'):
-            product_code = b[2:7]
-            weight_raw = int(b[7:12])
-            return {'type': 'weight', 'product_code': product_code, 'weight_kg': weight_raw / 1000.0, 'weight_g': weight_raw}
-        if len(b) == 13 and b[:2] == '22':
-            return {'type': 'price', 'product_code': b[2:7], 'price_lkr': int(b[7:12]) / 100.0}
-    except ValueError:
-        # Invalid characters thibboth normal barcode ekak vidiyata return karanawa
-        pass 
-        
-    return {'type': 'normal', 'barcode': b}
-
 def is_pos_operator_role(role):
     return normalize_role(role) in {'Cashier'}
 

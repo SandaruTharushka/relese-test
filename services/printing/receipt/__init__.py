@@ -1,1 +1,0 @@
-"""Receipt print engine subpackage."""

@@ -448,8 +448,6 @@
     <div class="modal-footer" style="border-top:1px solid var(--border)">
       <button class="btn btn-ghost" onclick="closeModal('editJobModal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveEditedJob()">Save</button>
-      <button class="btn btn-ghost" onclick="saveEditedJob('job-card')">Save &amp; Print Job Card</button>
-      <button class="btn btn-ghost" onclick="saveEditedJob('job-receipt')">Save &amp; Print Receipt</button>
     </div>
   </div>
 </div>
@@ -614,7 +612,6 @@
   </div>
 </div>
 
-<script src="{{ url_for('static', filename='js/receipt_print.js') }}"></script>
 <script>
 // ── State ──────────────────────────────────────────────────────────────────────
 let allJobs = [], currentFilter = '', currentJobId = null, currentInspectionJobId = null;
@@ -625,8 +622,6 @@ let brandSearchTimer = null;
 let brandRequestSeq = 0;
 let activeBrandIndex = -1;
 let selectedVehicleBrandId = null;
-const receiptPrintInFlight = new Set();
-const deliveredAutoPrintTriggered = new Set();
 const deliveryInFlight = new Set();
 
 const STATUS_CONFIG = {
@@ -689,8 +684,6 @@ function renderJobs(jobs){
       <td style="white-space:nowrap">
         <button class="btn btn-ghost btn-sm" onclick="viewJob(${j.id})" title="View job details">View</button>
         <button class="btn btn-ghost btn-sm" onclick="openEditJobModal(${j.id})" title="Edit job">Edit</button>
-        <button class="btn btn-ghost btn-sm" onclick="previewServiceReceipt(${j.id})" title="Preview receipt">👁️</button>
-        <button class="btn btn-ghost btn-sm" onclick="printJobReceipt(${j.id})" title="Print receipt">🧾 Receipt</button>
         <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="deleteJob(${j.id}, '${(j.job_number||'').replace(/'/g, '\\\'')}')">🗑</button>
       </td>
     </tr>
@@ -764,8 +757,6 @@ async function createJob(){
       clearNewJobForm();
       await loadJobs(currentFilter);
       await loadStats();
-      // Open job card print
-      window.open(`/repairs/${d.job.id}/job-card/print`, '_blank');
     } else {
       alert('Error: '+(d.error||'Could not create job'));
     }
@@ -1103,9 +1094,7 @@ function renderJobDetail(j){
   `;
 
   const footer=document.getElementById('viewJobFooter');
-  let btns=`<button type="button" class="btn btn-ghost" style="gap:6px" onclick="printJobCard(${j.id})">🖨 Job Card</button>`;
-  btns+=`<button type="button" class="btn btn-ghost" style="gap:6px" onclick="printJobReceipt(${j.id})">🧾 Job Receipt</button>`;
-  btns+=`<button class="btn btn-ghost" onclick="openEditJobModal(${j.id})" style="gap:6px">✏️ Edit Job</button>`;
+  let btns=`<button class="btn btn-ghost" onclick="openEditJobModal(${j.id})" style="gap:6px">✏️ Edit Job</button>`;
   if(j.status!=='delivered'){
     btns+=`<button class="btn btn-ghost" style="color:var(--danger);gap:6px" onclick="deleteJob(${j.id}, '${(j.job_number||'').replace(/'/g, '\\\'')}')">🗑 Delete</button>`;
   }
@@ -1121,9 +1110,6 @@ function renderJobDetail(j){
       btns+=`<button class="btn btn-primary" style="background:#10B981;gap:6px" onclick="deliverJob(${j.id})">✓ Mark Delivered</button>`;
     }
   }
-  if(j.status==='delivered'){
-    btns+=`<button type="button" class="btn btn-ghost" style="gap:6px" onclick="printServiceReceipt(${j.id}, this)">🧾 Receipt</button>`;
-  }
   footer.innerHTML=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">${btns}</div>`;
   const viewBody = document.getElementById('viewJobBody');
   window.CustomSelect?.init(viewBody);
@@ -1131,84 +1117,6 @@ function renderJobDetail(j){
   if (statusSelect) window.CustomSelect?.refresh(statusSelect);
 }
 
-
-function printJobCard(jobId){
-  if(!jobId) return;
-  window.open(`/repairs/${encodeURIComponent(jobId)}/job-card/print`, '_blank', 'noopener,noreferrer');
-}
-
-function printJobReceipt(jobId){
-  if(!jobId) return;
-  printServiceReceipt(jobId, null);
-}
-
-async function printServiceReceipt(jid, btn){
-  const triggerBtn = btn instanceof HTMLElement ? btn : null;
-  const originalLabel = triggerBtn ? (triggerBtn.dataset.originalLabel || triggerBtn.textContent || '🧾 Receipt') : '🧾 Receipt';
-  if (triggerBtn && triggerBtn.disabled) return;
-  if (receiptPrintInFlight.has(jid)) {
-    console.debug('[repairs] duplicate print prevented (in-flight)', { jid });
-    return;
-  }
-  receiptPrintInFlight.add(jid);
-  if (triggerBtn) {
-    triggerBtn.dataset.originalLabel = originalLabel;
-    triggerBtn.disabled = true;
-    triggerBtn.textContent = 'Printing…';
-  }
-  try {
-    const receiptUrl = `/repairs/${encodeURIComponent(jid)}/receipt/print?auto_print=1`;
-    let dispatchError = null;
-    try {
-      // Canonical endpoint — POST /api/receipts/repair/<job_id>/print
-      const response = await fetch(`/api/receipts/repair/${encodeURIComponent(jid)}/print`, {
-        method: 'POST',
-        headers: csrfHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ copies: 1 }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.ok) {
-        dispatchError = new Error(data?.error || data?.msg || `Printer dispatch failed (${response.status})`);
-        dispatchError.code = data?.code || '';
-        dispatchError.status = response.status;
-      } else if (typeof toast === 'function') {
-        toast(data?.msg || `Receipt queued for ${data?.display_no || data?.job_number || `job #${jid}`}.`, 'success');
-      }
-    } catch (err) {
-      dispatchError = err instanceof Error ? err : new Error('Printer dispatch failed.');
-    }
-    if (dispatchError) {
-      console.warn('[repairs] thermal dispatch failed, falling back to web print', { jid, error: dispatchError });
-      if (window.SuperMartReceiptPrint?.printFromUrl) {
-        await window.SuperMartReceiptPrint.printFromUrl({ url: receiptUrl, button: triggerBtn, busyText: 'Opening…' });
-      } else {
-        const popup = window.open(receiptUrl, '_blank', 'noopener,noreferrer');
-        if (!popup) throw new Error('Popup blocked while opening print preview.');
-      }
-      if (typeof toast === 'function') {
-        toast(`Printer unavailable (${dispatchError.message || 'dispatch failed'}). Opened browser print dialog instead.`, 'warning');
-      }
-    }
-  } catch (err) {
-    console.error('[repairs] service receipt print failed', err);
-    const message = err?.message || 'Service receipt print failed';
-    if (typeof toast === 'function') toast(message, 'error');
-    else alert(message);
-  } finally {
-    receiptPrintInFlight.delete(jid);
-    if (triggerBtn) {
-      triggerBtn.disabled = false;
-      triggerBtn.textContent = originalLabel;
-    }
-  }
-}
-
-function previewServiceReceipt(jid){
-  if(!jid) return;
-  const url = `/api/receipts/repair/${encodeURIComponent(jid)}/preview`;
-  const w = window.open(url, '_blank', 'noopener,noreferrer,width=440,height=720');
-  if (!w && typeof toast === 'function') toast('Popup blocked while opening preview.', 'warning');
-}
 
 async function openEditJobModal(id){
   try{
@@ -1248,7 +1156,7 @@ async function openEditJobModal(id){
   }
 }
 
-async function saveEditedJob(printMode = null){
+async function saveEditedJob(){
   if(!currentJobId){ return; }
   const issue = (document.getElementById('eIssue').value || '').trim();
   if(!issue){ alert('Issue reported is required.'); return; }
@@ -1294,11 +1202,6 @@ async function saveEditedJob(printMode = null){
       await loadJobs(currentFilter);
       await loadStats();
       viewJob(jobId);
-      if (printMode === 'job-card') {
-        printJobCard(jobId);
-      } else if (printMode === 'job-receipt') {
-        printJobReceipt(jobId);
-      }
     }else{
       alert('Error: ' + (d.error || 'Could not update job'));
     }
@@ -1506,10 +1409,6 @@ async function deliverJob(id){
     return;
   }
   if(!confirm('Mark this job as DELIVERED? This cannot be undone.')) return;
-  if (receiptPrintInFlight.has(id)) {
-    console.debug('[repairs] delivery blocked while print in-flight', { id });
-    return;
-  }
   deliveryInFlight.add(id);
   const odoOut=prompt('Odometer reading at delivery (km)? Leave blank to skip.');
   const payload={};
@@ -1519,11 +1418,6 @@ async function deliverJob(id){
     const d=await r.json();
     if(d.success){
       await loadJobs(currentFilter); await loadStats(); viewJob(id);
-      if (d.auto_print_receipt_enabled && !deliveredAutoPrintTriggered.has(id)) {
-        deliveredAutoPrintTriggered.add(id);
-        console.debug('[repairs] auto-printing delivered receipt', { id });
-        await printServiceReceipt(id, null);
-      }
     }
     else alert('Error: '+(d.error||'Could not deliver'));
   } finally {

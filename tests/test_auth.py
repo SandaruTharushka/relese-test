@@ -115,8 +115,3 @@ def test_operator_cannot_create_admin_user(client, flask_app):
     assert response.status_code == 403
 
 
-def test_barcode_scan_requires_login_redirects(client):
-    # Flask-Login's @login_required redirects unauthenticated browser requests (302).
-    # The endpoint is only accessed from within the authenticated app session.
-    response = client.get('/api/barcode/scan/1234567890123')
-    assert response.status_code in (302, 401)

@@ -24,10 +24,6 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 import re
 from decimal import Decimal
 
-from services.printing.settings_service import PrintSettingsService
-# ServiceReceiptBuilder and layout constants are no longer imported here —
-# all receipt builds go through ReceiptEngine in the route handlers below.
-
 from validators import parse_positive_float, parse_positive_int
 from customer_linking import ensure_customer_profile, normalize_phone
 from services.atomic_sequence import next_sequence
@@ -61,7 +57,7 @@ def gen_job_number():
     return next_sequence(db.session, 'JOB')
 
 
-def register_repair_routes(app, log_action=None, print_domain=None):
+def register_repair_routes(app, log_action=None):
     VALID_REPAIR_STATUSES = {
         'received', 'diagnosing', 'waiting_parts', 'in_progress',
         'ready', 'delivered', 'cancelled',
@@ -317,55 +313,6 @@ def register_repair_routes(app, log_action=None, print_domain=None):
     def repairs_page():
         return render_template('repairs.html', active='repairs')
 
-    def _render_repair_receipt_web_print(jid):
-        job = RepairJob.query.get_or_404(jid)
-        payment = _repair_payment_snapshot(job)
-        store = {
-            'name': StoreSettings.get('store_name', ''),
-            'phone': StoreSettings.get('store_phone', ''),
-            'address': StoreSettings.get('store_address', ''),
-            'email': StoreSettings.get('store_email', ''),
-            'branch': StoreSettings.get('store_branch', ''),
-        }
-        paper = (request.args.get('paper') or '80mm').strip().lower()
-        paper_width = '58mm' if '58' in paper else '80mm'
-        return render_template(
-            'repair_receipt.html',
-            job=job,
-            payment=payment,
-            store=store,
-            cashier_name=getattr(current_user, 'full_name', '') or getattr(current_user, 'username', 'Staff'),
-            auto_print=request.args.get('auto_print', '0') == '1',
-            paper_width=paper_width,
-        )
-
-    @app.route('/repairs/<int:jid>/job-card/print')
-    @login_required
-    def repair_job_card_print(jid):
-        job = RepairJob.query.get_or_404(jid)
-        return render_template('repair_job_card.html', job=job)
-
-    @app.route('/repairs/<int:jid>/receipt/print')
-    @login_required
-    def repair_job_receipt_print(jid):
-        return _render_repair_receipt_web_print(jid)
-
-    # Legacy URLs kept for compatibility; route to the same web-print renderers.
-    @app.route('/repairs/<int:jid>/card')
-    @login_required
-    def repair_job_card(jid):
-        return repair_job_card_print(jid)
-
-    @app.route('/repairs/<int:jid>/receipt')
-    @login_required
-    def repair_job_receipt(jid):
-        return repair_job_receipt_print(jid)
-
-    @app.route('/api/printer/print/job-card', methods=['POST'])
-    @login_required
-    def api_repair_job_card_direct_print_blocked():
-        return jsonify({'ok': False, 'error': 'Use web print for job card.'}), 400
-
     # ── API ────────────────────────────────────────────────────────────────────
 
     @app.route('/api/repairs', methods=['GET'])
@@ -594,53 +541,6 @@ def register_repair_routes(app, log_action=None, print_domain=None):
     def api_repair_get(jid):
         job = RepairJob.query.get_or_404(jid)
         return jsonify(job.to_dict())
-
-    @app.route('/api/repairs/<int:jid>/receipt-text', methods=['GET'])
-    @login_required
-    def api_repair_receipt_text(jid):
-        try:
-            app.logger.info('GET /api/repairs/%s/receipt-text hit user=%s', jid, getattr(current_user, 'id', None))
-            job = RepairJob.query.filter(RepairJob.id == jid).first()
-            if not job:
-                return jsonify({
-                    'ok': False,
-                    'error': 'Repair job not found.',
-                    'code': 'REPAIR_JOB_NOT_FOUND',
-                }), 404
-
-            from services.printing.receipt.receipt_engine import ReceiptEngine
-            engine = ReceiptEngine(StoreSettings)
-            result = engine.build_service_receipt(
-                job_id=jid,
-                actor_user_id=getattr(current_user, 'id', None),
-            )
-            job_number = job.job_number or f'JOB-{jid}'
-            app.logger.info(
-                'GET /api/repairs/%s/receipt-text success user=%s job_number=%s chars=%s cpl=%s',
-                jid,
-                getattr(current_user, 'id', None),
-                job_number,
-                len(result.receipt_text or ''),
-                result.cpl,
-            )
-            return jsonify({
-                'ok': True,
-                'job_id': jid,
-                'job_number': job_number,
-                'receipt_text': result.receipt_text,
-                'title': f'Service Job {job_number}',
-                'paper_size': result.paper_size,
-                'cpl': result.cpl,
-                'layout': result.layout,
-            }), 200
-        except Exception as exc:
-            app.logger.exception('Service receipt text generation failed jid=%s', jid)
-            return jsonify({
-                'ok': False,
-                'error': 'Failed to generate repair receipt.',
-                'details': str(exc),
-                'code': 'REPAIR_RECEIPT_TEXT_ERROR',
-            }), 500
 
     @app.route('/api/repairs/<int:jid>', methods=['PUT'])
     @login_required
@@ -1003,8 +903,7 @@ def register_repair_routes(app, log_action=None, print_domain=None):
                 joinedload(RepairJob.technician),
                 joinedload(RepairJob.customer),
             ).filter_by(id=jid).first()
-            auto_print_enabled = str(StoreSettings.get('pref_auto_print_receipt', 'false')).strip().lower() in {'1', 'true', 'yes', 'on'}
-            return jsonify({'success': True, 'job': job.to_dict(), 'auto_print_receipt_enabled': auto_print_enabled})
+            return jsonify({'success': True, 'job': job.to_dict()})
         except Exception as exc:
             db.session.rollback()
             app.logger.exception('Deliver failed jid=%s: %s', jid, exc)

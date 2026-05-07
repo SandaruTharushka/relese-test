@@ -14,7 +14,6 @@ from sqlalchemy.orm import selectinload, joinedload, contains_eager
 from utils.timezone import format_sl_date, format_sl_datetime
 from shared_helpers import contains_sql_like
 from validators import parse_positive_float, parse_positive_int
-from services.receipt_renderer import build_receipt_context
 from services.auto_discount_service import (
     calculate_discount_amount,
     get_discount_for_price,
@@ -32,41 +31,6 @@ PAYMENT_METHOD_ALIASES = {
     'store credit': 'StoreCredit',
 }
 MAX_INVOICE_RETRIES = 5
-INVOICE_BARCODE_DIR = 'invoice_barcodes'
-INVOICE_QR_DIR = 'invoice_qr'
-DEFAULT_RECEIPT_PROFILE = {
-    'type': 'thermal',
-    'cpl': 48,
-    'show_store_name': True,
-    'show_branch': True,
-    'show_address': False,
-    'show_phone': True,
-    'show_email': False,
-    'show_tax_number': False,
-    'header_align': 'center',
-    'show_invoice': True,
-    'show_datetime': True,
-    'show_cashier': True,
-    'show_customer': True,
-    'show_customer_phone': False,
-    'show_payment_method': True,
-    'show_product_name': True,
-    'show_qty': True,
-    'show_unit_price': True,
-    'show_discount': True,
-    'show_line_total': True,
-    'show_sku': False,
-    'wrap_product_names': True,
-    'show_subtotal': True,
-    'show_discount_total': True,
-    'show_tax': True,
-    'show_grand_total': True,
-    'show_paid': True,
-    'show_change': True,
-    'footer_text': 'Thank you for shopping!',
-    'show_thankyou': True,
-    'footer_align': 'center',
-}
 
 
 def is_invoice_conflict_error(exc):
@@ -125,77 +89,13 @@ def hold_order_error_payload(message, *, code='held_order_error', details=None):
     return payload
 
 
-def _safe_invoice_filename(invoice_no):
-    return re.sub(r'[^A-Za-z0-9_.-]+', '_', str(invoice_no or '').strip()) or 'invoice'
-
-
 def normalize_invoice_lookup_value(value):
     clean = str(value or '').strip()
     if not clean:
         return ''
-    # Some scanners prepend AIM symbology identifiers for Code128.
-    # Strip known prefixes so invoice lookups work instantly after scan.
     if clean.startswith(']C1'):
         clean = clean[3:].strip()
     return clean
-
-
-def _invoice_asset_info(app, invoice_no):
-    safe_invoice = _safe_invoice_filename(invoice_no)
-    barcode_rel = os.path.join(INVOICE_BARCODE_DIR, f'{safe_invoice}.png').replace('\\', '/')
-    qr_rel = os.path.join(INVOICE_QR_DIR, f'{safe_invoice}.png').replace('\\', '/')
-    barcode_abs = os.path.join(app.static_folder, barcode_rel.replace('/', os.sep))
-    qr_abs = os.path.join(app.static_folder, qr_rel.replace('/', os.sep))
-    return {
-        'safe_invoice': safe_invoice,
-        'barcode_rel': barcode_rel,
-        'qr_rel': qr_rel,
-        'barcode_abs': barcode_abs,
-        'qr_abs': qr_abs,
-    }
-
-
-def generate_invoice_code_images(app, *, invoice_no, invoice_url):
-    from barcode import Code128
-    from barcode.writer import ImageWriter
-    import qrcode
-
-    invoice_value = str(invoice_no or '').strip()
-    if not invoice_value:
-        return None
-
-    assets = _invoice_asset_info(app, invoice_value)
-    os.makedirs(os.path.dirname(assets['barcode_abs']), exist_ok=True)
-    os.makedirs(os.path.dirname(assets['qr_abs']), exist_ok=True)
-
-    if not os.path.exists(assets['barcode_abs']):
-        writer_opts = {
-            'write_text': False,
-            'module_width': 0.28,
-            'module_height': 10.0,
-            'quiet_zone': 1.5,
-        }
-        Code128(invoice_value, writer=ImageWriter()).save(
-            os.path.splitext(assets['barcode_abs'])[0],
-            options=writer_opts,
-        )
-
-    if not os.path.exists(assets['qr_abs']):
-        qr = qrcode.QRCode(
-            version=None,
-            error_correction=qrcode.constants.ERROR_CORRECT_M,
-            box_size=5,
-            border=2,
-        )
-        qr.add_data(str(invoice_url or '').strip())
-        qr.make(fit=True)
-        qr_img = qr.make_image(fill_color='black', back_color='white')
-        qr_img.save(assets['qr_abs'])
-
-    return {
-        'barcode_static_path': assets['barcode_rel'],
-        'qr_static_path': assets['qr_rel'],
-    }
 
 
 def normalize_held_order_cart(raw_cart):
@@ -333,62 +233,6 @@ def setting_enabled(StoreSettings, key, default='0'):
 
 
 
-
-def load_receipt_profile_from_db(StoreSettings, fallback: dict | None = None) -> dict:
-    """Load receipt layout profile from DB, falling back to DEFAULT_RECEIPT_PROFILE."""
-    base = dict(fallback or DEFAULT_RECEIPT_PROFILE)
-    key_to_profile = {
-        'rcpt_layout_type': 'type',
-        'rcpt_cpl': 'cpl',
-        'rcpt_header_align': 'header_align',
-        'rcpt_footer_align': 'footer_align',
-        'rcpt_footer_text': 'footer_text',
-        'rcpt_show_store_name': 'show_store_name',
-        'rcpt_show_branch': 'show_branch',
-        'rcpt_show_address': 'show_address',
-        'rcpt_show_phone': 'show_phone',
-        'rcpt_show_email': 'show_email',
-        'rcpt_show_tax_number': 'show_tax_number',
-        'rcpt_show_invoice': 'show_invoice',
-        'rcpt_show_datetime': 'show_datetime',
-        'rcpt_show_cashier': 'show_cashier',
-        'rcpt_show_customer': 'show_customer',
-        'rcpt_show_customer_phone': 'show_customer_phone',
-        'rcpt_show_payment_method': 'show_payment_method',
-        'rcpt_show_qty': 'show_qty',
-        'rcpt_show_unit_price': 'show_unit_price',
-        'rcpt_show_discount': 'show_discount',
-        'rcpt_show_line_total': 'show_line_total',
-        'rcpt_show_sku': 'show_sku',
-        'rcpt_wrap_product_names': 'wrap_product_names',
-        'rcpt_show_subtotal': 'show_subtotal',
-        'rcpt_show_discount_total': 'show_discount_total',
-        'rcpt_show_tax': 'show_tax',
-        'rcpt_show_grand_total': 'show_grand_total',
-        'rcpt_show_paid': 'show_paid',
-        'rcpt_show_change': 'show_change',
-        'rcpt_show_thankyou': 'show_thankyou',
-        'rcpt_show_return_policy': 'show_return_policy',
-        'rcpt_show_powered_by': 'show_powered_by',
-        'rcpt_enable_barcode': 'enable_barcode',
-        'rcpt_show_barcode_text': 'show_barcode_text',
-        'rcpt_compact_mode': 'compact_mode',
-    }
-    bool_keys = {v for k, v in key_to_profile.items() if k.startswith('rcpt_show_') or k in ('rcpt_compact_mode',)}
-    for db_key, profile_key in key_to_profile.items():
-        raw = StoreSettings.get(db_key, None)
-        if raw is None:
-            continue
-        if profile_key == 'cpl':
-            try:
-                base[profile_key] = int(str(raw).strip())
-            except (ValueError, TypeError):
-                pass
-        elif profile_key in bool_keys or profile_key in ('enable_barcode', 'show_barcode_text', 'compact_mode', 'wrap_product_names'):
-            base[profile_key] = str(raw).strip().lower() == 'true'
-        else:
-            base[profile_key] = str(raw).strip() or base.get(profile_key, '')
-    return base
 
 def register_sales_routes(
     app,
@@ -814,16 +658,6 @@ def register_sales_routes(
                         ))
 
                     db.session.commit()
-                    if sale and sale.status == 'completed':
-                        try:
-                            invoice_url = url_for('invoice_details_page', invoice_no=sale.invoice_number, _external=True)
-                            generate_invoice_code_images(
-                                app,
-                                invoice_no=sale.invoice_number,
-                                invoice_url=invoice_url,
-                            )
-                        except Exception:
-                            app.logger.exception('Failed generating invoice code images invoice=%s', sale.invoice_number)
                     break
                 except IntegrityError as e:
                     db.session.rollback()
@@ -898,7 +732,6 @@ def register_sales_routes(
                 'message': 'Payment successful',
                 'sale_id': sale.id,
                 'invoice': sale.invoice_number,
-                'receipt_url': url_for('sales_receipt_page', sid=sale.id, auto_print=1),
                 'subtotal': subtotal,
                 'discount': total_discount,
                 'tax': tax,
@@ -926,7 +759,6 @@ def register_sales_routes(
             'pay_data': pay_data,
             'sale_id': sale.id,
             'invoice': sale.invoice_number,
-            'receipt_url': url_for('sales_receipt_page', sid=sale.id, auto_print=1),
         })
 
     @app.route('/payment/notify', methods=['POST'])
@@ -983,13 +815,6 @@ def register_sales_routes(
             )
 
         db.session.commit()
-
-        if sale.status == 'completed' and not already_completed:
-            try:
-                invoice_url = url_for('invoice_details_page', invoice_no=sale.invoice_number, _external=True)
-                generate_invoice_code_images(app, invoice_no=sale.invoice_number, invoice_url=invoice_url)
-            except Exception:
-                app.logger.exception('Failed generating invoice code images after PayHere notify')
         return 'OK', 200
 
     @app.route('/payment/return')
@@ -1165,7 +990,6 @@ def register_sales_routes(
             'id': sale.id,
             'invoice_no': sale.invoice_number,
             'invoice_url': url_for('invoice_details_page', invoice_no=sale.invoice_number),
-            'receipt_url': url_for('sales_receipt_page', sid=sale.id),
         })
 
     @app.route('/api/invoices/<int:sid>')
@@ -1190,8 +1014,6 @@ def register_sales_routes(
                     customer_name='',
                     customer_phone='',
                     payment_method_label='',
-                    barcode_url='',
-                    qr_url='',
                 ),
                 404,
             )
@@ -1210,21 +1032,6 @@ def register_sales_routes(
             for p in sale.payments
         ) if sale.payments else '—'
 
-        barcode_url = ''
-        qr_url = ''
-        try:
-            assets = generate_invoice_code_images(
-                app,
-                invoice_no=sale.invoice_number,
-                invoice_url=url_for('invoice_details_page', invoice_no=sale.invoice_number, _external=True),
-            ) or {}
-            if assets.get('barcode_static_path'):
-                barcode_url = url_for('static', filename=assets['barcode_static_path'])
-            if assets.get('qr_static_path'):
-                qr_url = url_for('static', filename=assets['qr_static_path'])
-        except Exception:
-            app.logger.exception('Failed preparing invoice code images for details page invoice=%s', sale.invoice_number)
-
         return render_template(
             'invoice_details.html',
             sale=sale,
@@ -1232,105 +1039,6 @@ def register_sales_routes(
             customer_name=customer_name,
             customer_phone=customer_phone,
             payment_method_label=payment_method_label,
-            barcode_url=barcode_url,
-            qr_url=qr_url,
-        )
-
-    @app.route('/invoice/<invoice_no>/print')
-    @login_required
-    def invoice_print_page(invoice_no):
-        clean_invoice = normalize_invoice_lookup_value(invoice_no)
-        sale = Sale.query.filter_by(invoice_number=clean_invoice).first_or_404()
-        customer_name = 'Walk-in Customer'
-        customer_phone = ''
-        if sale.retail_customer:
-            customer_name = sale.retail_customer.name or customer_name
-            customer_phone = sale.retail_customer.phone or ''
-        elif sale.wholesale_customer:
-            customer_name = sale.wholesale_customer.name or customer_name
-            customer_phone = sale.wholesale_customer.phone or ''
-        store = {
-            'name': StoreSettings.get('store_name', 'Garage Management System'),
-            'phone': StoreSettings.get('store_phone', ''),
-            'address': StoreSettings.get('store_address', ''),
-        }
-        return render_template(
-            'invoice_print.html',
-            sale=sale,
-            store=store,
-            customer_name=customer_name,
-            customer_phone=customer_phone,
-            auto_print=request.args.get('auto_print', '0') == '1',
-        )
-
-    @app.route('/sales/<int:sid>/receipt')
-    @login_required
-    def sales_receipt_page(sid):
-        sale = db.session.get(Sale, sid)
-        if not sale:
-            abort(404)
-
-        store = {
-            'name': StoreSettings.get('store_name', 'Garage Management System'),
-            'phone': StoreSettings.get('store_phone', ''),
-            'address': StoreSettings.get('store_address', ''),
-            'email': StoreSettings.get('store_email', ''),
-            'branch': StoreSettings.get('store_branch', ''),
-            'footer': StoreSettings.get('receipt_footer', ''),
-        }
-        try:
-            profile = load_receipt_profile_from_db(StoreSettings)
-        except Exception:
-            profile = DEFAULT_RECEIPT_PROFILE.copy()
-        active_profile = str(profile.get('type') or 'thermal')
-        customer_name = 'Walk-in Customer'
-        customer_phone = ''
-        if sale.retail_customer:
-            customer_name = sale.retail_customer.name or customer_name
-            customer_phone = sale.retail_customer.phone or ''
-        elif sale.wholesale_customer:
-            customer_name = sale.wholesale_customer.name or customer_name
-            customer_phone = sale.wholesale_customer.phone or ''
-
-        payment_method_label = ', '.join(
-            f"{(p.method or 'other').replace('_', ' ').title()} ({float(p.amount or 0):.2f})"
-            for p in sale.payments
-        ) if sale.payments else '—'
-
-        barcode_url = ''
-        qr_url = ''
-        try:
-            assets = generate_invoice_code_images(
-                app,
-                invoice_no=sale.invoice_number,
-                invoice_url=url_for('invoice_details_page', invoice_no=sale.invoice_number, _external=True),
-            ) or {}
-            if assets.get('barcode_static_path'):
-                barcode_url = url_for('static', filename=assets['barcode_static_path'])
-            if assets.get('qr_static_path'):
-                qr_url = url_for('static', filename=assets['qr_static_path'])
-        except Exception:
-            app.logger.exception('Failed preparing invoice code images for receipt invoice=%s', sale.invoice_number)
-
-        receipt_context = build_receipt_context(
-            sale=sale,
-            store=store,
-            profile_type=active_profile,
-            profile=profile,
-            cashier_name=getattr(sale.cashier_user, 'full_name', '') or getattr(sale.cashier_user, 'username', 'Staff'),
-            customer_name=customer_name,
-            customer_phone=customer_phone,
-            payment_method_label=payment_method_label,
-            invoice_detail_url=url_for('invoice_details_page', invoice_no=sale.invoice_number),
-            barcode_url=barcode_url,
-            qr_url=qr_url,
-            fallback_paper_width=48,
-        )
-        app.logger.info('receipt_context_loaded invoice=%s profile=%s cpl=%s paper=%s', sale.invoice_number, active_profile, receipt_context.get('cpl'), receipt_context.get('paper_width'))
-        return render_template(
-            'sales_receipt.html',
-            auto_print=request.args.get('auto_print', '0') == '1',
-            **receipt_context,
         )
 
 
