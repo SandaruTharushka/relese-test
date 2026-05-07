@@ -114,6 +114,15 @@ def _sanitize_low_stock_alert(value):
         return DEFAULT_LOW_STOCK_ALERT
     return parsed if parsed >= 0 else DEFAULT_LOW_STOCK_ALERT
 
+def _get_or_create_uncategorized():
+    """Get or create the Uncategorized category for products without a category."""
+    uncategorized = Category.query.filter(func.lower(func.trim(Category.name)) == 'uncategorized').first()
+    if not uncategorized:
+        uncategorized = Category(name='Uncategorized', description='Default category for products')
+        db.session.add(uncategorized)
+        db.session.flush()
+    return uncategorized
+
 def _invalidate_low_stock_cache():
     with _low_stock_cache_lock:
         _low_stock_cache['expires'] = 0
@@ -1819,7 +1828,8 @@ def products_page():
         return render_template('products.html',
             products=products,
             categories=categories,
-            suppliers=suppliers)
+            suppliers=suppliers,
+            default_low_stock_alert=DEFAULT_LOW_STOCK_ALERT)
     except Exception as e:
         _log_products_issue('/products', 'products page', 'render error', error=str(e), stack_trace=traceback.format_exc())
         # Flash detailed error message
@@ -1896,11 +1906,7 @@ def _safe_decimal(value, default=0):
 
 
 def _repair_and_validate_products():
-    uncategorized = Category.query.filter(func.lower(func.trim(Category.name)) == 'uncategorized').first()
-    if not uncategorized:
-        uncategorized = Category(name='Uncategorized', description='Auto-created for repaired products')
-        db.session.add(uncategorized)
-        db.session.flush()
+    uncategorized = _get_or_create_uncategorized()
 
     repaired, invalid = [], []
     rows = Product.query.all()
@@ -2212,12 +2218,13 @@ def api_add_product():
     if stock_tracking_type == 'QUANTITY_TRACKED' and d.get('stock_qty') in (None, ''):
         return jsonify({'error': 'Stock quantity is required for quantity-tracked products'}), 400
     try:
+        default_cat = _get_or_create_uncategorized()
         if existing_with_barcode and existing_with_barcode.status != 'active':
             p = existing_with_barcode
             _restore_product_record(p)
             p.name = name
             p.sku = sku
-            p.category_id = d.get('category_id') or None
+            p.category_id = d.get('category_id') or default_cat.id
             p.supplier_id = d.get('supplier_id') or None
             p.buy_price = buy_price
             p.sell_price = sell_price
@@ -2240,7 +2247,7 @@ def api_add_product():
             p = Product(
                 barcode=barcode, name=name,
                 sku=sku,
-                category_id=d.get('category_id') or None,
+                category_id=d.get('category_id') or default_cat.id,
                 supplier_id=d.get('supplier_id') or None,
                 buy_price=buy_price, sell_price=sell_price,
                 wholesale_price=wholesale_price,
