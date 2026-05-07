@@ -1,25 +1,14 @@
 {% extends "base.html" %}
 {% from "sidebar.html" import sidebar with context %}
+{% from "settings/_shell.html" import settings_shell %}
 {% block title %} — Company Intro{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', filename='css/settings_shell.css') }}">{% endblock %}
 {% block body %}
-<div class="app-layout">
-  {{ sidebar('settings') }}
-  <div class="main-area">
-    <div class="topbar">
-      <div style="font-size:18px;font-weight:700">🏪 Company Intro</div>
-      <div class="flex items-center gap-2">
-        <a class="btn btn-ghost btn-sm" href="{{ url_for('settings') }}">← Settings</a>
-      </div>
-    </div>
+{% call settings_shell('company_intro', 'Company Intro', 'Branding and receipt identity settings.') %}
+<div class="settings-card">
+        <div class="text-muted text-sm" style="margin-bottom:14px">These details appear at the top of every receipt — billing, job, and return.</div>
 
-    <div class="page-content">
-      <div class="container" style="max-width:920px;margin:0 auto;padding:0 16px">
-      <div class="card" style="padding:18px">
-        <div class="text-muted text-sm" style="margin-bottom:14px">
-          These details appear at the top of every receipt — billing, job, and return.
-        </div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="settings-grid-2">
           <div class="form-group">
             <label class="form-label">Company Name *</label>
             <input class="form-input" id="co_name" value="{{ company.company_name }}">
@@ -84,11 +73,8 @@
           <button class="btn btn-primary" onclick="saveCompany()">💾 Save Company Info</button>
         </div>
         <div id="companyMsg" class="text-sm" style="margin-top:8px"></div>
-      </div>
-      </div>
-    </div>
-  </div>
 </div>
+{% endcall %}
 
 <script>
 function _csrf() {
