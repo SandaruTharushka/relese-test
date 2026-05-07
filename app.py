@@ -2234,6 +2234,19 @@ def _parse_decimal_strict(raw, field_name):
         raise ValueError(f'Invalid {field_name}')
 
 
+def _import_error(row_num, column, value, error, expected, suggestion, severity='error', raw_data=None):
+    return {
+        'row': row_num,
+        'column': column,
+        'value': str(value or ''),
+        'error': error,
+        'expected': expected,
+        'suggestion': suggestion,
+        'severity': severity,
+        'raw_data': raw_data or {},
+    }
+
+
 @app.route('/api/items/bulk-import', methods=['POST'])
 @login_required
 def api_bulk_import_items():
@@ -2258,8 +2271,9 @@ def api_bulk_import_items():
     if missing:
         return jsonify({'success': False, 'error': f'Missing required columns: {", ".join(missing)}'}), 400
 
-    created = updated = skipped = 0
+    created = updated = skipped = warnings = 0
     errors = []
+    review = []
     suppliers_cache = {}
     categories_cache = {}
 
@@ -2274,15 +2288,22 @@ def api_bulk_import_items():
             try:
                 name = ' '.join(cell('name').split())
                 if not name:
-                    raise ValueError('Item name is required')
-                qty = _parse_decimal_strict(cell('qty'), 'qty')
-                buy_price = _parse_decimal_strict(cell('buy_price'), 'buy_price')
-                sell_price = _parse_decimal_strict(cell('sell_price'), 'sell_price')
+                    raise ValueError('name|required|Item name is required|Non-empty text|Provide a product name')
+                qty_raw, buy_raw, sell_raw = cell('qty'), cell('buy_price'), cell('sell_price')
+                qty = _parse_decimal_strict(qty_raw, 'qty')
+                buy_price = _parse_decimal_strict(buy_raw, 'buy_price')
+                sell_price = _parse_decimal_strict(sell_raw, 'sell_price')
                 barcode = cell('barcode') or None
                 supplier_name = ' '.join(cell('supplier').split()) if 'supplier' in header_map else ''
                 category_name = ' '.join(cell('category').split()) if 'category' in header_map else ''
-                if qty < 0 or buy_price < 0 or sell_price < 0:
-                    raise ValueError('Numeric values cannot be negative')
+                if qty < 0:
+                    raise ValueError('qty|qty|Negative stock is not allowed|Zero or positive number|Use 0 or larger quantity')
+                if buy_price < 0:
+                    raise ValueError('buy_price|buy_price|Buy price cannot be negative|Zero or positive number|Set buy price to 0 or greater')
+                if sell_price < 0:
+                    raise ValueError('sell_price|sell_price|Sell price cannot be negative|Zero or positive number|Set sell price to 0 or greater')
+                if sell_price and buy_price and sell_price < buy_price:
+                    raise ValueError('sell_price|sell_price|Sell price must be greater than or equal to buy price|sell_price >= buy_price|Increase sell price or reduce buy price')
 
                 supplier_id = None
                 if supplier_name:
@@ -2330,7 +2351,10 @@ def api_bulk_import_items():
                         existing.category_id = category_id
                     if barcode and not existing.barcode:
                         existing.barcode = barcode
+                    prev_qty = Decimal(str(existing.stock_qty or 0)) - qty
                     updated += 1
+                    review.append({'row': i, 'status': 'warning', 'message': f'Updated existing item {existing.name}', 'previous_qty': str(prev_qty), 'new_qty': str(existing.stock_qty), 'qty_updated': True})
+                    warnings += 1
                 else:
                     product = Product(
                         name=name, barcode=barcode, buy_price=buy_price, sell_price=sell_price, stock_qty=qty,
@@ -2339,14 +2363,33 @@ def api_bulk_import_items():
                     )
                     db.session.add(product)
                     created += 1
+                    review.append({'row': i, 'status': 'success', 'message': f'Created item {name}'})
             except ValueError as ve:
                 skipped += 1
-                errors.append({'row': i, 'reason': str(ve)})
+                raw = {'name': cell('name'), 'qty': cell('qty'), 'buy_price': cell('buy_price'), 'sell_price': cell('sell_price'), 'barcode': cell('barcode')}
+                msg = str(ve)
+                if msg.startswith('Invalid '):
+                    field = msg.split(' ', 1)[1]
+                    err = _import_error(i, field, raw.get(field, ''), f'{field} must be numeric', 'Integer or decimal', 'Enter values like 1, 5, 10, 2.5', raw_data=raw)
+                else:
+                    parts = msg.split('|')
+                    if len(parts) >= 5:
+                        err = _import_error(i, parts[0], raw.get(parts[1], ''), parts[2], parts[3], parts[4], raw_data=raw)
+                    else:
+                        err = _import_error(i, 'row', '', msg, 'Valid row format', 'Correct the row values and retry', raw_data=raw)
+                errors.append(err)
+                review.append({'row': i, 'status': 'error', 'message': err['error'], 'error': err})
 
         db.session.commit()
         _invalidate_low_stock_cache()
         app.logger.info('Bulk import complete created=%s updated=%s skipped=%s errors=%s', created, updated, skipped, len(errors))
-        return jsonify({'success': True, 'created': created, 'updated': updated, 'skipped': skipped, 'errors': errors})
+        if errors:
+            os.makedirs('logs', exist_ok=True)
+            with open('logs/import_errors.log', 'a', encoding='utf-8') as fh:
+                for e in errors:
+                    fh.write(json.dumps(e, ensure_ascii=False) + '\n')
+        summary = {'total_rows': max(len(rows)-1, 0), 'successful_rows': created, 'updated_rows': updated, 'skipped_rows': skipped, 'warning_count': warnings, 'error_count': len(errors)}
+        return jsonify({'success': True, 'created': created, 'updated': updated, 'skipped': skipped, 'errors': errors, 'summary': summary, 'review': review})
     except Exception as exc:
         db.session.rollback()
         app.logger.exception('Bulk import fatal error: %s', exc)
