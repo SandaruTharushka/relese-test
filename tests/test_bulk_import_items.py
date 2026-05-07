@@ -1,14 +1,14 @@
 import io
 
-from models import Product, Supplier
+from models import Category, Product
 
 
 def test_bulk_import_creates_updates_and_supplier(auth_client, flask_app):
     payload = (
-        "name,buy_price,sell_price,qty,barcode,supplier\n"
-        "Engine Oil,2500,3200,10,343423423,ABC Supplier\n"
-        "Engine Oil,2500,3200,5,343423423,ABC Supplier\n"
-        "Brake Pad,3500,4500,5,,\n"
+        "name,buy_price,sell_price,qty,barcode,category\n"
+        "Engine Oil,2500,3200,10,343423423,Lubricants\n"
+        "Engine Oil,2600,3300,5,343423423,Lubricants\n"
+        "Brake Pad,3500,4500,5,,Brake Parts\n"
         "Bad Row,foo,120,1,999,\n"
         "\n"
     )
@@ -27,9 +27,11 @@ def test_bulk_import_creates_updates_and_supplier(auth_client, flask_app):
         assert float(oil.stock_qty) == 15.0
         brake = Product.query.filter_by(name='Brake Pad').first()
         assert brake is not None
-        sup = Supplier.query.filter_by(name='ABC Supplier').first()
-        assert sup is not None
-        assert oil.supplier_id == sup.id
+        assert float(oil.buy_price) == 2600.0
+        assert float(oil.sell_price) == 3300.0
+        lubricants = Category.query.filter_by(name='Lubricants').first()
+        assert lubricants is not None
+        assert oil.category_id == lubricants.id
 
 
 def test_bulk_import_duplicate_name_updates_qty(auth_client, flask_app):
@@ -42,3 +44,12 @@ def test_bulk_import_duplicate_name_updates_qty(auth_client, flask_app):
         oil = Product.query.filter_by(name='Engine Oil').first()
         assert oil is not None
         assert float(oil.stock_qty) == 10.0
+
+
+def test_products_import_sample_download(auth_client):
+    res = auth_client.get('/api/products/import/sample')
+    assert res.status_code == 200
+    assert res.headers.get('Content-Type', '').startswith('text/csv')
+    assert 'attachment; filename=products_import_sample.csv' == res.headers.get('Content-Disposition')
+    body = res.data.decode('utf-8')
+    assert body.splitlines()[0] == 'name,buy_price,sell_price,qty,barcode,category'

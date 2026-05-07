@@ -1779,13 +1779,14 @@ def api_products():
     q   = request.args.get('q', '')
     cat = request.args.get('cat', '')
     product_type = normalize_product_type(request.args.get('product_type', ''), fallback='')
-    query = Product.query.filter_by(status='active')
+    query = Product.query.outerjoin(Category, Category.id == Product.category_id).filter(Product.status == 'active')
     if q:
         term = contains_sql_like(q)
         query = query.filter(
             db.or_(
                 Product.name.ilike(term, escape='\\'),
                 Product.barcode.ilike(term, escape='\\'),
+                Category.name.ilike(term, escape='\\'),
             )
         )
     if cat:
@@ -2149,6 +2150,7 @@ def _resolve_import_headers(headers):
         'qty': {'qty', 'quantity'},
         'barcode': {'barcode', 'sku', 'qr_code', 'qrcode'},
         'supplier': {'supplier', 'supplier_name'},
+        'category': {'category', 'category_name'},
     }
     normalized = { _normalize_import_header(h): i for i, h in enumerate(headers or []) }
     out = {}
@@ -2197,6 +2199,7 @@ def api_bulk_import_items():
     created = updated = skipped = 0
     errors = []
     suppliers_cache = {}
+    categories_cache = {}
 
     try:
         for i, row in enumerate(rows[1:], start=2):
@@ -2215,6 +2218,7 @@ def api_bulk_import_items():
                 sell_price = _parse_decimal_strict(cell('sell_price'), 'sell_price')
                 barcode = cell('barcode') or None
                 supplier_name = ' '.join(cell('supplier').split()) if 'supplier' in header_map else ''
+                category_name = ' '.join(cell('category').split()) if 'category' in header_map else ''
                 if qty < 0 or buy_price < 0 or sell_price < 0:
                     raise ValueError('Numeric values cannot be negative')
 
@@ -2231,6 +2235,19 @@ def api_bulk_import_items():
                         suppliers_cache[key] = sup
                     supplier_id = sup.id
 
+                category_id = None
+                if category_name:
+                    key = category_name.lower()
+                    cat = categories_cache.get(key)
+                    if not cat:
+                        cat = Category.query.filter(func.lower(func.trim(Category.name)) == key).first()
+                        if not cat:
+                            cat = Category(name=category_name)
+                            db.session.add(cat)
+                            db.session.flush()
+                        categories_cache[key] = cat
+                    category_id = cat.id
+
                 existing = None
                 if barcode:
                     existing = Product.query.filter_by(barcode=barcode, status='active').first()
@@ -2239,19 +2256,21 @@ def api_bulk_import_items():
 
                 if existing:
                     existing.stock_qty = Decimal(str(existing.stock_qty or 0)) + qty
-                    if not existing.buy_price:
+                    if buy_price > 0:
                         existing.buy_price = buy_price
-                    if not existing.sell_price:
+                    if sell_price > 0:
                         existing.sell_price = sell_price
                     if supplier_id and not existing.supplier_id:
                         existing.supplier_id = supplier_id
+                    if category_id:
+                        existing.category_id = category_id
                     if barcode and not existing.barcode:
                         existing.barcode = barcode
                     updated += 1
                 else:
                     product = Product(
                         name=name, barcode=barcode, buy_price=buy_price, sell_price=sell_price, stock_qty=qty,
-                        supplier_id=supplier_id, status='active', low_stock_lvl=10, product_type='normal',
+                        supplier_id=supplier_id, category_id=category_id, status='active', low_stock_lvl=10, product_type='normal',
                         stock_tracking_type='QUANTITY_TRACKED', availability_status='IN_STOCK'
                     )
                     db.session.add(product)
@@ -2268,6 +2287,23 @@ def api_bulk_import_items():
         db.session.rollback()
         app.logger.exception('Bulk import fatal error: %s', exc)
         return jsonify({'success': False, 'error': 'Bulk import failed due to fatal error'}), 500
+
+
+@app.route('/api/products/import/sample', methods=['GET'])
+@login_required
+def api_products_import_sample():
+    lines = [
+        'name,buy_price,sell_price,qty,barcode,category',
+        'Piston Kit XL,1641.50,2462.25,5,10096,Engine Parts',
+        'Oil Seal,950.00,1425.00,8,30000017,Seals',
+        'Brake Cable,1200.00,1800.00,3,20001,Brake Parts',
+    ]
+    csv_content = '\n'.join(lines) + '\n'
+    return Response(
+        csv_content,
+        mimetype='text/csv',
+        headers={'Content-Disposition': 'attachment; filename=products_import_sample.csv'}
+    )
 
 @app.route('/api/products/<int:pid>', methods=['DELETE'])
 @login_required
