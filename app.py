@@ -1,7 +1,8 @@
-import os, sys, json, subprocess, threading, webbrowser, random, tempfile, re, shutil, secrets, time, math, zipfile, hashlib, unicodedata
+import os, sys, json, subprocess, threading, webbrowser, random, tempfile, re, shutil, secrets, time, math, zipfile, hashlib, unicodedata, csv, io
 from pathlib import Path
 from typing import Any
 from datetime import datetime, timedelta, date as date_type, timezone
+from decimal import Decimal, InvalidOperation
 from flask import (Flask, render_template, request, redirect,
                    url_for, jsonify, flash, abort, session, Response)
 from flask_login import (LoginManager, login_user, logout_user,
@@ -2132,6 +2133,141 @@ def api_update_product(pid):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': f'Failed to update product: {str(e)}'}), 500
+
+
+
+
+def _normalize_import_header(value):
+    return re.sub(r'[^a-z0-9]+', '_', str(value or '').strip().lower()).strip('_')
+
+
+def _resolve_import_headers(headers):
+    aliases = {
+        'name': {'name', 'item_name', 'product_name'},
+        'buy_price': {'buy_price', 'cost_price'},
+        'sell_price': {'sell_price', 'selling_price'},
+        'qty': {'qty', 'quantity'},
+        'barcode': {'barcode', 'sku', 'qr_code', 'qrcode'},
+        'supplier': {'supplier', 'supplier_name'},
+    }
+    normalized = { _normalize_import_header(h): i for i, h in enumerate(headers or []) }
+    out = {}
+    for field, names in aliases.items():
+        for nm in names:
+            if nm in normalized:
+                out[field] = normalized[nm]
+                break
+    return out
+
+
+def _parse_decimal_strict(raw, field_name):
+    raw_text = str(raw or '').strip()
+    if raw_text == '':
+        return Decimal('0')
+    try:
+        return Decimal(raw_text)
+    except (InvalidOperation, ValueError):
+        raise ValueError(f'Invalid {field_name}')
+
+
+@app.route('/api/items/bulk-import', methods=['POST'])
+@login_required
+def api_bulk_import_items():
+    require_roles('Admin', 'Operator', 'Manager')
+    upload = request.files.get('file')
+    if not upload:
+        return jsonify({'success': False, 'error': 'File is required'}), 400
+    try:
+        text_data = upload.read().decode('utf-8-sig')
+    except Exception:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': 'Failed to read file'}), 400
+
+    reader = csv.reader(io.StringIO(text_data))
+    rows = list(reader)
+    if not rows:
+        return jsonify({'success': False, 'error': 'File is empty'}), 400
+
+    header_map = _resolve_import_headers(rows[0])
+    required = ['name', 'buy_price', 'sell_price', 'qty']
+    missing = [k for k in required if k not in header_map]
+    if missing:
+        return jsonify({'success': False, 'error': f'Missing required columns: {", ".join(missing)}'}), 400
+
+    created = updated = skipped = 0
+    errors = []
+    suppliers_cache = {}
+
+    try:
+        for i, row in enumerate(rows[1:], start=2):
+            if not any(str(c or '').strip() for c in row):
+                continue
+            def cell(field):
+                idx = header_map.get(field)
+                return str(row[idx]).strip() if idx is not None and idx < len(row) else ''
+
+            try:
+                name = ' '.join(cell('name').split())
+                if not name:
+                    raise ValueError('Item name is required')
+                qty = _parse_decimal_strict(cell('qty'), 'qty')
+                buy_price = _parse_decimal_strict(cell('buy_price'), 'buy_price')
+                sell_price = _parse_decimal_strict(cell('sell_price'), 'sell_price')
+                barcode = cell('barcode') or None
+                supplier_name = ' '.join(cell('supplier').split()) if 'supplier' in header_map else ''
+                if qty < 0 or buy_price < 0 or sell_price < 0:
+                    raise ValueError('Numeric values cannot be negative')
+
+                supplier_id = None
+                if supplier_name:
+                    key = supplier_name.lower()
+                    sup = suppliers_cache.get(key)
+                    if not sup:
+                        sup = Supplier.query.filter(func.lower(func.trim(Supplier.name)) == key).first()
+                        if not sup:
+                            sup = Supplier(name=supplier_name, status='active')
+                            db.session.add(sup)
+                            db.session.flush()
+                        suppliers_cache[key] = sup
+                    supplier_id = sup.id
+
+                existing = None
+                if barcode:
+                    existing = Product.query.filter_by(barcode=barcode, status='active').first()
+                if not existing:
+                    existing = Product.query.filter(func.lower(func.trim(Product.name)) == name.lower(), Product.status == 'active').first()
+
+                if existing:
+                    existing.stock_qty = Decimal(str(existing.stock_qty or 0)) + qty
+                    if not existing.buy_price:
+                        existing.buy_price = buy_price
+                    if not existing.sell_price:
+                        existing.sell_price = sell_price
+                    if supplier_id and not existing.supplier_id:
+                        existing.supplier_id = supplier_id
+                    if barcode and not existing.barcode:
+                        existing.barcode = barcode
+                    updated += 1
+                else:
+                    product = Product(
+                        name=name, barcode=barcode, buy_price=buy_price, sell_price=sell_price, stock_qty=qty,
+                        supplier_id=supplier_id, status='active', low_stock_lvl=10, product_type='normal',
+                        stock_tracking_type='QUANTITY_TRACKED', availability_status='IN_STOCK'
+                    )
+                    db.session.add(product)
+                    created += 1
+            except ValueError as ve:
+                skipped += 1
+                errors.append({'row': i, 'reason': str(ve)})
+
+        db.session.commit()
+        _invalidate_low_stock_cache()
+        app.logger.info('Bulk import complete created=%s updated=%s skipped=%s errors=%s', created, updated, skipped, len(errors))
+        return jsonify({'success': True, 'created': created, 'updated': updated, 'skipped': skipped, 'errors': errors})
+    except Exception as exc:
+        db.session.rollback()
+        app.logger.exception('Bulk import fatal error: %s', exc)
+        return jsonify({'success': False, 'error': 'Bulk import failed due to fatal error'}), 500
 
 @app.route('/api/products/<int:pid>', methods=['DELETE'])
 @login_required

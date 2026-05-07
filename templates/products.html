@@ -9,7 +9,10 @@
       <div style="font-size:18px;font-weight:700">📦 Products</div>
       <div class="flex gap-2">
         <button class="btn btn-ghost btn-sm" onclick="openManageCatModal()">🏷️ Manage Categories</button>
+        <button class="btn btn-ghost btn-sm" id="bulkImportBtn" onclick="triggerBulkImport()">Bulk Import Items</button>
+        <button class="btn btn-ghost btn-sm" onclick="downloadSampleImportFile()">Download Sample Import File</button>
         <button class="btn btn-primary btn-sm" onclick="openModal('addProductModal')">+ Add Product</button>
+        <input type="file" id="bulkImportInput" accept=".txt,.csv" style="display:none" onchange="handleBulkImportSelection(event)">
       </div>
     </div>
     <div class="page-content fade-in">
@@ -542,6 +545,56 @@ async function deleteCategoryUI(id, name, buttonEl = null) {
       buttonEl.textContent = 'Delete';
     }
   }
+}
+
+
+
+let bulkImporting = false;
+function triggerBulkImport() {
+  if (bulkImporting) return;
+  const input = document.getElementById('bulkImportInput');
+  if (input) input.click();
+}
+
+async function handleBulkImportSelection(event) {
+  const file = event?.target?.files?.[0];
+  if (!file || bulkImporting) return;
+  bulkImporting = true;
+  const btn = document.getElementById('bulkImportBtn');
+  const old = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Importing...'; }
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await fetch('/api/items/bulk-import', { method: 'POST', body: formData });
+    const data = await response.json();
+    if (!response.ok || !data.success) throw new Error(data.error || 'Import failed');
+    let msg = `Bulk import completed\nCreated: ${data.created}\nQty Updated: ${data.updated}\nSkipped: ${data.skipped}`;
+    if (Array.isArray(data.errors) && data.errors.length) {
+      msg += '\n\nView Import Errors:\n' + data.errors.map(e => `Row ${e.row}: ${e.reason}`).join('\n');
+    }
+    await AppDialog.alert(msg, { title: 'Bulk Import Items' });
+    location.reload();
+  } catch (err) {
+    toast(err.message || 'Bulk import failed', 'error');
+  } finally {
+    bulkImporting = false;
+    if (btn) { btn.disabled = false; btn.textContent = old || 'Bulk Import Items'; }
+    event.target.value = '';
+  }
+}
+
+function downloadSampleImportFile() {
+  const content = 'name,buy_price,sell_price,qty,barcode,supplier\nEngine Oil,2500,3200,10,890001,ABC Supplier\n';
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'sample_item_import.csv';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 /** Simple HTML escape to prevent XSS in dynamically-built HTML. */
