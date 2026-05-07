@@ -32,23 +32,23 @@
             </tr></thead>
             <tbody>
               {% for p in products %}
-              <tr data-name="{{ p.name|lower }}" data-barcode="{{ (p.barcode or '')|lower }}" data-category="{{ (p.cat.name if p.cat else '')|lower }}" data-product-id="{{ p.id }}">
+              <tr data-name="{{ (p.name or '')|lower }}" data-barcode="{{ (p.barcode or '')|lower }}" data-category="{{ (p.cat.name if p.cat and p.cat.name else '')|lower }}" data-product-id="{{ p.id }}">
                 <td class="text-xs text-muted">{{ p.barcode or '—' }}</td>
                 <td style="font-weight:600">
-                  {{ p.name }}
+                  {{ p.name or '(no name)' }}
                   {% if p.barcode_type == 'weight' %}<span class="badge badge-purple" style="margin-left:6px;font-size:10px">⚖️ kg</span>{% endif %}
                 </td>
-                <td><span class="badge badge-primary">{{ p.cat.name if p.cat else '—' }}</span></td>
+                <td><span class="badge badge-primary">{{ p.cat.name if p.cat and p.cat.name else '—' }}</span></td>
                 <td class="text-sm text-muted">
                   {% if p.rack_number %}R:{{ p.rack_number }}{% endif %}
                   {% if p.section_number %} S:{{ p.section_number }}{% endif %}
                   {% if not p.rack_number and not p.section_number %}—{% endif %}
                 </td>
-                <td class="text-sm">LKR {{ "%.2f"|format(p.buy_price) }}</td>
-                <td style="font-weight:700;color:var(--accent)">LKR {{ "%.2f"|format(p.sell_price) }}</td>
+                <td class="text-sm">LKR {{ "%.2f"|format(p.buy_price or 0) }}</td>
+                <td style="font-weight:700;color:var(--accent)">LKR {{ "%.2f"|format(p.sell_price or 0) }}</td>
                 <td class="text-sm text-muted">{% if p.wholesale_price %}LKR {{ "%.0f"|format(p.wholesale_price) }}{% else %}—{% endif %}</td>
                 <td>
-                  <span class="badge {{ 'badge-danger' if p.is_low else 'badge-success' }}">{{ p.stock_qty }}</span>
+                  <span class="badge {{ 'badge-danger' if (p.stock_qty is not none and p.stock_qty <= (p.low_stock_lvl or 2)) else 'badge-success' }}">{{ p.stock_qty or 0 }}</span>
                 </td>
                 <td>
                   <div class="flex gap-2">

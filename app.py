@@ -1785,21 +1785,90 @@ def dashboard():
 @login_required
 def products_page():
     require_roles('Admin', 'Operator', 'Manager')
-    return render_template('products.html',
-        products=Product.query.filter_by(status='active').all(),
-        categories=Category.query.all(),
-        suppliers=Supplier.query.filter_by(status='active').all())
+    try:
+        # Repair and validate products before rendering
+        repaired, invalid = _repair_and_validate_products()
+
+        # Log if any repairs were made
+        if repaired:
+            _log_products_issue('/products', 'products page', 'repair performed', count=len(repaired), repairs=repaired)
+        if invalid:
+            _log_products_issue('/products', 'products page', 'invalid records found', count=len(invalid), invalid=invalid)
+
+        # Fetch fresh products after repair
+        products = Product.query.filter_by(status='active').all()
+        categories = Category.query.all()
+        suppliers = Supplier.query.filter_by(status='active').all()
+
+        # Log if there are still issues
+        for p in products:
+            issues = []
+            if not p.name or not str(p.name).strip():
+                issues.append('empty name')
+            if p.stock_qty is None:
+                issues.append('null stock_qty')
+            if p.category_id is None:
+                issues.append('no category')
+            if p.buy_price is None:
+                issues.append('null buy_price')
+            if p.sell_price is None:
+                issues.append('null sell_price')
+            if issues:
+                _log_products_issue('/products', 'products page', 'unresolved product issues', product_id=p.id, product_name=p.name, issues=issues)
+
+        return render_template('products.html',
+            products=products,
+            categories=categories,
+            suppliers=suppliers)
+    except Exception as e:
+        _log_products_issue('/products', 'products page', 'render error', error=str(e), stack_trace=traceback.format_exc())
+        # Flash detailed error message
+        flash(f'Failed to load Products page: {str(e)[:100]}. Check logs for details.', 'error')
+        return redirect(url_for('dashboard'))
 
 @app.route('/inventory')
 @login_required
 def inventory():
-    prods     = Product.query.filter_by(status='active').all()
-    low       = [p for p in prods if (p.stock_tracking_type == 'AVAILABILITY_ONLY' and p.availability_status == 'OUT_OF_STOCK') or (p.stock_tracking_type != 'AVAILABILITY_ONLY' and p.stock_qty <= p.low_stock_lvl)]
-    total_val = sum(float(p.sell_price or 0) * float(p.stock_qty or 0) for p in prods)
-    movements = StockMovement.query.order_by(StockMovement.date.desc()).limit(30).all()
-    return render_template('inventory.html',
-        products=prods, low_stock=low, low_stock_count=len(low),
-        total_val=total_val, movements=movements)
+    try:
+        # Repair and validate products before rendering
+        repaired, invalid = _repair_and_validate_products()
+
+        if repaired:
+            _log_products_issue('/inventory', 'inventory page', 'repair performed', count=len(repaired))
+        if invalid:
+            _log_products_issue('/inventory', 'inventory page', 'invalid records found', count=len(invalid))
+
+        # Fetch fresh products after repair
+        prods = Product.query.filter_by(status='active').all()
+
+        # Safe low stock calculation
+        low = []
+        for p in prods:
+            try:
+                is_low = (p.stock_tracking_type == 'AVAILABILITY_ONLY' and p.availability_status == 'OUT_OF_STOCK') or (p.stock_tracking_type != 'AVAILABILITY_ONLY' and p.stock_qty is not None and p.stock_qty <= (p.low_stock_lvl or 2))
+                if is_low:
+                    low.append(p)
+            except Exception as calc_err:
+                _log_products_issue('/inventory', 'inventory page', 'low stock calculation error', product_id=p.id, error=str(calc_err))
+
+        # Safe total value calculation
+        total_val = 0
+        for p in prods:
+            try:
+                sell = float(p.sell_price or 0)
+                qty = float(p.stock_qty or 0)
+                total_val += sell * qty
+            except (ValueError, TypeError) as val_err:
+                _log_products_issue('/inventory', 'inventory page', 'value calculation error', product_id=p.id, error=str(val_err))
+
+        movements = StockMovement.query.order_by(StockMovement.date.desc()).limit(30).all()
+        return render_template('inventory.html',
+            products=prods, low_stock=low, low_stock_count=len(low),
+            total_val=total_val, movements=movements)
+    except Exception as e:
+        _log_products_issue('/inventory', 'inventory page', 'render error', error=str(e), stack_trace=traceback.format_exc())
+        flash(f'Failed to load Inventory page: {str(e)[:100]}. Check logs for details.', 'error')
+        return redirect(url_for('dashboard'))
 
 def _products_error_logger():
     logger = logging.getLogger('products_diagnostics')
@@ -1920,82 +1989,97 @@ def api_products():
 def api_products_search():
     """GET /api/products/search?q=keyword&limit=10
     Search active products and return compact JSON rows for autocomplete widgets."""
-    q = request.args.get('q', '').strip()
-    product_type = normalize_product_type(request.args.get('product_type', ''), fallback='')
     try:
-        limit = min(max(int(request.args.get('limit', 10)), 1), 100)
-    except (TypeError, ValueError):
-        limit = 10
-    if not q:
-        return jsonify([])
+        q = request.args.get('q', '').strip()
+        product_type = normalize_product_type(request.args.get('product_type', ''), fallback='')
+        try:
+            limit = min(max(int(request.args.get('limit', 10)), 1), 100)
+        except (TypeError, ValueError):
+            limit = 10
+        if not q:
+            return jsonify([])
 
-    term = contains_sql_like(q)
-    filters = [Product.status == 'active']
-    if product_type:
-        filters.append(Product.product_type == product_type)
+        term = contains_sql_like(q)
+        filters = [Product.status == 'active']
+        if product_type:
+            filters.append(Product.product_type == product_type)
 
-    results = Product.query.filter(
-        *filters,
-        db.or_(
-            Product.name.ilike(term, escape='\\'),
-            Product.barcode.ilike(term, escape='\\'),
-            Product.rack_number.ilike(term, escape='\\'),
-            Product.section_number.ilike(term, escape='\\'),
-        )
-    ).order_by(Product.name.asc()).limit(limit).all()
+        results = Product.query.filter(
+            *filters,
+            db.or_(
+                Product.name.ilike(term, escape='\\'),
+                Product.barcode.ilike(term, escape='\\'),
+                Product.rack_number.ilike(term, escape='\\'),
+                Product.section_number.ilike(term, escape='\\'),
+            )
+        ).order_by(Product.name.asc()).limit(limit).all()
 
-    return jsonify([
-        {
-            'id': p.id,
-            'name': p.name,
-            'price': float(p.sell_price or 0),
-            'stock_qty': p.stock_qty,
-            'stock_tracking_type': p.stock_tracking_type or 'QUANTITY_TRACKED',
-            'availability_status': p.availability_status or 'IN_STOCK',
-            'barcode': p.barcode or '',
-            'rack_number': p.rack_number or '',
-            'section_number': p.section_number or '',
-        }
-        for p in results
-    ])
+        items = []
+        for p in results:
+            try:
+                items.append({
+                    'id': p.id,
+                    'name': p.name or '(no name)',
+                    'price': _safe_decimal(p.sell_price, default=0),
+                    'stock_qty': _safe_decimal(p.stock_qty, default=0),
+                    'stock_tracking_type': p.stock_tracking_type or 'QUANTITY_TRACKED',
+                    'availability_status': p.availability_status or 'IN_STOCK',
+                    'barcode': p.barcode or '',
+                    'rack_number': p.rack_number or '',
+                    'section_number': p.section_number or '',
+                })
+            except Exception as item_err:
+                _log_products_issue('/api/products/search', 'products search', 'product serialization error', product_id=p.id, error=str(item_err))
+        return jsonify(items)
+    except Exception as exc:
+        _log_products_issue('/api/products/search', 'products search API', 'sql query errors', search_term=request.args.get('q', ''), error=str(exc), stack_trace=traceback.format_exc())
+        return jsonify({'ok': False, 'error': 'search failed', 'endpoint': '/api/products/search', 'details': str(exc)[:100]}), 500
 
 
 @app.route('/api/inventory/parts/search')
 @login_required
 def api_inventory_parts_search():
-    q = (request.args.get('q') or '').strip()
     try:
-        limit = min(max(int(request.args.get('limit', 10)), 1), 100)
-    except (TypeError, ValueError):
-        limit = 10
-    if len(q) < 1:
-        return jsonify([])
+        q = (request.args.get('q') or '').strip()
+        try:
+            limit = min(max(int(request.args.get('limit', 10)), 1), 100)
+        except (TypeError, ValueError):
+            limit = 10
+        if len(q) < 1:
+            return jsonify([])
 
-    term = contains_sql_like(q)
-    results = Product.query.outerjoin(Category, Category.id == Product.category_id).filter(
-        Product.status == 'active',
-        db.or_(
-            Product.name.ilike(term, escape='\\'),
-            Product.sku.ilike(term, escape='\\'),
-            Product.barcode.ilike(term, escape='\\'),
-            Category.name.ilike(term, escape='\\'),
-        )
-    ).order_by(Product.name.asc()).limit(limit).all()
-    app.logger.debug('[JOB PART SEARCH] q=%s results=%s', q, len(results))
-    return jsonify([
-        {
-            'id': p.id,
-            'name': p.name,
-            'sku': p.sku or '',
-            'barcode': p.barcode or '',
-            'cost_price': float(p.buy_price or 0),
-            'selling_price': float(p.sell_price or 0),
-            'quantity': float(p.stock_qty or 0),
-            'stock_tracking_type': p.stock_tracking_type or 'QUANTITY_TRACKED',
-            'availability_status': p.availability_status or 'IN_STOCK',
-        }
-        for p in results
-    ])
+        term = contains_sql_like(q)
+        results = Product.query.outerjoin(Category, Category.id == Product.category_id).filter(
+            Product.status == 'active',
+            db.or_(
+                Product.name.ilike(term, escape='\\'),
+                Product.sku.ilike(term, escape='\\'),
+                Product.barcode.ilike(term, escape='\\'),
+                Category.name.ilike(term, escape='\\'),
+            )
+        ).order_by(Product.name.asc()).limit(limit).all()
+        app.logger.debug('[JOB PART SEARCH] q=%s results=%s', q, len(results))
+
+        items = []
+        for p in results:
+            try:
+                items.append({
+                    'id': p.id,
+                    'name': p.name or '(no name)',
+                    'sku': p.sku or '',
+                    'barcode': p.barcode or '',
+                    'cost_price': _safe_decimal(p.buy_price, default=0),
+                    'selling_price': _safe_decimal(p.sell_price, default=0),
+                    'quantity': _safe_decimal(p.stock_qty, default=0),
+                    'stock_tracking_type': p.stock_tracking_type or 'QUANTITY_TRACKED',
+                    'availability_status': p.availability_status or 'IN_STOCK',
+                })
+            except Exception as item_err:
+                _log_products_issue('/api/inventory/parts/search', 'inventory parts search', 'product serialization error', product_id=p.id, error=str(item_err))
+        return jsonify(items)
+    except Exception as exc:
+        _log_products_issue('/api/inventory/parts/search', 'inventory parts search API', 'sql query errors', search_term=request.args.get('q', ''), error=str(exc), stack_trace=traceback.format_exc())
+        return jsonify({'ok': False, 'error': 'search failed', 'endpoint': '/api/inventory/parts/search', 'details': str(exc)[:100]}), 500
 
 
 @app.route('/api/products/create', methods=['POST'])
