@@ -11,7 +11,7 @@ from flask_wtf.csrf import CSRFError, CSRFProtect
 from flask_talisman import Talisman
 from dotenv import load_dotenv
 from sqlalchemy import func, extract, text, inspect as sa_inspect, or_
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from models import (db, User, Category, Supplier, Product,
                     Sale, SaleItem, Payment, StockMovement, UserLog, PasswordReset,
                     WholesaleCustomer, StoreSettings, SupplierTransaction,
@@ -999,6 +999,23 @@ def barcode_in_use(barcode, exclude_product_id=None):
     if exclude_product_id:
         alias_q = alias_q.filter(ProductBarcode.product_id != exclude_product_id)
     return alias_q.first() is not None
+
+
+def find_product_by_barcode_any_status(barcode, exclude_product_id=None):
+    if not barcode:
+        return None
+    q = Product.query.filter(Product.barcode == barcode)
+    if exclude_product_id:
+        q = q.filter(Product.id != exclude_product_id)
+    return q.first()
+
+
+def _restore_product_record(product):
+    product.status = 'active'
+    if hasattr(product, 'is_active'):
+        product.is_active = True
+    if hasattr(product, 'deleted_at'):
+        product.deleted_at = None
 
 
 def normalize_lookup_token(value: str) -> str:
@@ -1991,8 +2008,9 @@ def api_add_product():
     # ── Duplicate barcode check ────────────────────────────────────────────
     barcode = (d.get('barcode') or '').strip() or None
     sku = (d.get('sku') or '').strip() or None
-    if barcode and barcode_in_use(barcode):
-        return jsonify({'error': f'Barcode "{barcode}" is already used by another product'}), 409
+    existing_with_barcode = find_product_by_barcode_any_status(barcode) if barcode else None
+    if existing_with_barcode and existing_with_barcode.status == 'active':
+        return jsonify({'error': f'Barcode already exists for active product: {existing_with_barcode.name}'}), 409
     if sku and Product.query.filter_by(sku=sku).first():
         return jsonify({'error': f'SKU "{sku}" is already used by another product'}), 409
     product_type = normalize_product_type(d.get('product_type'), fallback='normal')
@@ -2007,33 +2025,66 @@ def api_add_product():
     if stock_tracking_type == 'QUANTITY_TRACKED' and d.get('stock_qty') in (None, ''):
         return jsonify({'error': 'Stock quantity is required for quantity-tracked products'}), 400
     try:
-        p = Product(
-            barcode=barcode, name=name,
-            sku=sku,
-            category_id=d.get('category_id') or None,
-            supplier_id=d.get('supplier_id') or None,
-            buy_price=buy_price, sell_price=sell_price,
-            wholesale_price=wholesale_price,
-            stock_qty=stock_qty, low_stock_lvl=low_stock_lvl,
-            price_per_kg=price_per_kg,
-            barcode_type=d.get('barcode_type', 'normal'),
-            rack_number=d.get('rack_number', ''),
-            section_number=d.get('section_number', ''),
-            warranty_period=d.get('warranty_period', 'none'),
-            product_type=product_type,
-            is_imei_tracked=0,
-            stock_tracking_type=stock_tracking_type,
-            availability_status=availability_status,
-            stock_note=stock_note,
-        )
-        db.session.add(p)
+        if existing_with_barcode and existing_with_barcode.status != 'active':
+            p = existing_with_barcode
+            _restore_product_record(p)
+            p.name = name
+            p.sku = sku
+            p.category_id = d.get('category_id') or None
+            p.supplier_id = d.get('supplier_id') or None
+            p.buy_price = buy_price
+            p.sell_price = sell_price
+            p.wholesale_price = wholesale_price
+            p.stock_qty = stock_qty
+            p.low_stock_lvl = low_stock_lvl
+            p.price_per_kg = price_per_kg
+            p.barcode_type = d.get('barcode_type', 'normal')
+            p.rack_number = d.get('rack_number', '')
+            p.section_number = d.get('section_number', '')
+            p.warranty_period = d.get('warranty_period', 'none')
+            p.product_type = product_type
+            p.is_imei_tracked = 0
+            p.stock_tracking_type = stock_tracking_type
+            p.availability_status = availability_status
+            p.stock_note = stock_note
+            action_msg = 'Product restored and updated'
+            status_code = 200
+        else:
+            p = Product(
+                barcode=barcode, name=name,
+                sku=sku,
+                category_id=d.get('category_id') or None,
+                supplier_id=d.get('supplier_id') or None,
+                buy_price=buy_price, sell_price=sell_price,
+                wholesale_price=wholesale_price,
+                stock_qty=stock_qty, low_stock_lvl=low_stock_lvl,
+                price_per_kg=price_per_kg,
+                barcode_type=d.get('barcode_type', 'normal'),
+                rack_number=d.get('rack_number', ''),
+                section_number=d.get('section_number', ''),
+                warranty_period=d.get('warranty_period', 'none'),
+                product_type=product_type,
+                is_imei_tracked=0,
+                stock_tracking_type=stock_tracking_type,
+                availability_status=availability_status,
+                stock_note=stock_note,
+            )
+            db.session.add(p)
+            action_msg = 'Added product'
+            status_code = 201
+
         db.session.commit()
         _invalidate_low_stock_cache()
-        log_action(f'Added product: {p.name}')
-        return jsonify(p.to_dict()), 201
-    except Exception as e:
+        log_action(f'{action_msg}: {p.name}')
+        payload = p.to_dict()
+        payload['message'] = action_msg
+        return jsonify(payload), status_code
+    except IntegrityError:
         db.session.rollback()
-        return jsonify({'error': f'Failed to add product: {str(e)}'}), 500
+        return jsonify({'error': 'Barcode already exists. Please use a different barcode or restore the existing product.'}), 409
+    except Exception:
+        db.session.rollback()
+        return jsonify({'error': 'Failed to save product'}), 500
 
 @app.route('/api/products/<int:pid>', methods=['GET'])
 @login_required
@@ -2250,11 +2301,13 @@ def api_bulk_import_items():
 
                 existing = None
                 if barcode:
-                    existing = Product.query.filter_by(barcode=barcode, status='active').first()
+                    existing = Product.query.filter_by(barcode=barcode).first()
                 if not existing:
                     existing = Product.query.filter(func.lower(func.trim(Product.name)) == name.lower(), Product.status == 'active').first()
 
                 if existing:
+                    if existing.status != 'active':
+                        _restore_product_record(existing)
                     existing.stock_qty = Decimal(str(existing.stock_qty or 0)) + qty
                     if buy_price > 0:
                         existing.buy_price = buy_price
@@ -2305,6 +2358,21 @@ def api_products_import_sample():
         headers={'Content-Disposition': 'attachment; filename=products_import_sample.csv'}
     )
 
+
+
+@app.route('/api/products/barcode-status', methods=['GET'])
+@login_required
+def api_product_barcode_status():
+    barcode = (request.args.get('barcode') or '').strip()
+    if not barcode:
+        return jsonify({'ok': False, 'message': 'Barcode is required'}), 400
+    product = find_product_by_barcode_any_status(barcode)
+    if not product:
+        return jsonify({'ok': True, 'status': 'available', 'message': 'Barcode is available'})
+    if product.status == 'active':
+        return jsonify({'ok': True, 'status': 'active', 'message': 'Barcode already used', 'product_name': product.name, 'product_id': product.id})
+    return jsonify({'ok': True, 'status': 'inactive', 'message': 'Barcode belongs to deleted product and will be restored on save', 'product_name': product.name, 'product_id': product.id})
+
 @app.route('/api/products/<int:pid>', methods=['DELETE'])
 @login_required
 def api_delete_product(pid):
@@ -2316,6 +2384,8 @@ def api_delete_product(pid):
 
     try:
         product.status = 'inactive'
+        if hasattr(product, 'is_active'):
+            product.is_active = False
         db.session.commit()
         log_action(
             f'Product inactivated: {product.name}',
