@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %} — Company Intro{% endblock %}
+{% block body %}
+<div class="app-layout">
+  {{ sidebar('settings') }}
+  <div class="main-area">
+    <div class="topbar">
+      <div style="font-size:18px;font-weight:700">🏪 Company Intro</div>
+      <div class="flex items-center gap-2">
+        <a class="btn btn-ghost btn-sm" href="{{ url_for('settings') }}">← Settings</a>
+      </div>
+    </div>
+
+    <div class="container" style="max-width:920px;margin:18px auto;padding:0 16px">
+      <div class="card" style="padding:18px">
+        <div class="text-muted text-sm" style="margin-bottom:14px">
+          These details appear at the top of every receipt — billing, job, and return.
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group">
+            <label class="form-label">Company Name *</label>
+            <input class="form-input" id="co_name" value="{{ company.company_name }}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Slogan</label>
+            <input class="form-input" id="co_slogan" value="{{ company.company_slogan }}">
+          </div>
+          <div class="form-group" style="grid-column:1/-1">
+            <label class="form-label">Address</label>
+            <textarea class="form-input" id="co_address" rows="2">{{ company.company_address }}</textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Phone</label>
+            <input class="form-input" id="co_phone" value="{{ company.company_phone }}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input class="form-input" id="co_email" value="{{ company.company_email }}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Website</label>
+            <input class="form-input" id="co_website" value="{{ company.company_website }}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Registration No.</label>
+            <input class="form-input" id="co_reg" value="{{ company.company_registration_number }}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tax No.</label>
+            <input class="form-input" id="co_tax" value="{{ company.company_tax_number }}">
+          </div>
+          <div class="form-group" style="grid-column:1/-1">
+            <label class="form-label">Footer Text</label>
+            <input class="form-input" id="co_footer" value="{{ company.company_footer_text }}">
+          </div>
+          <div class="form-group" style="grid-column:1/-1">
+            <label class="form-label">Receipt Note (small print)</label>
+            <input class="form-input" id="co_note" value="{{ company.company_receipt_note }}">
+          </div>
+        </div>
+
+        <hr style="border:0;border-top:1px solid var(--border-color);margin:14px 0">
+
+        <div style="display:flex;gap:16px;align-items:flex-start">
+          <div>
+            <div class="form-label" style="margin-bottom:6px">Current Logo</div>
+            {% if company.company_logo_path %}
+              <img id="logoPreview" src="{{ company.company_logo_path }}"
+                   style="max-width:160px;max-height:80px;border:1px dashed var(--border-color);padding:6px;background:#fff">
+            {% else %}
+              <div id="logoPreview" class="text-muted text-sm" style="padding:18px;border:1px dashed var(--border-color)">No logo uploaded</div>
+            {% endif %}
+          </div>
+          <div style="flex:1">
+            <label class="form-label">Upload Logo (PNG/JPG/SVG, ≤ 2MB)</label>
+            <input class="form-input" id="logoFile" type="file" accept=".png,.jpg,.jpeg,.gif,.webp,.svg">
+          </div>
+        </div>
+
+        <div class="flex gap-2" style="margin-top:14px">
+          <button class="btn btn-primary" onclick="saveCompany()">💾 Save Company Info</button>
+        </div>
+        <div id="companyMsg" class="text-sm" style="margin-top:8px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function _csrf() {
+  return document.querySelector('meta[name="csrf-token"]')?.content || '';
+}
+
+async function saveCompany() {
+  const msg = document.getElementById('companyMsg');
+  msg.textContent = 'Saving…';
+  const form = new FormData();
+  form.append('company_name', document.getElementById('co_name').value);
+  form.append('company_slogan', document.getElementById('co_slogan').value);
+  form.append('company_address', document.getElementById('co_address').value);
+  form.append('company_phone', document.getElementById('co_phone').value);
+  form.append('company_email', document.getElementById('co_email').value);
+  form.append('company_website', document.getElementById('co_website').value);
+  form.append('company_registration_number', document.getElementById('co_reg').value);
+  form.append('company_tax_number', document.getElementById('co_tax').value);
+  form.append('company_footer_text', document.getElementById('co_footer').value);
+  form.append('company_receipt_note', document.getElementById('co_note').value);
+  const file = document.getElementById('logoFile').files[0];
+  if (file) form.append('logo', file);
+  try {
+    const res = await fetch('/api/settings/company-intro/save', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': _csrf() },
+      body: form,
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.msg || 'Save failed');
+    msg.textContent = `Saved (${data.saved} fields).`;
+    msg.style.color = 'var(--accent2,#16a34a)';
+    if (data.company?.company_logo_path) {
+      const img = document.getElementById('logoPreview');
+      if (img.tagName === 'IMG') img.src = data.company.company_logo_path + '?t=' + Date.now();
+    }
+  } catch (e) {
+    msg.textContent = `Error: ${e.message}`;
+    msg.style.color = '#dc2626';
+  }
+}
+</script>
+{% endblock %}

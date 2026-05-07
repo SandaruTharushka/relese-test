@@ -1,0 +1,166 @@
+/* Central thermal-receipt stylesheet — drives the same template for billing,
+   job, and return receipts. Variables are injected by the Jinja template. */
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #f5f6fa;
+  color: #0f172a;
+  font-family: var(--rcpt-font-family, 'Outfit', system-ui, sans-serif);
+}
+
+.rcpt-paper {
+  width: var(--paper-width, 80mm);
+  max-width: 100%;
+  margin: 16px auto;
+  padding: 12px 10px 18px;
+  background: #fff;
+  color: #000;
+  box-shadow: 0 4px 18px rgba(15, 23, 42, .14);
+  font-family: var(--rcpt-font-family, ui-monospace, 'Courier New', monospace);
+  font-size: var(--rcpt-font-size, 12px);
+  line-height: 1.35;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+}
+
+.rcpt-58mm .rcpt-paper { font-size: calc(var(--rcpt-font-size, 12px) - 1px); }
+
+/* ───── header ───── */
+.rcpt-header { text-align: var(--rcpt-header-align, center); }
+.rcpt-logo {
+  max-width: 60%;
+  max-height: 60px;
+  display: block;
+  margin: 4px auto 6px;
+  object-fit: contain;
+}
+.rcpt-company {
+  font-size: calc(var(--rcpt-font-size, 12px) + 4px);
+  font-weight: 800;
+  letter-spacing: .3px;
+  text-transform: uppercase;
+  margin: 2px 0;
+}
+.rcpt-slogan { font-size: calc(var(--rcpt-font-size, 12px) - 1px); margin-bottom: 2px; }
+.rcpt-line { font-size: calc(var(--rcpt-font-size, 12px) - 1px); }
+.muted { color: #444; }
+
+/* ───── divider ───── */
+.rcpt-divider {
+  border: 0;
+  border-top: 1px var(--rcpt-divider, dashed) #000;
+  margin: 6px 0;
+}
+
+/* ───── doc title ───── */
+.rcpt-doc-title {
+  text-align: center;
+  font-weight: 800;
+  font-size: calc(var(--rcpt-font-size, 12px) + 1px);
+  letter-spacing: 1px;
+  margin: 2px 0 4px;
+}
+
+/* ───── meta ───── */
+.rcpt-meta { display: flex; flex-direction: column; gap: 2px; }
+.rcpt-meta div { display: flex; justify-content: space-between; gap: 8px; }
+.rcpt-meta span { color: #555; }
+
+/* ───── items table ───── */
+.rcpt-items {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.rcpt-items th, .rcpt-items td {
+  padding: 2px 1px;
+  vertical-align: top;
+  font-size: var(--rcpt-font-size, 12px);
+}
+.rcpt-items th {
+  text-align: left;
+  border-bottom: 1px dashed #000;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.rcpt-items .t-name { width: 50%; word-break: break-word; }
+.rcpt-items .t-num  { width: 22%; text-align: right; font-variant-numeric: tabular-nums; }
+.rcpt-items .t-qty  { width: 12%; text-align: right; }
+.rcpt-items td.t-name { padding-right: 4px; }
+
+/* 58mm compact rows: stack name on its own line. */
+.rcpt-58mm .rcpt-items thead { display: none; }
+.rcpt-58mm .rcpt-items tbody tr {
+  display: grid;
+  grid-template-columns: 1fr;
+  border-bottom: 1px dotted #ccc;
+  padding: 3px 0;
+}
+.rcpt-58mm .rcpt-items td { padding: 0; text-align: left; }
+.rcpt-58mm .rcpt-items td.t-num,
+.rcpt-58mm .rcpt-items td.t-qty { display: inline; }
+.rcpt-58mm .rcpt-items tbody tr td.t-name { font-weight: 600; }
+.rcpt-58mm .rcpt-items tbody tr td.t-name + td::before { content: 'Price '; color: #555; }
+.rcpt-58mm .rcpt-items tbody tr td.t-qty::before     { content: ' × '; color: #555; }
+.rcpt-58mm .rcpt-items tbody tr td.t-qty + td::before{ content: ' = '; color: #555; }
+
+/* ───── notes (job/return) ───── */
+.rcpt-notes div { margin: 2px 0; }
+
+/* ───── totals ───── */
+.rcpt-totals { display: flex; flex-direction: column; gap: 2px; }
+.rcpt-totals div { display: flex; justify-content: space-between; gap: 8px; }
+.rcpt-totals .grand {
+  font-weight: 800;
+  font-size: calc(var(--rcpt-font-size, 12px) + 2px);
+  margin-top: 2px;
+  border-top: 1px dashed #000;
+  padding-top: 4px;
+}
+
+/* ───── barcode (visual filler — real barcode lib isn't required) ───── */
+.rcpt-barcode { text-align: center; margin: 4px 0; }
+.rcpt-barcode .bars {
+  display: inline-flex;
+  gap: 2px;
+  margin-bottom: 2px;
+  align-items: end;
+  height: 30px;
+}
+.rcpt-barcode .bar { display: inline-block; width: 3px; background: #000; }
+.rcpt-barcode .bar-0 { height: 100%; }
+.rcpt-barcode .bar-1 { height: 60%; }
+.rcpt-barcode .bar-2 { height: 80%; }
+.rcpt-barcode .bar-3 { height: 40%; }
+.rcpt-barcode-text { font-size: calc(var(--rcpt-font-size, 12px) - 2px); letter-spacing: 2px; }
+
+/* ───── footer ───── */
+.rcpt-footer { text-align: var(--rcpt-footer-align, center); margin-top: 4px; }
+.rcpt-footer div { margin: 2px 0; }
+
+.center { text-align: center; }
+
+/* ───── print rules ───── */
+@page {
+  size: var(--paper-width, 80mm) auto;
+  margin: 0;
+}
+@media print {
+  html, body { background: #fff; }
+  .rcpt-paper {
+    box-shadow: none;
+    margin: 0;
+    padding: 4px 6px 8px;
+    width: var(--paper-width, 80mm);
+  }
+}
+
+/* template style accents (subtle — keeps thermal feel) */
+.rcpt-modern_garage .rcpt-doc-title { letter-spacing: 2px; }
+.rcpt-classic .rcpt-paper { font-family: 'Courier New', monospace; }
+.rcpt-compact .rcpt-paper { font-size: calc(var(--rcpt-font-size, 12px) - 1px); }
+.rcpt-compact .rcpt-divider { margin: 3px 0; }
