@@ -1,22 +1,14 @@
 {% extends "base.html" %}
 {% from "sidebar.html" import sidebar with context %}
+{% from "settings/_shell.html" import settings_shell %}
 {% block title %} — Receipt Layout{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', filename='css/settings_shell.css') }}">{% endblock %}
 {% block body %}
-<div class="app-layout">
-  {{ sidebar('settings') }}
-  <div class="main-area">
-    <div class="topbar">
-      <div style="font-size:18px;font-weight:700">🧾 Receipt Layout</div>
-      <div class="flex items-center gap-2">
-        <a class="btn btn-ghost btn-sm" href="{{ url_for('settings') }}">← Settings</a>
-      </div>
-    </div>
-
-    <div class="page-content">
+{% call settings_shell('receipt_layout','Receipt Layout','Unified receipt template editor with live preview.') %}
       <div style="display:grid;grid-template-columns:minmax(320px,420px) minmax(0,1fr);gap:16px;align-items:start;min-width:0">
 
       <!-- ─── form ─── -->
-      <div class="card" style="padding:16px">
+      <div class="settings-card" style="padding:16px">
         <div style="font-size:16px;font-weight:700;margin-bottom:8px">Layout</div>
         <div class="text-muted text-sm" style="margin-bottom:12px">
           One layout drives Billing, Job, and Return receipts.
@@ -101,7 +93,7 @@
       </div>
 
       <!-- ─── preview ─── -->
-      <div class="card" style="padding:16px;min-width:0">
+      <div class="settings-card" style="padding:16px;min-width:0">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
           <div>
             <div style="font-size:16px;font-weight:700">Live Preview</div>
@@ -117,10 +109,7 @@
           <iframe id="previewFrame" style="width:100%;max-width:100%;min-height:760px;border:0;background:transparent"></iframe>
         </div>
       </div>
-      </div>
-    </div>
-  </div>
-</div>
+{% endcall %}
 
 <script>
 window.__INITIAL_LAYOUT__ = {{ layout | tojson }};

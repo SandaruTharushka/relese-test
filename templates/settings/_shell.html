@@ -1,0 +1,47 @@
+{% macro settings_shell(active_key, title, subtitle='', actions='') %}
+<div class="app-layout">
+  {{ sidebar('settings') }}
+  <div class="main-area settings-host">
+    <div class="topbar">
+      <div style="font-size:18px;font-weight:700">⚙️ System Settings</div>
+      <div class="flex items-center gap-2">{{ actions|safe }}</div>
+    </div>
+    <div class="settings-shell">
+      <aside class="settings-nav" aria-label="Settings navigation">
+        <div class="settings-nav-group">GENERAL</div>
+        <a class="settings-nav-item {{ 'is-active' if active_key == 'company_intro' else '' }}" href="{{ url_for('settings_company_intro') }}">🏪 Company Intro</a>
+
+        <div class="settings-nav-group">HARDWARE</div>
+        <a class="settings-nav-item {{ 'is-active' if active_key == 'printer_settings' else '' }}" href="{{ url_for('settings_printers_page') }}">🖨️ Printer Settings</a>
+        <a class="settings-nav-item {{ 'is-active' if active_key == 'receipt_layout' else '' }}" href="{{ url_for('settings_receipt_layout') }}">🧾 Receipt Layout</a>
+        <a class="settings-nav-item" href="{{ url_for('settings') }}#card">💳 Card Payment</a>
+        <a class="settings-nav-item" href="{{ url_for('settings') }}#drawer">💰 Cash Drawer</a>
+
+        <div class="settings-nav-group">SALES</div>
+        <a class="settings-nav-item" href="{{ url_for('settings') }}#payment">💵 Payment Options</a>
+        <a class="settings-nav-item" href="{{ url_for('settings') }}#tax">📊 Tax & Pricing</a>
+        <a class="settings-nav-item" href="{{ url_for('settings') }}#discount">🏷️ Discounts</a>
+
+        <div class="settings-nav-group">SYSTEM</div>
+        <a class="settings-nav-item" href="{{ url_for('settings') }}#users">👥 Users</a>
+        <a class="settings-nav-item" href="{{ url_for('settings') }}#audit">📋 Audit Log</a>
+        <a class="settings-nav-item" href="{{ url_for('settings') }}#sessions">🔌 Sessions</a>
+        <a class="settings-nav-item" href="{{ url_for('settings') }}#returns-cfg">🔄 Return Policy</a>
+        <a class="settings-nav-item" href="{{ url_for('settings') }}#database">🗄️ Database</a>
+
+        <div class="settings-nav-group">BACKUP</div>
+        <a class="settings-nav-item" href="{{ url_for('settings') }}#gdrive">☁️ Cloud Backup</a>
+      </aside>
+      <section class="settings-content">
+        <header class="settings-content-head">
+          <h1>{{ title }}</h1>
+          {% if subtitle %}<p>{{ subtitle }}</p>{% endif %}
+        </header>
+        <div class="settings-content-inner">
+          {{ caller() }}
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+{% endmacro %}
