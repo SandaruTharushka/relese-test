@@ -2,7 +2,7 @@
 from flask import request, jsonify
 from flask_login import login_required, current_user
 
-from models import db, Product, ProductVariantGroup, ProductVariant, StockMovement, money_to_decimal
+from models import db, Product, ProductVariantGroup, ProductVariant, StockMovement, money_to_decimal, DEFAULT_LOW_STOCK_ALERT
 from datetime import datetime, timezone
 from shared_helpers import user_has_any_role
 
@@ -42,7 +42,7 @@ def register_variant_routes(app, log_action=None):
                     sell_price=sell_price,
                     buy_price=money_to_decimal(v.get('buy_price', 0)),
                     stock_qty=int(v.get('stock_qty', 0)),
-                    low_stock_lvl=int(v.get('low_stock_lvl', 5)),
+                    low_stock_lvl=int(v.get('low_stock_lvl', DEFAULT_LOW_STOCK_ALERT)),
                     status='active',
                 )
                 db.session.add(variant)
