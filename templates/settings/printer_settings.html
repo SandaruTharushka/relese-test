@@ -9,13 +9,14 @@
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
           <div>
             <div style="font-size:16px;font-weight:700">Connected Printers</div>
-            <div class="text-muted text-sm">Real status pulled from the OS spooler — driver alone is not enough.</div>
+            <div class="text-muted text-sm">Real status with port validation — driver AND physical connectivity verified.</div>
           </div>
           <div class="flex gap-2">
             <button class="btn btn-ghost btn-sm" onclick="refreshPrinters()">🔄 Refresh List</button>
             <button class="btn btn-ghost btn-sm" onclick="refreshStatus()">🔁 Refresh Status</button>
           </div>
         </div>
+        <div id="printerWarning" class="text-sm" style="margin-bottom:10px;display:none;padding:8px;background:#fee2e2;border-radius:4px;color:#991b1b;border:1px solid #fca5a5"></div>
         <div id="printerList" class="text-sm text-muted">Loading…</div>
       </div>
 
@@ -83,14 +84,35 @@
 {% endcall %}
 
 <style>
-  .badge-status { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; }
-  .badge-online  { background:#d1fae5; color:#065f46; }
-  .badge-offline { background:#fee2e2; color:#991b1b; }
-  .badge-paused  { background:#fef3c7; color:#92400e; }
-  .badge-error   { background:#fee2e2; color:#991b1b; }
-  .badge-unknown { background:#e5e7eb; color:#374151; }
-  .printer-row { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px dashed var(--border-color); }
+  .badge-status {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-right: 4px;
+  }
+  .badge-online      { background: #d1fae5; color: #065f46; }
+  .badge-offline     { background: #fee2e2; color: #991b1b; }
+  .badge-paused      { background: #fef3c7; color: #92400e; }
+  .badge-error       { background: #fee2e2; color: #991b1b; }
+  .badge-unknown     { background: #e5e7eb; color: #374151; }
+  .badge-disconnected{ background: #fee2e2; color: #991b1b; }
+  .badge-driver-only { background: #bfdbfe; color: #1e40af; }
+
+  .printer-row {
+    display: flex;
+    flex-direction: column;
+    padding: 10px 0;
+    border-bottom: 1px dashed var(--border-color);
+  }
   .printer-row:last-child { border-bottom: 0; }
+  .printer-name { font-weight: 600; margin-bottom: 4px; }
+  .printer-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+  .printer-message { font-size: 12px; color: #6b7280; font-style: italic; }
+  .printer-details { font-size: 11px; color: #9ca3af; margin-top: 4px; }
 </style>
 
 <script>

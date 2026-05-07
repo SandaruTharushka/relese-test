@@ -6,34 +6,62 @@
     return document.querySelector('meta[name="csrf-token"]')?.content || '';
   }
 
-  function statusBadge(status) {
-    const s = (status?.status || 'unknown').toLowerCase();
-    const cls = ({
+  function statusBadges(p) {
+    const s = (p?.status || 'unknown').toLowerCase();
+    const badges = [];
+
+    // Main status badge
+    const statusMap = {
       online: 'badge-online',
       offline: 'badge-offline',
       paused: 'badge-paused',
       error: 'badge-error',
-    })[s] || 'badge-unknown';
-    return `<span class="badge-status ${cls}">${s}</span>`;
+      unknown: 'badge-unknown',
+    };
+    const cls = statusMap[s] || 'badge-unknown';
+    badges.push(`<span class="badge-status ${cls}">${s.toUpperCase()}</span>`);
+
+    // Additional status badges
+    if (p.driver_installed && !p.connected) {
+      badges.push(`<span class="badge-status badge-disconnected">DISCONNECTED</span>`);
+    }
+    if (p.driver_installed && !p.connected && s !== 'offline') {
+      badges.push(`<span class="badge-status badge-driver-only">DRIVER ONLY</span>`);
+    }
+    if (p.status === 'error') {
+      badges.push(`<span class="badge-status badge-error">ERROR</span>`);
+    }
+
+    return badges.join('');
   }
 
   async function refreshPrinters() {
     const list = document.getElementById('printerList');
+    const warning = document.getElementById('printerWarning');
     list.innerHTML = 'Loading…';
     try {
       const res = await fetch('/api/settings/printers/list', { credentials: 'same-origin' });
       const data = await res.json();
       const printers = data.printers || [];
+
+      // Show warning if no online printers
+      const onlinePrinters = printers.filter(p => p.status === 'online');
+      if (data.warning || onlinePrinters.length === 0) {
+        warning.innerHTML = '⚠️ ' + (data.warning || 'No connected receipt printer detected. Please verify printer connection.');
+        warning.style.display = 'block';
+      } else {
+        warning.style.display = 'none';
+      }
+
       if (printers.length === 0) {
         list.innerHTML = '<div class="text-muted">No printers detected. Connect a printer or check Windows drivers.</div>';
       } else {
         list.innerHTML = printers.map(p => `
           <div class="printer-row">
-            <div>
-              <div style="font-weight:600">${p.name}</div>
-              <div class="text-muted text-sm">${p.message || ''}</div>
-            </div>
-            <div>${statusBadge(p)}</div>
+            <div class="printer-name">${p.name}</div>
+            <div class="printer-badges">${statusBadges(p)}</div>
+            ${p.message ? `<div class="printer-message">${p.message}</div>` : ''}
+            ${p.port_name ? `<div class="printer-details">Port: ${p.port_name}</div>` : ''}
           </div>
         `).join('');
       }
@@ -59,13 +87,19 @@
   async function refreshStatus() {
     const sel = document.getElementById('receiptPrinter');
     const out = document.getElementById('receiptStatus');
-    if (!sel.value) { out.innerHTML = '<span class="text-muted">No printer selected</span>'; return; }
+    if (!sel.value) {
+      out.innerHTML = '<span class="text-muted">No printer selected</span>';
+      return;
+    }
     out.innerHTML = 'Checking…';
     try {
       const res = await fetch('/api/settings/printers/status?name=' + encodeURIComponent(sel.value));
       const data = await res.json();
       const s = data.status || {};
-      out.innerHTML = `${statusBadge(s)} <span class="text-muted">${s.message || ''}</span>`;
+      const badges = statusBadges(s);
+      const msg = s.message || '';
+      const port = s.port_name ? ` <span class="text-muted text-sm">(Port: ${s.port_name})</span>` : '';
+      out.innerHTML = `<div style="margin-top:6px">${badges}${port}${msg ? ` <div class="text-muted text-sm" style="margin-top:4px">${msg}</div>` : ''}</div>`;
     } catch (e) {
       out.innerHTML = `<span style="color:#dc2626">Status check failed: ${e.message}</span>`;
     }
