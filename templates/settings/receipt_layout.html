@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "sidebar.html" import sidebar with context %}
-{% from "settings/_shell.html" import settings_shell %}
+{% from "settings/_shell.html" import settings_shell with context %}
 {% block title %} — Receipt Layout{% endblock %}
 {% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', filename='css/settings_shell.css') }}">{% endblock %}
 {% block body %}
