@@ -126,7 +126,7 @@
   function applySaved() {
     document.getElementById('paperWidth').value = SAVED.printer_default_paper_width || '80mm';
     document.getElementById('connectionType').value = SAVED.printer_connection_type || 'windows';
-    document.getElementById('printMode').value = SAVED.printer_print_mode || 'html';
+    document.getElementById('printMode').value = SAVED.printer_print_mode || 'windows_raw';
     document.getElementById('autoDetect').checked = SAVED.printer_auto_detect_enabled !== false;
     document.getElementById('printingEnabled').checked = SAVED.printer_is_enabled !== false;
   }

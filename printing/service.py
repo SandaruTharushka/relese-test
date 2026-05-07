@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import logging
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from printing import escpos_renderer, html_renderer
@@ -19,6 +21,24 @@ from printing.receipt_engine import build_receipt_context, render_receipt_text
 from printing.windows_spooler import send_raw
 
 log = logging.getLogger(__name__)
+
+
+def _printer_logger() -> logging.Logger:
+    logger = logging.getLogger("printing.audit")
+    if logger.handlers:
+        return logger
+    base = Path(__file__).resolve().parent.parent
+    logs_dir = base / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    handler = RotatingFileHandler(logs_dir / "printer.log", maxBytes=2_000_000, backupCount=3, encoding="utf-8")
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    logger.propagate = True
+    return logger
+
+
+printer_log = _printer_logger()
 
 
 # ---------------------------------------------------------------------------
@@ -103,15 +123,15 @@ def print_receipt(receipt_type: str, source_id: int) -> Dict[str, Any]:
     layout = ReceiptLayoutSettings.load()
     ctx = build_receipt_context(receipt_type, source_id)
 
-    mode = settings.get("printer_print_mode", "html")
-    if mode == "html":
+    mode = settings.get("printer_print_mode", "windows_raw")
+    if mode in ("html", "html_preview", "pdf_print"):
         # HTML mode: caller (the browser) opens preview URL with auto_print=1
         # and prints via the OS print dialog. Service-side dispatch is a no-op
         # but we still return success so the UI flow is uniform.
         log.info("print dispatched mode=html printer=%s", printer_name)
         return {
             "ok": True,
-            "mode": "html",
+            "mode": mode,
             "msg": "Opened in browser print dialog",
             "preview_url": f"/api/receipts/{receipt_type}/{source_id}/preview?auto_print=1",
             "doc_number": ctx["doc_number"],
@@ -124,6 +144,7 @@ def print_receipt(receipt_type: str, source_id: int) -> Dict[str, Any]:
                 "cp437", errors="replace"
             )
         result = send_raw(printer_name, payload, doc_name=f"Receipt {ctx['doc_number']}")
+        printer_log.info("receipt_print type=%s source=%s printer=%s mode=%s ok=%s result=%s", receipt_type, source_id, printer_name, mode, result.get("ok"), result.get("msg"))
         log.info("print dispatched mode=%s ok=%s", mode, result.get("ok"))
         return {**result, "mode": mode, "doc_number": ctx["doc_number"]}
     return {"ok": False, "msg": f"Unsupported print mode: {mode!r}"}
@@ -151,7 +172,15 @@ def test_receipt_print() -> Dict[str, Any]:
         b"\x1dV\x00"
     )
     result = send_raw(name, sample, doc_name="Printer Test")
-    return result
+    out = {
+        **result,
+        "printer_name": name,
+        "print_mode": settings.get("printer_print_mode", "windows_raw"),
+        "renderer_used": "raw_escpos_test_payload",
+        "spooler_result": result.get("msg"),
+    }
+    printer_log.info("test_print kind=receipt printer=%s ok=%s result=%s", name, out.get("ok"), out.get("msg"))
+    return out
 
 
 def test_label_print() -> Dict[str, Any]:
@@ -167,4 +196,13 @@ def test_label_print() -> Dict[str, Any]:
             "status": status,
         }
     payload = b"--- Label Test ---\nGarage POS\n\n\n"
-    return send_raw(name, payload, doc_name="Label Test")
+    result = send_raw(name, payload, doc_name="Label Test")
+    out = {
+        **result,
+        "printer_name": name,
+        "print_mode": settings.get("printer_print_mode", "windows_raw"),
+        "renderer_used": "raw_label_test_payload",
+        "spooler_result": result.get("msg"),
+    }
+    printer_log.info("test_print kind=label printer=%s ok=%s result=%s", name, out.get("ok"), out.get("msg"))
+    return out

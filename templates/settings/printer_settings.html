@@ -65,9 +65,11 @@
           <div class="form-group">
             <label class="form-label">Print Mode</label>
             <select class="form-input" id="printMode">
-              <option value="html">HTML (browser dialog)</option>
+              <option value="windows_raw">Windows Raw (direct)</option>
               <option value="escpos">ESC/POS (raw bytes)</option>
-              <option value="windows_raw">Windows Raw (text)</option>
+              <option value="html_preview">HTML Preview (browser fallback)</option>
+              <option value="pdf_print">PDF Print (fallback)</option>
+              <option value="html">HTML (legacy browser dialog)</option>
             </select>
           </div>
         </div>

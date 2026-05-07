@@ -112,14 +112,14 @@ class PrinterSettings:
 
     PAPER_WIDTHS = ("58mm", "80mm")
     CONNECTION_TYPES = ("usb", "network", "windows")
-    PRINT_MODES = ("html", "escpos", "windows_raw")
+    PRINT_MODES = ("html", "html_preview", "escpos", "windows_raw", "pdf_print")
 
     DEFAULTS: Dict[str, str] = {
         "printer_receipt_name": "",
         "printer_label_name": "",
         "printer_default_paper_width": "80mm",
         "printer_connection_type": "windows",
-        "printer_print_mode": "html",
+        "printer_print_mode": "windows_raw",
         "printer_auto_detect_enabled": "1",
         "printer_is_enabled": "1",
     }
@@ -158,7 +158,7 @@ class PrinterSettings:
                         f"Use one of {cls.CONNECTION_TYPES}."
                     )
             elif key == "printer_print_mode":
-                value = str(value or "html").strip().lower()
+                value = str(value or "windows_raw").strip().lower()
                 if value not in cls.PRINT_MODES:
                     raise ValueError(
                         f"Invalid print mode: {value!r}. "

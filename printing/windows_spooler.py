@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import platform
+import traceback
 from typing import Dict, Union
 
 log = logging.getLogger(__name__)
@@ -36,26 +37,34 @@ def send_raw(printer_name: str, payload: Union[bytes, str], *, doc_name: str = "
     if win32print is None:
         return _unsupported("pywin32 not available; raw printing disabled")
     if isinstance(payload, str):
-        payload = payload.encode("cp437", errors="replace")
-    try:
-        handle = win32print.OpenPrinter(printer_name)
-    except Exception as exc:
-        log.warning("OpenPrinter failed for %s: %s", printer_name, exc)
-        return _unsupported(f"Cannot open printer: {exc}")
-    try:
+        payload = payload.encode("utf-8", errors="replace")
+
+    last_error = None
+    last_traceback = ""
+    for attempt in range(1, 4):
+        handle = None
         try:
-            win32print.StartDocPrinter(handle, 1, (doc_name, None, "RAW"))
+            handle = win32print.OpenPrinter(printer_name)
+            job_id = win32print.StartDocPrinter(handle, 1, (doc_name, None, "RAW"))
             win32print.StartPagePrinter(handle)
-            win32print.WritePrinter(handle, payload)
+            bytes_written = win32print.WritePrinter(handle, payload)
             win32print.EndPagePrinter(handle)
             win32print.EndDocPrinter(handle)
+            log.info("Raw print dispatched printer=%s bytes=%d written=%d doc=%s attempt=%d", printer_name, len(payload), bytes_written, doc_name, attempt)
+            return {"ok": True, "msg": f"Sent {bytes_written} bytes to {printer_name}", "job_id": job_id, "bytes_written": bytes_written, "attempt": attempt}
         except Exception as exc:
-            log.exception("Raw print failed for %s", printer_name)
-            return _unsupported(f"Print failed: {exc}")
-    finally:
-        try:
-            win32print.ClosePrinter(handle)
-        except Exception:
-            pass
-    log.info("Raw print dispatched printer=%s bytes=%d doc=%s", printer_name, len(payload), doc_name)
-    return {"ok": True, "msg": f"Sent {len(payload)} bytes to {printer_name}"}
+            last_error = exc
+            last_traceback = traceback.format_exc()
+            log.exception("Raw print failed for %s on attempt=%d", printer_name, attempt)
+        finally:
+            if handle is not None:
+                try:
+                    win32print.ClosePrinter(handle)
+                except Exception:
+                    pass
+    return {
+        "ok": False,
+        "msg": f"Print failed after retries: {last_error}",
+        "exception": repr(last_error),
+        "traceback": last_traceback,
+    }
