@@ -111,7 +111,20 @@ def _build_billing_context(source_id: int) -> Dict[str, Any]:
         )
 
     paid_total = sum((_to_decimal(p.amount) for p in sale.payments), Decimal("0"))
-    grand = _to_decimal(sale.total_amount)
+    grand_pre_charge = _to_decimal(sale.total_amount)
+    card_charge_rate = _to_decimal(getattr(sale, "card_charge_rate", None) or 0)
+    card_charge_amount = _to_decimal(getattr(sale, "card_charge_amount", None) or 0)
+    stored_final = _to_decimal(getattr(sale, "final_total", None) or 0)
+    grand = stored_final if stored_final > 0 else grand_pre_charge
+    payment_method = getattr(sale, "payment_method", None) or ", ".join(
+        sorted({(p.method or "").title() for p in sale.payments if p.method})
+    )
+
+    # cash given = tendered for cash payments; change = change_amount
+    cash_given = _to_decimal(sale.tendered) if payment_method == "Cash" else Decimal("0")
+    change_amount = _to_decimal(sale.change_amount) if payment_method == "Cash" else Decimal("0")
+
+    # balance for non-fully-paid invoices (e.g. wholesale credit)
     balance = grand - paid_total
     if balance < 0:
         balance = Decimal("0")
@@ -130,14 +143,18 @@ def _build_billing_context(source_id: int) -> Dict[str, Any]:
         "customer_phone": sale.customer_phone_snapshot or "",
         "vehicle": "",
         "items": items,
-        "subtotal": _to_decimal(sale.subtotal),
+        "subtotal": grand_pre_charge,
         "discount": _to_decimal(sale.discount),
         "tax": _to_decimal(sale.tax),
+        "card_charge_rate": card_charge_rate,
+        "card_charge_amount": card_charge_amount,
         "grand_total": grand,
         "paid": paid_total,
+        "cash_given": cash_given,
+        "change_amount": change_amount,
         "balance": balance,
         "outstanding": balance,
-        "payment_method": ", ".join(sorted({(p.method or "").title() for p in sale.payments if p.method})),
+        "payment_method": payment_method,
         "items_count": sum(int(it.quantity or 0) for it in sale.items),
         "extra": {},
     }
@@ -419,9 +436,21 @@ def render_receipt_text(
             out.append(kv("Discount:", _money(context["discount"])))
         if context.get("tax"):
             out.append(kv("Tax:", _money(context["tax"])))
+        card_charge = _to_decimal(context.get("card_charge_amount") or 0)
+        card_rate = _to_decimal(context.get("card_charge_rate") or 0)
+        if card_charge > 0:
+            rate_str = f"{card_rate:g}" if card_rate == int(card_rate) else f"{float(card_rate):.4g}"
+            out.append(kv(f"Card Charge {rate_str}%:", _money(card_charge)))
         out.append(kv("Grand Total:", _money(context["grand_total"])))
-        out.append(kv("Total Paid:", _money(context["paid"])))
-        out.append(kv("Balance:", _money(context["balance"])))
+        pm = (context.get("payment_method") or "").strip()
+        if pm == "Cash" and context.get("cash_given"):
+            out.append(kv("Cash Given:", _money(context["cash_given"])))
+            out.append(kv("Balance:", _money(context.get("change_amount") or 0)))
+        else:
+            out.append(kv("Total Paid:", _money(context["paid"])))
+            out.append(kv("Balance:", _money(context["balance"])))
+        if pm:
+            out.append(kv("Payment:", pm))
         append_divider(out)
     if not skip_footer and layout.get("rcpt_layout_show_footer"):
         footer = company.get("company_footer_text") or "Thank you!"
