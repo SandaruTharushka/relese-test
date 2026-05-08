@@ -142,9 +142,18 @@
         {% if ctx.tax and layout.rcpt_layout_show_tax_info %}
           <div><span>Tax:</span><strong>{{ money(ctx.tax) }}</strong></div>
         {% endif %}
+        {% if ctx.card_charge_amount and ctx.card_charge_amount > 0 %}
+          {% set rate_label = ctx.card_charge_rate | float %}
+          <div><span>Card Charge {{ rate_label | int if rate_label == rate_label | int else rate_label }}%:</span><strong>{{ money(ctx.card_charge_amount) }}</strong></div>
+        {% endif %}
         <div class="grand"><span>Grand Total:</span><strong>{{ money(ctx.grand_total) }}</strong></div>
-        <div><span>Total Paid:</span><strong>{{ money(ctx.paid) }}</strong></div>
-        <div><span>Balance:</span><strong>{{ money(ctx.balance) }}</strong></div>
+        {% if ctx.payment_method == 'Cash' and ctx.cash_given and ctx.cash_given > 0 %}
+          <div><span>Cash Given:</span><strong>{{ money(ctx.cash_given) }}</strong></div>
+          <div><span>Balance:</span><strong>{{ money(ctx.change_amount) }}</strong></div>
+        {% else %}
+          <div><span>Total Paid:</span><strong>{{ money(ctx.paid) }}</strong></div>
+          <div><span>Balance:</span><strong>{{ money(ctx.balance) }}</strong></div>
+        {% endif %}
         {% if ctx.payment_method %}
           <div><span>Payment:</span><strong>{{ ctx.payment_method }}</strong></div>
         {% endif %}

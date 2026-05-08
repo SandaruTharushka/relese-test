@@ -415,7 +415,25 @@ def register_sales_routes(
             if not math.isfinite(total) or total <= 0:
                 raise ValueError('Sale total must be greater than zero.')
 
-            payment_state = normalize_sale_payment_input(d, total)
+            # ── Card charge (2.5% default, configurable) ──────────────────────
+            raw_method_peek = normalize_payment_method_name(d.get('method'))
+            card_charge_rate = Decimal('0.00')
+            card_charge_amount = Decimal('0.00')
+            final_total = Decimal(str(round(total, 2)))
+            if raw_method_peek == 'Card':
+                raw_rate = d.get('card_charge_rate')
+                if raw_rate not in (None, ''):
+                    try:
+                        card_charge_rate = Decimal(str(raw_rate)).quantize(Decimal('0.0001'))
+                    except Exception:
+                        card_charge_rate = Decimal('2.5000')
+                else:
+                    card_charge_rate = Decimal(str(StoreSettings.get('card_charge_rate', '2.5'))).quantize(Decimal('0.0001'))
+                card_charge_amount = (final_total * card_charge_rate / Decimal('100')).quantize(Decimal('0.01'))
+                final_total = (final_total + card_charge_amount).quantize(Decimal('0.01'))
+
+            effective_total = float(final_total)
+            payment_state = normalize_sale_payment_input(d, effective_total)
             method = payment_state['method']
             payments_data = payment_state['payments_data']
             tendered = payment_state['tendered']
@@ -507,6 +525,10 @@ def register_sales_routes(
                         total_amount=total,
                         tendered=tendered,
                         change_amount=change_amt,
+                        payment_method=method,
+                        card_charge_rate=card_charge_rate,
+                        card_charge_amount=card_charge_amount,
+                        final_total=final_total,
                         status='pending' if is_payhere else 'completed',
                     )
                     db.session.add(sale)
@@ -722,7 +744,7 @@ def register_sales_routes(
 
         # ── Post-transaction response (DB is committed, no more writes needed) ──
         if not is_payhere:
-            log_action(f'Sale {sale.invoice_number} – LKR {total:.2f}')
+            log_action(f'Sale {sale.invoice_number} – LKR {float(final_total):.2f}')
             ws_balance = None
             if wc:
                 ws_balance = {'name': wc.name, 'balance': wc.balance}
@@ -739,6 +761,9 @@ def register_sales_routes(
                 'tax_rate': tax_settings['tax_rate'],
                 'total': total,
                 'total_amount': total,
+                'card_charge_rate': float(card_charge_rate),
+                'card_charge_amount': float(card_charge_amount),
+                'final_total': float(final_total),
                 'method': method,
                 'tendered': tendered,
                 'change': change_amt,

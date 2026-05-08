@@ -456,6 +456,10 @@ class Sale(Model):
     total_amount          = db.Column(MONEY, default=0)
     tendered              = db.Column(MONEY, default=0)   # total cash/card handed over
     change_amount         = db.Column(MONEY, default=0)   # change given back
+    payment_method        = db.Column(db.String(20), nullable=True)
+    card_charge_rate      = db.Column(_Numeric(7, 4, asdecimal=True), default=0)
+    card_charge_amount    = db.Column(MONEY, default=0)
+    final_total           = db.Column(MONEY, default=0)
     status                = db.Column(db.String(20), default='completed')
     items                 = db.relationship('SaleItem', backref='sale', lazy=True, cascade='all,delete')
     payments              = db.relationship('Payment',  backref='sale', lazy=True, cascade='all,delete')
@@ -482,6 +486,10 @@ class Sale(Model):
             'total_amount': money_to_float(self.total_amount),
             'tendered': money_to_float(self.tendered),
             'change_amount': money_to_float(self.change_amount),
+            'payment_method': self.payment_method or '',
+            'card_charge_rate': float(self.card_charge_rate or 0),
+            'card_charge_amount': money_to_float(self.card_charge_amount),
+            'final_total': money_to_float(self.final_total) if self.final_total else money_to_float(self.total_amount),
             'status': self.status,
             'items': [i.to_dict() for i in self.items],
             'payments': [p.to_dict() for p in self.payments]
