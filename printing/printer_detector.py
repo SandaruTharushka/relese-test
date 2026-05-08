@@ -114,18 +114,20 @@ _PORT_TYPES = {
 
 def _validate_usb_port_exists(port_name: str) -> Tuple[bool, str]:
     """Check if a USB port actually exists and has a device connected."""
-    if not port_name or "usb" not in port_name.lower():
-        return True, "Not a USB port"
+    if not port_name or not any(x in port_name.upper() for x in ["USB", "COM", "LPT"]):
+        return True, "Not a physical local port"
     try:
         import wmi  # type: ignore
         c = wmi.WMI()
+        # Look for USB Printing Support or specific USB devices
+        # This is a broad check but helps distinguish completely empty USB stacks
         query = 'SELECT * FROM Win32_USBHub'
         devices = list(c.query(query))
         if devices:
             detection_log.debug(f"Found {len(devices)} USB devices")
-            return True, "USB device detected"
+            return True, "USB controller/devices active"
         detection_log.warning(f"No USB devices found for port {port_name}")
-        return False, "USB port has no connected device"
+        return False, "USB subsystem appears inactive or device unplugged"
     except Exception as e:
         detection_log.debug(f"USB port check failed (WMI unavailable): {e}")
         return True, "USB check skipped (WMI unavailable)"
@@ -170,21 +172,24 @@ def _validate_network_port(port_name: str) -> Tuple[bool, str]:
 
 def _validate_port_exists(port_name: str, printer_name: str) -> Tuple[bool, str]:
     """CRITICAL: Verify the port actually exists and is reachable.
-
-    This is what catches unplugged USB printers. The spooler may report
-    them as READY, but the port validation will fail.
     """
     if not port_name:
         detection_log.warning(f"Printer {printer_name} has no port configured")
         return False, "No port configured"
 
-    port_lower = port_name.lower()
+    port_upper = port_name.upper()
 
-    if "usb" in port_lower or "com" in port_lower:
+    # Common virtual/special ports that are always "valid"
+    if any(x in port_upper for x in ["PORTPROMPT:", "NUL:", "FILE:", "SHRFAX:"]):
+        return True, f"Virtual port ({port_name})"
+
+    if "USB" in port_upper or "COM" in port_upper:
         return _validate_usb_port_exists(port_name)
-    elif "ip" in port_lower or ":" in port_name:
+    elif "IP" in port_upper or ":" in port_name:
         return _validate_network_port(port_name)
     else:
+        # If it's something like "Printer PORT:" (common for some drivers), 
+        # we assume it's valid if it's not explicitly a physical port we failed to find.
         detection_log.debug(f"Port {port_name} type unknown, assuming valid")
         return True, f"Port type unknown ({port_name})"
 
@@ -293,7 +298,8 @@ def _windows_get_status(printer_name: str) -> Dict[str, object]:
         info = win32print.GetPrinter(handle, 2)
         detection_log.debug(f"{printer_name}: Stage 2 ✓ GetPrinter succeeded")
 
-        port_name = info.get("PortName", "")
+        # PyWin32 GetPrinter(2) uses p-prefixed keys for strings
+        port_name = info.get("pPortName") or info.get("PortName") or ""
         attributes = int(info.get("Attributes", 0))
         spooler_status = int(info.get("Status", 0))
 

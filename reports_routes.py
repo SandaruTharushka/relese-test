@@ -48,6 +48,9 @@ def register_reports_routes(
     def reports():
         _ensure_reports_access()
         today = datetime.now().astimezone().date()
+        # Default range for summary stats: last 7 days
+        start = today - timedelta(days=6)
+        end = today
         weekly = []
         for i in range(6, -1, -1):
             d = today - timedelta(days=i)

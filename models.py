@@ -1,4 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.orm import DeclarativeBase, validates
 from flask_login import UserMixin
 import hashlib
 
@@ -7,12 +8,17 @@ from datetime import datetime, date, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from sqlalchemy import CheckConstraint, UniqueConstraint, Index
 from sqlalchemy import Numeric as _Numeric
-from sqlalchemy.orm import validates
 from shared_helpers import normalize_role
 
 MONEY = _Numeric(14, 2, asdecimal=True)  # Use for all price/amount columns
 
 db = SQLAlchemy()
+
+class Model(db.Model):
+    __abstract__ = True
+    def __init__(self, **kwargs):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
 MONEY_QUANTUM = Decimal('0.01')
 MONEY_ZERO = Decimal('0.00')
@@ -37,7 +43,7 @@ def money_to_float(value, default=0.0):
     """Serialize money values as floats so current JSON/UI code keeps working."""
     return float(money_to_decimal(value, default=Decimal(str(default))))
 
-class User(UserMixin, db.Model):
+class User(UserMixin, Model):
     __tablename__ = 'users'
     id                    = db.Column(db.Integer, primary_key=True)
     username              = db.Column(db.String(80), unique=True, nullable=False)
@@ -103,7 +109,7 @@ class User(UserMixin, db.Model):
         }
 
 
-class PasswordReset(db.Model):
+class PasswordReset(Model):
     __tablename__ = 'password_resets'
     id         = db.Column(db.Integer, primary_key=True)
     user_id    = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -135,7 +141,7 @@ class PasswordReset(db.Model):
         return stored_otp == otp_value
 
 
-class Category(db.Model):
+class Category(Model):
     __tablename__ = 'categories'
     id          = db.Column(db.Integer, primary_key=True)
     name        = db.Column(db.String(80), unique=True, nullable=False)
@@ -146,7 +152,7 @@ class Category(db.Model):
         return {'id': self.id, 'name': self.name, 'description': self.description}
 
 
-class Supplier(db.Model):
+class Supplier(Model):
     __tablename__ = 'suppliers'
     __table_args__ = (
         UniqueConstraint('name', name='uq_supplier_name'),
@@ -173,7 +179,7 @@ class Supplier(db.Model):
         }
 
 
-class SupplierTransaction(db.Model):
+class SupplierTransaction(Model):
     __tablename__ = 'supplier_transactions'
     id          = db.Column(db.Integer, primary_key=True)
     supplier_id = db.Column(db.Integer, db.ForeignKey('suppliers.id'), nullable=False)
@@ -192,7 +198,7 @@ class SupplierTransaction(db.Model):
         }
 
 
-class Product(db.Model):
+class Product(Model):
     __tablename__ = 'products'
     __table_args__ = (
         CheckConstraint('stock_qty >= 0', name='ck_products_stock_qty_non_negative'),
@@ -257,7 +263,7 @@ class Product(db.Model):
         }
 
 
-class WholesaleCustomer(db.Model):
+class WholesaleCustomer(Model):
     __tablename__ = 'wholesale_customers'
     id                 = db.Column(db.Integer, primary_key=True)
     name               = db.Column(db.String(150), nullable=False)
@@ -287,7 +293,7 @@ class WholesaleCustomer(db.Model):
         }
 
 
-class WholesaleTransaction(db.Model):
+class WholesaleTransaction(Model):
     __tablename__ = 'wholesale_transactions'
     id          = db.Column(db.Integer, primary_key=True)
     customer_id = db.Column(db.Integer, db.ForeignKey('wholesale_customers.id'), nullable=False)
@@ -306,7 +312,7 @@ class WholesaleTransaction(db.Model):
         }
 
 
-class HeldOrder(db.Model):
+class HeldOrder(Model):
     __tablename__ = 'held_orders'
     id                    = db.Column(db.Integer, primary_key=True)
     label                 = db.Column(db.String(100))
@@ -329,7 +335,7 @@ class HeldOrder(db.Model):
         }
 
 
-class StoreSettings(db.Model):
+class StoreSettings(Model):
     __tablename__ = 'store_settings'
     id    = db.Column(db.Integer, primary_key=True)
     key   = db.Column(db.String(80), unique=True, nullable=False)
@@ -427,7 +433,7 @@ class StoreSettings(db.Model):
         return {row.key: row.value for row in query.all()}
 
 
-class Sale(db.Model):
+class Sale(Model):
     __tablename__ = 'sales'
     __table_args__ = (
         UniqueConstraint('invoice_number', name='uq_sale_invoice_number'),
@@ -482,7 +488,7 @@ class Sale(db.Model):
         }
 
 
-class SaleItem(db.Model):
+class SaleItem(Model):
     __tablename__ = 'sale_items'
     __table_args__ = (
         Index('ix_sale_items_sale_id', 'sale_id'),
@@ -538,7 +544,7 @@ class SaleItem(db.Model):
         }
 
 
-class AutoDiscountRule(db.Model):
+class AutoDiscountRule(Model):
     __tablename__ = 'auto_discount_rules'
     __table_args__ = (
         CheckConstraint('min_price >= 0', name='ck_auto_discount_min_price_non_negative'),
@@ -568,7 +574,7 @@ class AutoDiscountRule(db.Model):
         }
 
 
-class Payment(db.Model):
+class Payment(Model):
     __tablename__ = 'payments'
     __table_args__ = (
         Index('ix_payments_sale_id', 'sale_id'),
@@ -617,7 +623,7 @@ class Payment(db.Model):
         }
 
 
-class StockMovement(db.Model):
+class StockMovement(Model):
     __tablename__ = 'stock_movements'
     id             = db.Column(db.Integer, primary_key=True)
     product_id     = db.Column(db.Integer, db.ForeignKey('products.id'))
@@ -653,7 +659,7 @@ class StockMovement(db.Model):
 
 # ── WORKSHOP STOCK USAGE ──────────────────────────────────────────────────────
 
-class WorkshopStockUsage(db.Model):
+class WorkshopStockUsage(Model):
     __tablename__ = 'workshop_stock_usage'
     __table_args__ = (
         Index('ix_workshop_stock_usage_created_at', 'created_at'),
@@ -699,7 +705,7 @@ class WorkshopStockUsage(db.Model):
         }
 
 
-class UserLog(db.Model):
+class UserLog(Model):
     __tablename__ = 'user_logs'
     id               = db.Column(db.Integer, primary_key=True)
     user_id          = db.Column(db.Integer, db.ForeignKey('users.id'))
@@ -713,7 +719,7 @@ class UserLog(db.Model):
 
 # ── PURCHASE / GRN ────────────────────────────────────────────────────────────
 
-class Purchase(db.Model):
+class Purchase(Model):
     __tablename__ = 'purchases'
     __table_args__ = (
         Index('ix_purchases_purchase_date', 'purchase_date'),
@@ -748,7 +754,7 @@ class Purchase(db.Model):
         }
 
 
-class PurchaseItem(db.Model):
+class PurchaseItem(Model):
     __tablename__ = 'purchase_items'
     id          = db.Column(db.Integer, primary_key=True)
     purchase_id = db.Column(db.Integer, db.ForeignKey('purchases.id'))
@@ -771,7 +777,7 @@ class PurchaseItem(db.Model):
 
 # ── PRODUCT RETURNS ───────────────────────────────────────────────────────────
 
-class ProductReturn(db.Model):
+class ProductReturn(Model):
     __tablename__ = 'product_returns'
     id               = db.Column(db.Integer, primary_key=True)
     return_number    = db.Column(db.String(40), unique=True, nullable=False)
@@ -807,7 +813,7 @@ class ProductReturn(db.Model):
         }
 
 
-class ReturnItem(db.Model):
+class ReturnItem(Model):
     __tablename__ = 'return_items'
     id         = db.Column(db.Integer, primary_key=True)
     return_id  = db.Column(db.Integer, db.ForeignKey('product_returns.id'))
@@ -832,7 +838,7 @@ class ReturnItem(db.Model):
 
 # ── BACKUP LOGS ───────────────────────────────────────────────────────────────
 
-class BackupLog(db.Model):
+class BackupLog(Model):
     """Tracks every database backup — local and Google Drive uploads."""
     __tablename__ = 'backup_logs'
     id          = db.Column(db.Integer, primary_key=True)
@@ -859,7 +865,7 @@ class BackupLog(db.Model):
 
 # ── MULTIPLE BARCODES ─────────────────────────────────────────────────────────
 
-class ProductBarcode(db.Model):
+class ProductBarcode(Model):
     """Allows a single product to have multiple barcodes (aliases, variants, weight/price codes)."""
     __tablename__ = 'product_barcodes'
     id           = db.Column(db.Integer, primary_key=True)
@@ -879,7 +885,7 @@ class ProductBarcode(db.Model):
 
 # ── RETAIL CUSTOMERS (Feature 3) ──────────────────────────────────────────────
 
-class RetailCustomer(db.Model):
+class RetailCustomer(Model):
     __tablename__ = 'retail_customers'
     id               = db.Column(db.Integer, primary_key=True)
     customer_code    = db.Column(db.String(30), unique=True, index=True)
@@ -915,7 +921,7 @@ class RetailCustomer(db.Model):
 
 # ── IMEI RECORDS (Feature 1) ──────────────────────────────────────────────────
 
-class IMEIRecord(db.Model):
+class IMEIRecord(Model):
     __tablename__ = 'imei_records'
     __table_args__ = (
         Index('idx_imei_records_imei_unique', 'imei', unique=True),
@@ -1156,7 +1162,7 @@ class IMEIRecord(db.Model):
         }
 
 
-class IMEIHistory(db.Model):
+class IMEIHistory(Model):
     __tablename__ = 'imei_history'
     id         = db.Column(db.Integer, primary_key=True)
     imei       = db.Column(db.String(20), nullable=False, index=True)
@@ -1186,7 +1192,7 @@ class IMEIHistory(db.Model):
 
 # ── PRODUCT VARIANTS (Feature 2) ──────────────────────────────────────────────
 
-class ProductVariantGroup(db.Model):
+class ProductVariantGroup(Model):
     __tablename__ = 'product_variant_groups'
     id         = db.Column(db.Integer, primary_key=True)
     product_id = db.Column(db.Integer, db.ForeignKey('products.id'), nullable=False)
@@ -1203,7 +1209,7 @@ class ProductVariantGroup(db.Model):
         }
 
 
-class ProductVariant(db.Model):
+class ProductVariant(Model):
     __tablename__ = 'product_variants'
     id            = db.Column(db.Integer, primary_key=True)
     group_id      = db.Column(db.Integer, db.ForeignKey('product_variant_groups.id'), nullable=False)
@@ -1235,7 +1241,7 @@ class ProductVariant(db.Model):
 
 # ── REPAIR JOBS (Feature 4) ───────────────────────────────────────────────────
 
-class VehicleBrand(db.Model):
+class VehicleBrand(Model):
     __tablename__ = 'vehicle_brands'
     __table_args__ = (
         UniqueConstraint('normalized_name', 'vehicle_type', name='uq_vehicle_brand_normalized_type'),
@@ -1264,7 +1270,7 @@ class VehicleBrand(db.Model):
             'usage_count': int(self.usage_count or 0),
         }
 
-class RepairJob(db.Model):
+class RepairJob(Model):
     __tablename__ = 'repair_jobs'
     __table_args__ = (
         Index('ix_repair_jobs_received_date', 'received_date'),
@@ -1372,7 +1378,7 @@ class RepairJob(db.Model):
         }
 
 
-class RepairJobPart(db.Model):
+class RepairJobPart(Model):
     __tablename__ = 'repair_job_parts'
     id         = db.Column(db.Integer, primary_key=True)
     job_id     = db.Column(db.Integer, db.ForeignKey('repair_jobs.id'), nullable=False)
@@ -1397,7 +1403,7 @@ class RepairJobPart(db.Model):
         }
 
 
-class RepairPayment(db.Model):
+class RepairPayment(Model):
     __tablename__ = 'repair_payments'
     id             = db.Column(db.Integer, primary_key=True)
     job_id         = db.Column(db.Integer, db.ForeignKey('repair_jobs.id'), nullable=False, index=True)
@@ -1427,7 +1433,7 @@ class RepairPayment(db.Model):
 
 # ── VEHICLE INSPECTION (Garage intake checklist) ─────────────────────────────
 
-class VehicleInspection(db.Model):
+class VehicleInspection(Model):
     __tablename__ = 'vehicle_inspections'
     id              = db.Column(db.Integer, primary_key=True)
     job_id          = db.Column(db.Integer, db.ForeignKey('repair_jobs.id'), nullable=False, unique=True)
@@ -1476,7 +1482,7 @@ class VehicleInspection(db.Model):
 
 # ── VEHICLE HISTORY (per licence plate) ──────────────────────────────────────
 
-class VehicleHistory(db.Model):
+class VehicleHistory(Model):
     __tablename__ = 'vehicle_history'
     id                      = db.Column(db.Integer, primary_key=True)
     reg_no                  = db.Column(db.String(20), nullable=False, index=True)
@@ -1511,7 +1517,7 @@ class VehicleHistory(db.Model):
 
 # ── TRADE-INS (Feature 6) ─────────────────────────────────────────────────────
 
-class TradeIn(db.Model):
+class TradeIn(Model):
     __tablename__ = 'trade_ins'
     id              = db.Column(db.Integer, primary_key=True)
     trade_in_number = db.Column(db.String(40), unique=True, nullable=False)
@@ -1556,7 +1562,7 @@ class TradeIn(db.Model):
 
 # ── INSTALLMENT PLANS (Feature 5) ─────────────────────────────────────────────
 
-class InstallmentPlan(db.Model):
+class InstallmentPlan(Model):
     __tablename__ = 'installment_plans'
     id               = db.Column(db.Integer, primary_key=True)
     sale_id          = db.Column(db.Integer, db.ForeignKey('sales.id'), nullable=False)
@@ -1676,7 +1682,7 @@ class InstallmentPlan(db.Model):
         }
 
 
-class Installment(db.Model):
+class Installment(Model):
     __tablename__ = 'installments'
     id             = db.Column(db.Integer, primary_key=True)
     plan_id        = db.Column(db.Integer, db.ForeignKey('installment_plans.id'), nullable=False)
@@ -1712,7 +1718,7 @@ class Installment(db.Model):
         }
 
 
-class InstallmentPayment(db.Model):
+class InstallmentPayment(Model):
     __tablename__ = 'installment_payments'
     id = db.Column(db.Integer, primary_key=True)
     plan_id = db.Column(db.Integer, db.ForeignKey('installment_plans.id'), nullable=False)
@@ -1739,7 +1745,7 @@ class InstallmentPayment(db.Model):
         }
 
 
-class InstallmentStatusHistory(db.Model):
+class InstallmentStatusHistory(Model):
     __tablename__ = 'installment_status_history'
     id = db.Column(db.Integer, primary_key=True)
     plan_id = db.Column(db.Integer, db.ForeignKey('installment_plans.id'), nullable=False)
@@ -1766,7 +1772,7 @@ class InstallmentStatusHistory(db.Model):
 # BROKER MANAGEMENT
 # ══════════════════════════════════════════════════════════════════════════════
 
-class Broker(db.Model):
+class Broker(Model):
     __tablename__ = 'brokers'
     id                       = db.Column(db.Integer, primary_key=True)
     name                     = db.Column(db.String(150), nullable=False)
@@ -1805,7 +1811,7 @@ class Broker(db.Model):
         }
 
 
-class BrokerCommissionPayment(db.Model):
+class BrokerCommissionPayment(Model):
     __tablename__ = 'broker_commission_payments'
     id           = db.Column(db.Integer, primary_key=True)
     broker_id    = db.Column(db.Integer, db.ForeignKey('brokers.id'), nullable=False, index=True)
@@ -1838,7 +1844,7 @@ class BrokerCommissionPayment(db.Model):
 
 EXPENSE_TYPES = ('shop_expense', 'bank_loan', 'work_expense', 'extra_expense', 'savings', 'other')
 
-class ExpenseCategory(db.Model):
+class ExpenseCategory(Model):
     __tablename__ = 'expense_categories'
     id         = db.Column(db.Integer, primary_key=True)
     name       = db.Column(db.String(100), nullable=False, unique=True)
@@ -1856,7 +1862,7 @@ class ExpenseCategory(db.Model):
         }
 
 
-class ExpenseEntry(db.Model):
+class ExpenseEntry(Model):
     __tablename__ = 'expense_entries'
     id             = db.Column(db.Integer, primary_key=True)
     entry_date     = db.Column(db.Date, nullable=False, index=True)
