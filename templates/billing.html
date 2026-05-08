@@ -981,12 +981,13 @@ async function loadProducts(cat = '', q = '') {
       return;
     }
     const data = await res.json();
-    if (!data) return;
-    const newIds = data.map(p => p.id + ':' + p.stock_qty).join(',');
+    if (!data || !data.ok) return;
+    const items = Array.isArray(data.items) ? data.items : [];
+    const newIds = items.map(p => p.id + ':' + p.stock_qty).join(',');
     if (newIds === _lastProductIds) return; // nothing changed — skip DOM update
     _lastProductIds = newIds;
-    allProducts = data;
-    renderGrid(data);
+    allProducts = items;
+    renderGrid(items);
   } catch (e) {
     console.warn('loadProducts failed:', e);
   }
