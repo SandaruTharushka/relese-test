@@ -26,6 +26,20 @@ function authMessageFromResponse(result) {
   return 'Login failed. Please try again.';
 }
 
+async function checkServerHealth() {
+  try {
+    const res = await fetch('/health', { method: 'GET' });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (data && data.status === 'starting') return 'starting';
+      return 'error';
+    }
+    return 'ok';
+  } catch (_) {
+    return 'unreachable';
+  }
+}
+
 async function doLogin() {
   const btn = document.getElementById('loginBtn');
   const u = document.getElementById('inp_user').value.trim();
@@ -40,6 +54,26 @@ async function doLogin() {
   btn.disabled = true;
   btn.textContent = '⏳ Signing in…';
 
+  // Pre-flight: confirm the backend is reachable before sending credentials.
+  const health = await checkServerHealth();
+  if (health === 'starting') {
+    showAlert(al, 'error', 'The server is still starting up. Please wait a moment and try again.');
+    btn.disabled = false;
+    btn.textContent = '🔐 Sign In';
+    return;
+  }
+  if (health !== 'ok') {
+    showAlert(al, 'error',
+      'Cannot reach the backend server. ' +
+      'If you just opened the application, wait a few seconds and try again. ' +
+      'If the problem persists, restart the application and check the log file in ' +
+      '%LOCALAPPDATA%\\Garage Management System\\logs\\desktop-runtime.log'
+    );
+    btn.disabled = false;
+    btn.textContent = '🔐 Sign In';
+    return;
+  }
+
   let result = null;
   try {
     const res = await fetch('/login', {
@@ -49,7 +83,11 @@ async function doLogin() {
     });
     result = await parseApiResponse(res);
   } catch (_) {
-    showAlert(al, 'error', 'Unable to reach the server. Please try again.');
+    showAlert(al, 'error',
+      'Lost connection to the backend server. ' +
+      'Please restart the application. ' +
+      'Check logs at: %LOCALAPPDATA%\\Garage Management System\\logs\\desktop-runtime.log'
+    );
     btn.disabled = false;
     btn.textContent = '🔐 Sign In';
     return;
