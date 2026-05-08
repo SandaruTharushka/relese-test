@@ -165,15 +165,16 @@ def print_receipt(receipt_type: str, source_id: int) -> Dict[str, Any]:
             "doc_number": ctx["doc_number"],
         }
     if mode in ("escpos", "windows_raw"):
-        if mode == "escpos":
-            payload = escpos_renderer.render_escpos(receipt_type, ctx, layout, company)
-        else:
-            payload = render_receipt_text(receipt_type, ctx, layout, company).encode(
-                "cp437", errors="replace"
-            )
+        # Both raw modes use the canonical ESC/POS renderer so that every
+        # layout setting (logo, auto-cut, font, paper width, Sinhala image
+        # rendering) is applied consistently regardless of which mode is chosen.
+        payload = escpos_renderer.render_escpos(receipt_type, ctx, layout, company)
         result = send_raw(printer_name, payload, doc_name=f"Receipt {ctx['doc_number']}")
-        printer_log.info("receipt_print type=%s source=%s printer=%s mode=%s ok=%s result=%s", receipt_type, source_id, printer_name, mode, result.get("ok"), result.get("msg"))
-        log.info("print dispatched mode=%s ok=%s", mode, result.get("ok"))
+        printer_log.info(
+            "receipt_print type=%s source=%s printer=%s mode=%s ok=%s result=%s",
+            receipt_type, source_id, printer_name, mode, result.get("ok"), result.get("msg"),
+        )
+        log.info("print dispatched mode=%s ok=%s bytes=%d", mode, result.get("ok"), len(payload))
         return {**result, "mode": mode, "doc_number": ctx["doc_number"]}
     return {"ok": False, "msg": f"Unsupported print mode: {mode!r}"}
 
@@ -206,7 +207,7 @@ def test_receipt_print() -> Dict[str, Any]:
         "datetime": "Test Print",
         "cashier": "System",
         "customer_name": "Test Customer",
-        "customer_phone": "",
+        "customer_phone": "000 000 0000",
         "vehicle": "",
         "items": [{
             "name": "Printer Diagnostic Item",
@@ -221,17 +222,15 @@ def test_receipt_print() -> Dict[str, Any]:
         "grand_total": 0,
         "paid": 0,
         "balance": 0,
+        "outstanding": 0,
         "payment_method": "test",
         "items_count": 1,
         "extra": {},
     }
-    mode = settings.get("printer_print_mode", "windows_raw")
-    if mode == "escpos":
-        sample = escpos_renderer.render_escpos("billing", sample_ctx, layout, company)
-        renderer_used = "canonical_escpos_renderer"
-    else:
-        sample = render_receipt_text("billing", sample_ctx, layout, company).encode("cp437", errors="replace")
-        renderer_used = "canonical_text_renderer"
+    # Always use the canonical ESC/POS renderer so that every layout setting
+    # (logo, auto-cut, paper width) is exercised in the test print too.
+    sample = escpos_renderer.render_escpos("billing", sample_ctx, layout, company)
+    renderer_used = "canonical_escpos_renderer"
     result = send_raw(name, sample, doc_name="Printer Test")
     out = {
         **result,

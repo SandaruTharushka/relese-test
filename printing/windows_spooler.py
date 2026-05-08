@@ -50,9 +50,48 @@ def send_raw(printer_name: str, payload: Union[bytes, str], *, doc_name: str = "
             bytes_written = win32print.WritePrinter(handle, payload)
             win32print.EndPagePrinter(handle)
             win32print.EndDocPrinter(handle)
-            log.info("Raw print dispatched printer=%s bytes=%d written=%d doc=%s attempt=%d", printer_name, len(payload), bytes_written, doc_name, attempt)
-            return {"ok": True, "msg": f"Sent {bytes_written} bytes to {printer_name}", "job_id": job_id, "bytes_written": bytes_written, "attempt": attempt}
+            log.info(
+                "Raw print dispatched printer=%s bytes=%d written=%d doc=%s attempt=%d",
+                printer_name, len(payload), bytes_written, doc_name, attempt,
+            )
+            return {
+                "ok": True,
+                "msg": f"Sent {bytes_written} bytes to {printer_name}",
+                "job_id": job_id,
+                "bytes_written": bytes_written,
+                "attempt": attempt,
+            }
         except Exception as exc:
+            err_str = str(exc)
+            # pywintypes.error: (1905, 'StartDocPrinter',
+            #   'The specified printer has been deleted.')
+            # This is a permanent error — retrying will not help.
+            if "1905" in err_str or "been deleted" in err_str.lower():
+                log.error(
+                    "Printer '%s' has been deleted from Windows spooler: %s",
+                    printer_name, exc,
+                )
+                return {
+                    "ok": False,
+                    "msg": (
+                        f"Printer '{printer_name}' has been deleted from Windows. "
+                        "Please go to Settings → Printer Settings and reselect your printer."
+                    ),
+                    "exception": repr(exc),
+                    "traceback": traceback.format_exc(),
+                }
+            # pywintypes.error: (1801, ...) — invalid printer name
+            if "1801" in err_str:
+                log.error("Printer '%s' not found (error 1801): %s", printer_name, exc)
+                return {
+                    "ok": False,
+                    "msg": (
+                        f"Printer '{printer_name}' is no longer installed or has been renamed. "
+                        "Please reselect printer in Settings."
+                    ),
+                    "exception": repr(exc),
+                    "traceback": traceback.format_exc(),
+                }
             last_error = exc
             last_traceback = traceback.format_exc()
             log.exception("Raw print failed for %s on attempt=%d", printer_name, attempt)

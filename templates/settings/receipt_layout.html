@@ -32,7 +32,7 @@
             </select>
           </div>
           <div class="form-group">
-            <label class="form-label">Font Size</label>
+            <label class="form-label">Font Size (px)</label>
             <input class="form-input" id="lay_font_size" type="number" min="8" max="24">
           </div>
         </div>
@@ -87,9 +87,29 @@
           <label><input type="checkbox" id="lay_auto_cut"> Auto-cut Receipt Paper</label>
         </div>
 
-        <div class="flex gap-2" style="margin-top:14px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+          <div class="form-group">
+            <label class="form-label">Cut Type</label>
+            <select class="form-input" id="lay_cut_type">
+              <option value="full">Full Cut</option>
+              <option value="partial">Partial Cut</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Feed Lines Before Cut</label>
+            <input class="form-input" id="lay_feed_lines" type="number" min="0" max="10">
+          </div>
+        </div>
+
+        <div style="background:#fefce8;border:1px solid #fde047;border-radius:6px;padding:8px 10px;font-size:12px;margin-top:4px;color:#713f12">
+          <strong>Sinhala / Unicode text:</strong> Sinhala in the Receipt Note or Footer will automatically be rendered as a raster image so it prints correctly on thermal printers. Requires <em>Iskoola Pota</em> or <em>Nirmala UI</em> installed on Windows, or a bundled font in <code>printing/fonts/</code>.
+        </div>
+
+        <div class="flex gap-2" style="margin-top:14px;flex-wrap:wrap">
           <button class="btn btn-primary" onclick="saveLayout()">💾 Save Layout</button>
           <button class="btn btn-ghost" onclick="resetLayout()">↺ Reset to Default</button>
+          <button class="btn btn-ghost" onclick="testPrint()" id="btnTestPrint">🖶 Test Print</button>
+          <button class="btn btn-ghost" onclick="testCut()" id="btnTestCut">✂ Test Cut</button>
         </div>
         <div id="layoutMsg" class="text-sm" style="margin-top:8px"></div>
       </div>
