@@ -40,6 +40,7 @@
 #  end-user machine. Do NOT re-enable UPX for this project.
 
 import os as _os
+from PyInstaller.utils.hooks import collect_data_files
 
 block_cipher = None
 
@@ -59,7 +60,7 @@ a = Analysis(
         ('static',           'static'),
         ('version.py',       '.'),
         ('update_config.py', '.'),   # GitHub update configuration constants
-    ] + _seed_db_datas,
+    ] + _seed_db_datas + collect_data_files('escpos'),
     hiddenimports=[
         # ── Core application modules ────────────────────────────────────────────
         # app is the primary Flask application; it is loaded via
