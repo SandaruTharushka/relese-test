@@ -8,7 +8,8 @@
     bool: ['rcpt_layout_show_logo', 'rcpt_layout_show_company_name', 'rcpt_layout_show_address',
            'rcpt_layout_show_phone', 'rcpt_layout_show_email', 'rcpt_layout_show_customer',
            'rcpt_layout_show_vehicle', 'rcpt_layout_show_cashier', 'rcpt_layout_show_barcode',
-           'rcpt_layout_show_footer', 'rcpt_layout_show_tax_info', 'rcpt_layout_show_payment_summary'],
+           'rcpt_layout_show_footer', 'rcpt_layout_show_tax_info', 'rcpt_layout_show_payment_summary',
+           'rcpt_layout_auto_cut'],
   };
 
   const KEY_TO_INPUT = {
@@ -32,6 +33,7 @@
     rcpt_layout_show_footer: 'lay_show_footer',
     rcpt_layout_show_tax_info: 'lay_show_tax_info',
     rcpt_layout_show_payment_summary: 'lay_show_payment_summary',
+    rcpt_layout_auto_cut: 'lay_auto_cut',
   };
 
   function csrf() { return document.querySelector('meta[name="csrf-token"]')?.content || ''; }

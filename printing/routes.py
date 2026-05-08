@@ -195,6 +195,14 @@ def register_printing_routes(app, *, db, log_action=None):
         status = 200 if result.get("ok") else 400
         return jsonify(result), status
 
+    @app.route("/api/settings/printers/cut", methods=["POST"])
+    @login_required
+    def api_printers_cut():
+        _require_admin_write()
+        result = printing_service.cut_printer_paper()
+        status = 200 if result.get("ok") else 400
+        return jsonify(result), status
+
     # ── RECEIPT LAYOUT API ─────────────────────────────────────────────────
 
     @app.route("/api/settings/receipt-layout", methods=["GET"])

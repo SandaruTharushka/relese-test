@@ -4,8 +4,8 @@ cd /d "%~dp0"
 
 :: ============================================================
 ::  Garage Management System — Master Build Script
-::  Produces: dist\GarageManagementSystem.exe + dist\SuperMartPrinterManager.exe
-::            + release\GarageManagementSystem_Setup_v3.1.exe  (if Inno Setup found)
+::  Produces: dist\GarageManagementSystem.exe
+::            + release\GarageManagementSystem_Setup_v3.3.1.exe  (if Inno Setup found)
 ::
 ::  Usage:  BUILD.bat
 ::
@@ -99,7 +99,6 @@ for %%F in (
     app.py
     runtime_paths.py
     SuperMartPOS.spec
-    SuperMartPrinterManager.spec
     requirements.txt
     static\icons\icon.ico
 ) do (
@@ -204,11 +203,6 @@ if exist "dist\GarageManagementSystem.exe" (
     echo  [PASS] dist\GarageManagementSystem.exe
 ) else (
     echo  [FAIL] dist\GarageManagementSystem.exe  NOT FOUND
-)
-if exist "dist\SuperMartPrinterManager.exe" (
-    echo  [PASS] dist\SuperMartPrinterManager.exe
-) else (
-    echo  [WARN] dist\SuperMartPrinterManager.exe  NOT FOUND
 )
 if exist "release\GarageManagementSystem.exe" (
     echo  [PASS] release\GarageManagementSystem.exe

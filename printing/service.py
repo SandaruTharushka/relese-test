@@ -272,3 +272,22 @@ def test_label_print() -> Dict[str, Any]:
     }
     printer_log.info("test_print kind=label printer=%s ok=%s result=%s", name, out.get("ok"), out.get("msg"))
     return out
+
+
+def cut_printer_paper() -> Dict[str, Any]:
+    """Send a manual cut command to the selected receipt printer."""
+    settings = PrinterSettings.load()
+    name = settings.get("printer_receipt_name") or ""
+    if not name:
+        return {"ok": False, "msg": "No receipt printer selected"}
+
+    # Minimal ESC/POS cut command
+    _ESC = b"\x1b"
+    _GS = b"\x1d"
+    _CUT = _GS + b"V" + b"\x00"
+    _INIT = _ESC + b"@"
+
+    payload = _INIT + b"\n\n\n" + _CUT
+    result = send_raw(name, payload, doc_name="Manual Cut")
+    printer_log.info("manual_cut printer=%s ok=%s", name, result.get("ok"))
+    return result

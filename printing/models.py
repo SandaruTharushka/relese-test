@@ -213,6 +213,7 @@ class ReceiptLayoutSettings:
         "rcpt_layout_item_row_style": "standard",
         "rcpt_layout_divider_style": "dashed",
         "rcpt_layout_template_style": "modern_garage",
+        "rcpt_layout_auto_cut": "1",
     }
 
     BOOL_KEYS = {
@@ -228,6 +229,7 @@ class ReceiptLayoutSettings:
         "rcpt_layout_show_footer",
         "rcpt_layout_show_tax_info",
         "rcpt_layout_show_payment_summary",
+        "rcpt_layout_auto_cut",
     }
 
     ENUM_KEYS = {

@@ -157,6 +157,26 @@
   }
   window.testPrint = testPrint;
 
+  async function cutPaper() {
+    const msg = document.getElementById('saveMsg');
+    msg.textContent = 'Sending cut command…';
+    msg.style.color = '';
+    try {
+      const res = await fetch('/api/settings/printers/cut', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() }
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.msg || 'Cut failed');
+      msg.textContent = 'Cut command sent successfully.';
+      msg.style.color = '#16a34a';
+    } catch (e) {
+      msg.textContent = `Cut command failed: ${e.message}`;
+      msg.style.color = '#dc2626';
+    }
+  }
+  window.cutPaper = cutPaper;
+
   function applySaved() {
     document.getElementById('paperWidth').value = SAVED.printer_default_paper_width || '80mm';
     document.getElementById('connectionType').value = SAVED.printer_connection_type || 'windows';

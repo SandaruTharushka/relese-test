@@ -16,6 +16,8 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Dict, List, Optional
 
 from flask import current_app, render_template
+from escpos.printer import Dummy
+from pathlib import Path
 
 from printing.models import (
     CompanyProfile,
@@ -438,6 +440,16 @@ _BOLD_ON = _ESC + b"E" + b"\x01"
 _BOLD_OFF = _ESC + b"E" + b"\x00"
 
 
+def _resolve_logo_path(logo_rel: str) -> Optional[Path]:
+    if not logo_rel:
+        return None
+    # /static/uploads/logos/... -> static/uploads/logos/...
+    clean = logo_rel.lstrip("/")
+    base = Path(__file__).resolve().parent.parent
+    p = base / clean
+    return p if p.exists() else None
+
+
 def render_receipt_escpos(
     receipt_type: str,
     context: Dict[str, Any],
@@ -445,15 +457,35 @@ def render_receipt_escpos(
     company_profile: Optional[Dict[str, Any]] = None,
 ) -> bytes:
     """Generate raw ESC/POS bytes from the same context."""
-    text = render_receipt_text(receipt_type, context, layout_settings, company_profile)
-    payload = _INIT + _ALIGN_CENTER
-    if layout_settings and layout_settings.get("rcpt_layout_show_company_name"):
+    layout = layout_settings or ReceiptLayoutSettings.load()
+    company = company_profile or CompanyProfile.load()
+
+    payload = _INIT
+
+    # 1. Logo
+    if layout.get("rcpt_layout_show_logo") and company.get("company_logo_path"):
+        lp = _resolve_logo_path(company["company_logo_path"])
+        if lp:
+            try:
+                p = Dummy()
+                p._raw(_ALIGN_CENTER)
+                p.image(str(lp))
+                p._raw(_ALIGN_LEFT)
+                payload += p.output
+            except Exception as e:
+                log.warning("escpos logo render failed: %s", e)
+
+    # 2. Text Content
+    text = render_receipt_text(receipt_type, context, layout, company)
+    payload += _ALIGN_CENTER
+    if layout.get("rcpt_layout_show_company_name"):
         payload += _BOLD_ON
     payload += _ALIGN_LEFT + _BOLD_OFF
     safe = text.encode("cp437", errors="replace")
     payload += safe
     payload += b"\n\n\n"
-    payload += _CUT
+    if layout.get("rcpt_layout_auto_cut", True):
+        payload += _CUT
     return payload
 
 

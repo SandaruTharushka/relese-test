@@ -4,7 +4,7 @@ cd /d "%~dp0"
 
 :: ============================================================
 ::  Garage Management System — Desktop EXE Build Script
-::  Builds: dist\GarageManagementSystem.exe + dist\SuperMartPrinterManager.exe
+::  Builds: dist\GarageManagementSystem.exe
 ::
 ::  Called by BUILD.bat (which sets up the venv first), but can
 ::  also be run directly if the venv already exists.
@@ -62,12 +62,6 @@ if errorlevel 1 (
 :: ── Validate required spec and source files ──────────────────────────────────
 for %%F in (
     SuperMartPOS.spec
-    SuperMartPrinterManager.spec
-    main.py
-    desktop_runtime.py
-    app.py
-    runtime_paths.py
-    version.py
     static\icons\icon.ico
 ) do (
     if not exist "%%F" (
@@ -85,12 +79,6 @@ if not errorlevel 1 (
     echo  [!] Detected running GarageManagementSystem.exe — terminating before build...
     taskkill /f /im GarageManagementSystem.exe >nul 2>&1
     timeout /t 2 /nobreak >nul
-)
-tasklist 2>nul | findstr /i "SuperMartPrinterManager.exe" >nul 2>&1
-if not errorlevel 1 (
-    echo  [!] Detected running SuperMartPrinterManager.exe — terminating...
-    taskkill /f /im SuperMartPrinterManager.exe >nul 2>&1
-    timeout /t 1 /nobreak >nul
 )
 
 :: ── Create release folder ─────────────────────────────────────────────────────
@@ -139,17 +127,6 @@ if errorlevel 1 (
 )
 echo  [OK] GarageManagementSystem.exe built successfully
 
-:: ── Build SuperMartPrinterManager.exe ────────────────────────────────────────
-echo.
-echo  [2/2] Running PyInstaller for SuperMartPrinterManager...
-python -m PyInstaller --clean --noconfirm SuperMartPrinterManager.spec
-if errorlevel 1 (
-    echo.
-    echo  [ERROR] PyInstaller failed for SuperMartPrinterManager.spec.
-    exit /b 1
-)
-echo  [OK] SuperMartPrinterManager.exe built successfully
-
 :: ── Verify outputs exist ──────────────────────────────────────────────────────
 if not exist "dist\GarageManagementSystem.exe" (
     echo  [ERROR] Build reported success but dist\GarageManagementSystem.exe was not found.
@@ -158,14 +135,10 @@ if not exist "dist\GarageManagementSystem.exe" (
 
 :: ── Copy EXE stub to release\ for reference ─────────────────────────────────────
 copy /y "dist\GarageManagementSystem.exe" "release\GarageManagementSystem.exe" >nul
-if exist "dist\SuperMartPrinterManager.exe" (
-    copy /y "dist\SuperMartPrinterManager.exe" "release\SuperMartPrinterManager.exe" >nul
-)
 
 echo.
 echo  [DONE] Desktop executables ready:
 echo    dist\GarageManagementSystem.exe
-if exist "dist\SuperMartPrinterManager.exe" echo    dist\SuperMartPrinterManager.exe
 echo.
 exit /b 0
 
