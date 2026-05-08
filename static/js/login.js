@@ -248,10 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Build keyboard DOM
   vkBuild();
 
-  // Restore saved mode (skip overlay)
+  // Restore saved mode; default to 'pc' so the overlay never blocks startup
   const saved = localStorage.getItem(MODE_KEY);
-  if (saved === 'touch' || saved === 'pc') {
-    applyMode(saved);
-  }
-  // else: mode overlay stays visible for first-time selection
+  applyMode(saved === 'touch' ? 'touch' : 'pc');
 });
