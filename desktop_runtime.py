@@ -805,7 +805,16 @@ class DesktopLauncher:
         if self.server.error:
             splash.close_splash()
             splash.close()
-            raise RuntimeError(self.server.error)
+            _log_path = str(log_file_path())
+            _msg = (
+                f'{self.server.error}\n\n'
+                f'Log file:\n{_log_path}\n\n'
+                'Open the log file to see the full error details.'
+            )
+            logger.error('Startup failed — showing error dialog: %s', self.server.error)
+            QtWidgets.QMessageBox.critical(None, f'{APP_NAME} — Startup Error', _msg)
+            qt_app.quit()
+            return
 
         # Brief stabilisation: the health endpoint responds as soon as the HTTP
         # server starts listening, but the Waitress worker threads may still be
@@ -948,6 +957,25 @@ def _log_startup_diagnostics() -> None:
 def main() -> None:
     setup_runtime_logging()
     _log_startup_diagnostics()
-    launcher = DesktopLauncher()
-    logger.info('Starting %s desktop runtime version %s.', APP_NAME, APP_VERSION)
-    launcher.run()
+    try:
+        launcher = DesktopLauncher()
+        logger.info('Starting %s desktop runtime version %s.', APP_NAME, APP_VERSION)
+        launcher.run()
+    except Exception as _exc:
+        logger.exception('Fatal startup error')
+        _log_path = str(log_file_path())
+        _msg = (
+            f'A fatal error prevented {APP_NAME} from starting.\n\n'
+            f'Error: {_exc}\n\n'
+            f'Log file:\n{_log_path}\n\n'
+            'Open the log file for full details.'
+        )
+        try:
+            import importlib as _il
+            _QApp = _il.import_module('PySide6.QtWidgets')
+            _app = _QApp.QApplication.instance() or _QApp.QApplication(sys.argv)
+            _QApp.QMessageBox.critical(None, f'{APP_NAME} — Fatal Error', _msg)
+            _app.quit()
+        except Exception:
+            print(_msg, file=sys.stderr)
+        sys.exit(1)

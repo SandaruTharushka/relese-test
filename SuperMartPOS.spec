@@ -95,6 +95,20 @@ a = Analysis(
         'startup_backup',             # pre-start backup helper
         'validators',                 # shared validation helpers
 
+        # ── Root-level printing package — loaded by app.py via
+        # `from printing import register_printing_routes`.  Listed explicitly
+        # because app is only imported via importlib (not a static import in
+        # main.py) so PyInstaller's static analyser may miss these submodules.
+        'printing',
+        'printing.routes',
+        'printing.models',
+        'printing.receipt_engine',
+        'printing.printer_detector',
+        'printing.service',
+        'printing.escpos_renderer',
+        'printing.html_renderer',
+        'printing.windows_spooler',
+
         # ── New canonical printing route modules (domain rewrite) ─────────────────
         'routes',
         'routes.printing_settings_routes',

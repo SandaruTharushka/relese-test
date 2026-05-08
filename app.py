@@ -453,8 +453,18 @@ _active_sessions: dict = {}
 _active_sessions_lock = threading.Lock()
 
 @app.route('/health')
+@app.route('/api/health')
 def health():
-    return 'ok'
+    global _db_ok
+    if not _db_ok:
+        try:
+            with db.engine.connect() as _hc:
+                _hc.execute(text('SELECT 1'))
+            _db_ok = True
+        except Exception as _hc_err:
+            app.logger.warning('[HEALTH] DB not ready: %s', _hc_err)
+            return jsonify({'status': 'starting', 'db': False}), 503
+    return jsonify({'status': 'ok', 'db': True})
 
 
 def _wants_json_response() -> bool:
