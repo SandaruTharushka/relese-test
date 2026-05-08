@@ -60,6 +60,10 @@ C:\\ProgramData/
 # Runtime activation/license state — auto-generated on first run, machine-specific
 license/
 
+# Runtime backup data — generated on-device, never version-controlled
+backups/
+backup_config.json
+
 # Runtime-uploaded company logos
 static/uploads/
 
