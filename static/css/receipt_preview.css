@@ -82,7 +82,7 @@ html, body {
 }
 .rcpt-items th {
   text-align: left;
-  border-bottom: 1px dashed #000;
+  border-bottom: 1px solid #000;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .5px;
@@ -97,7 +97,6 @@ html, body {
 .rcpt-58mm .rcpt-items tbody tr {
   display: grid;
   grid-template-columns: 1fr;
-  border-bottom: 1px dotted #ccc;
   padding: 3px 0;
 }
 .rcpt-58mm .rcpt-items td { padding: 0; text-align: left; }
@@ -118,7 +117,7 @@ html, body {
   font-weight: 800;
   font-size: calc(var(--rcpt-font-size, 12px) + 2px);
   margin-top: 2px;
-  border-top: 1px dashed #000;
+  border-top: 1px solid #000;
   padding-top: 4px;
 }
 
