@@ -972,6 +972,25 @@ async function printJobReceipt(jobId) {
 }
 window.printJobReceipt = printJobReceipt;
 
+async function cutReceiptPaper() {
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+  try {
+    const res = await fetch('/api/settings/printers/cut', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrf },
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      (typeof toast === 'function' ? toast(data.msg || 'Cut failed', 'danger') : alert(data.msg || 'Cut failed'));
+    } else if (typeof toast === 'function') {
+      toast('Paper cut sent', 'success');
+    }
+  } catch (e) {
+    (typeof toast === 'function' ? toast(`Cut error: ${e.message}`, 'danger') : alert(`Cut error: ${e.message}`));
+  }
+}
+window.cutReceiptPaper = cutReceiptPaper;
+
 async function viewJob(id){
   currentJobId=id;
   openModal('viewJobModal');
@@ -1120,6 +1139,7 @@ function renderJobDetail(j){
   const footer=document.getElementById('viewJobFooter');
   let btns=`<button class="btn btn-ghost" onclick="openEditJobModal(${j.id})" style="gap:6px">✏️ Edit Job</button>`;
   btns+=`<button class="btn btn-ghost" onclick="printJobReceipt(${j.id})" style="gap:6px">🖨️ Print Receipt</button>`;
+  btns+=`<button class="btn btn-ghost" onclick="cutReceiptPaper()" title="Send paper cut command to printer" style="gap:6px">✂️ Auto Cut</button>`;
   if(j.status!=='delivered'){
     btns+=`<button class="btn btn-ghost" style="color:var(--danger);gap:6px" onclick="deleteJob(${j.id}, '${(j.job_number||'').replace(/'/g, '\\\'')}')">🗑 Delete</button>`;
   }

@@ -450,6 +450,27 @@ def _resolve_logo_path(logo_rel: str) -> Optional[Path]:
     return p if p.exists() else None
 
 
+def _prepare_logo_for_escpos(logo_path: Path, paper_width: str = "80mm") -> Optional[Path]:
+    """Resize logo image to fit thermal paper width and return a temp PNG path."""
+    import tempfile
+    suffix = logo_path.suffix.lower()
+    if suffix == ".svg":
+        return None  # SVG cannot be rasterised here; skip silently
+    try:
+        from PIL import Image
+        max_px = 384 if paper_width == "80mm" else 256
+        img = Image.open(str(logo_path)).convert("RGB")
+        if img.width > max_px:
+            ratio = max_px / img.width
+            img = img.resize((max_px, max(1, int(img.height * ratio))), Image.LANCZOS)
+        tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+        img.save(tmp.name, "PNG")
+        return Path(tmp.name)
+    except Exception as e:
+        log.warning("logo prepare failed: %s", e)
+        return None
+
+
 def render_receipt_escpos(
     receipt_type: str,
     context: Dict[str, Any],
@@ -459,6 +480,7 @@ def render_receipt_escpos(
     """Generate raw ESC/POS bytes from the same context."""
     layout = layout_settings or ReceiptLayoutSettings.load()
     company = company_profile or CompanyProfile.load()
+    paper_width = str(layout.get("rcpt_layout_paper_width") or "80mm")
 
     payload = _INIT
 
@@ -466,21 +488,28 @@ def render_receipt_escpos(
     if layout.get("rcpt_layout_show_logo") and company.get("company_logo_path"):
         lp = _resolve_logo_path(company["company_logo_path"])
         if lp:
+            tmp_logo: Optional[Path] = None
             try:
-                p = Dummy()
-                p._raw(_ALIGN_CENTER)
-                p.image(str(lp))
-                p._raw(_ALIGN_LEFT)
-                payload += p.output
+                tmp_logo = _prepare_logo_for_escpos(lp, paper_width)
+                if tmp_logo:
+                    p = Dummy()
+                    p._raw(_ALIGN_CENTER)
+                    p.image(str(tmp_logo))
+                    p._raw(_ALIGN_LEFT)
+                    payload += p.output
+                    payload += b"\n"
             except Exception as e:
                 log.warning("escpos logo render failed: %s", e)
+            finally:
+                if tmp_logo and tmp_logo.exists():
+                    try:
+                        tmp_logo.unlink()
+                    except Exception:
+                        pass
 
     # 2. Text Content
     text = render_receipt_text(receipt_type, context, layout, company)
-    payload += _ALIGN_CENTER
-    if layout.get("rcpt_layout_show_company_name"):
-        payload += _BOLD_ON
-    payload += _ALIGN_LEFT + _BOLD_OFF
+    payload += _ALIGN_LEFT
     safe = text.encode("cp437", errors="replace")
     payload += safe
     payload += b"\n\n\n"
