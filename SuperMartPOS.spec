@@ -40,6 +40,7 @@
 #  end-user machine. Do NOT re-enable UPX for this project.
 
 import os as _os
+from PyInstaller.utils.hooks import collect_data_files
 
 block_cipher = None
 
@@ -59,6 +60,7 @@ a = Analysis(
         ('static',           'static'),
         ('version.py',       '.'),
         ('update_config.py', '.'),   # GitHub update configuration constants
+        *collect_data_files('escpos'),
     ] + _seed_db_datas,
     hiddenimports=[
         # ── Core application modules ────────────────────────────────────────────
