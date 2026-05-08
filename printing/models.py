@@ -214,6 +214,8 @@ class ReceiptLayoutSettings:
         "rcpt_layout_divider_style": "dashed",
         "rcpt_layout_template_style": "modern_garage",
         "rcpt_layout_auto_cut": "1",
+        "rcpt_layout_cut_type": "full",
+        "rcpt_layout_feed_lines": "4",
     }
 
     BOOL_KEYS = {
@@ -232,6 +234,8 @@ class ReceiptLayoutSettings:
         "rcpt_layout_auto_cut",
     }
 
+    CUT_TYPES = ("full", "partial")
+
     ENUM_KEYS = {
         "rcpt_layout_paper_width": PAPER_WIDTHS,
         "rcpt_layout_header_alignment": ALIGNMENTS,
@@ -239,6 +243,7 @@ class ReceiptLayoutSettings:
         "rcpt_layout_item_row_style": ROW_STYLES,
         "rcpt_layout_divider_style": DIVIDER_STYLES,
         "rcpt_layout_template_style": TEMPLATE_STYLES,
+        "rcpt_layout_cut_type": CUT_TYPES,
     }
 
     @classmethod
@@ -253,6 +258,8 @@ class ReceiptLayoutSettings:
                 out[key] = _coerce_bool(value, default == "1")
             elif key == "rcpt_layout_font_size":
                 out[key] = _coerce_int(value, 12)
+            elif key == "rcpt_layout_feed_lines":
+                out[key] = max(0, min(10, _coerce_int(value, 4)))
             else:
                 out[key] = _coerce_str(value, default)
         return out
@@ -280,6 +287,11 @@ class ReceiptLayoutSettings:
                 if not 8 <= size <= 24:
                     raise ValueError("Font size must be between 8 and 24.")
                 clean[key] = str(size)
+            elif key == "rcpt_layout_feed_lines":
+                lines = _coerce_int(value, 4)
+                if not 0 <= lines <= 10:
+                    raise ValueError("Feed lines must be between 0 and 10.")
+                clean[key] = str(lines)
             else:
                 clean[key] = _coerce_str(value, default).strip()
         if not clean:
