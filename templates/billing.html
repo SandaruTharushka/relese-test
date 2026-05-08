@@ -1918,6 +1918,37 @@ async function confirmPayment() {
   _startReceiptAutoClose(5);
 }
 
+function resetCartState() {
+  // Defensive guard — ensure cart is always a valid array
+  if (!Array.isArray(cart)) cart = [];
+
+  // Clear cart and selection
+  cart = [];
+  selectedCartIdx = -1;
+
+  // Clear order-level discount inputs
+  const discInput  = document.getElementById('discountInput');
+  const discPctEl  = document.getElementById('discountPercent');
+  if (discInput)  discInput.value  = '';
+  if (discPctEl)  discPctEl.value  = '';
+
+  // Clear retail customer selection
+  clearRetailCustomer();
+
+  // Reset wholesale customer selector
+  const wsEl = document.getElementById('wsCustomer');
+  if (wsEl) { wsEl.value = ''; onWsChange(); }
+
+  // Clear payment modal cash fields
+  const cashGivenEl   = document.getElementById('cashGiven');
+  const changeDisplay = document.getElementById('changeDisplay');
+  if (cashGivenEl)   cashGivenEl.value = '';
+  if (changeDisplay) { changeDisplay.style.display = 'none'; changeDisplay.textContent = ''; }
+
+  // Re-render order panel (shows empty state, resets item count & totals)
+  renderCart();
+}
+
 function showReceipt(data) {
   _currentSaleId = data?.sale_id || null;
   _currentReceiptInvoice = data?.invoice || '';
@@ -1965,10 +1996,8 @@ function newSale() {
   // because openModal() uses class-based visibility and an inline display:none would
   // override it, permanently breaking every subsequent modal open without a page reload.
   document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('show'));
-  // Reset payment method to Cash and wholesale selector
+  // Reset payment method to Cash
   selectPayMethod('Cash');
-  const wsEl = document.getElementById('wsCustomer');
-  if (wsEl) { wsEl.value = ''; onWsChange(); }
   // Refresh held orders count in the background after payment
   _refreshHeldCount();
   // Return focus to barcode scanner — ready for next customer instantly
