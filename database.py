@@ -22,6 +22,60 @@ _SEED_MAX_ROWS = 1  # allow at most 1 row (e.g. a single default admin)
 _SQLITE_MAGIC = b'SQLite format 3\x00'
 
 
+def _log_available_backups(db_path: Path) -> None:
+    """After detecting a corrupt DB, log any available backups so the operator
+    knows they can restore rather than losing all data."""
+    try:
+        from runtime_paths import persistent_app_dir
+        backups_dir = persistent_app_dir() / 'backups'
+        if not backups_dir.exists():
+            _startup_logger.warning(
+                'CORRUPT-DB: No backups directory found at %s. '
+                'A fresh database will be created — previous data may be unrecoverable.',
+                backups_dir,
+            )
+            return
+
+        # Gather both new and old filename patterns.
+        zips = sorted(
+            list(backups_dir.glob('GarageManagementSystem_Backup_*.zip'))
+            + list(backups_dir.glob('backup_*.zip')),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        db_snapshots = sorted(
+            backups_dir.glob('supermart_????????_??????.db'),
+            key=lambda p: p.name,
+            reverse=True,
+        )
+
+        if not zips and not db_snapshots:
+            _startup_logger.warning(
+                'CORRUPT-DB: Corrupt database detected at %s. '
+                'No backups were found in %s. '
+                'A fresh empty database will be initialised.',
+                db_path,
+                backups_dir,
+            )
+            return
+
+        _startup_logger.warning(
+            'CORRUPT-DB: Corrupt database detected at %s. '
+            'Found %d ZIP backup(s) and %d DB snapshot(s) in %s. '
+            'To restore, use Settings → Database & Backup → Restore after the app starts.',
+            db_path,
+            len(zips),
+            len(db_snapshots),
+            backups_dir,
+        )
+        if zips:
+            _startup_logger.warning(
+                'CORRUPT-DB: Latest available backup: %s', zips[0].name
+            )
+    except Exception as exc:
+        _startup_logger.debug('_log_available_backups error (non-fatal): %s', exc)
+
+
 def _is_valid_sqlite_file(path: Path) -> bool:
     """Return True only if *path* starts with the SQLite file-format magic bytes."""
     try:
@@ -36,7 +90,15 @@ def _validate_seed_database(bundled_db: Path) -> bool:
 
     Rejects the seed when any checked table has more rows than _SEED_MAX_ROWS,
     which would indicate a customer-populated DB was accidentally packaged.
+    Also rejects when the file does not exist — sqlite3.connect() would silently
+    create an empty DB which would pass all checks but would not be the intended
+    seed file.
     """
+    if not bundled_db.exists():
+        _startup_logger.warning(
+            'Seed-DB validation: file not found at %s; skipping copy.', bundled_db
+        )
+        return False
     try:
         conn = sqlite3.connect(str(bundled_db), timeout=2)
         try:
@@ -107,6 +169,7 @@ def _seed_bundled_database(writable_db_path: Path) -> None:
                 exc,
             )
             return
+    _log_available_backups(writable_db_path)
     bundled = bundle_root() / DEFAULT_DATABASE_FILE
     if not bundled.exists():
         return
@@ -169,6 +232,7 @@ def resolve_database_path(database_file: str | None = None) -> str:
     # at the target path but is not a valid SQLite database, rename it so the app
     # can initialise a fresh schema rather than failing on every request.
     if db_path.exists() and not _is_valid_sqlite_file(db_path):
+        _log_available_backups(db_path)
         stamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
         bad_path = db_path.with_name(
             f'{db_path.stem}_corrupt_{stamp}{db_path.suffix}'
