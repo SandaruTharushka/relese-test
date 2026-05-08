@@ -356,6 +356,7 @@ def render_receipt_text(
     company_profile: Optional[Dict[str, Any]] = None,
     *,
     skip_footer: bool = False,
+    skip_barcode: bool = False,
 ) -> str:
     """Plain-text representation suitable for thermal raw print or logs."""
     layout = layout_settings or ReceiptLayoutSettings.load()
@@ -452,6 +453,10 @@ def render_receipt_text(
         if pm:
             out.append(kv("Payment:", pm))
         append_divider(out)
+    if not skip_barcode and context.get("doc_number"):
+        append_divider(out)
+        out.append(center(context["doc_number"]))
+
     if not skip_footer and layout.get("rcpt_layout_show_footer"):
         footer = company.get("company_footer_text") or "Thank you!"
         out.append(center(footer))
@@ -647,6 +652,73 @@ def _prepare_logo_for_escpos(logo_path: Path, paper_width: str = "80mm") -> Opti
 
 
 # ---------------------------------------------------------------------------
+# ESC/POS barcode helper
+# ---------------------------------------------------------------------------
+
+def _render_escpos_barcode(doc_number: str, paper_width: str = "80mm") -> bytes:
+    """Return ESC/POS bytes for a Code128 barcode.
+
+    Tries python-escpos barcode() first.  On failure, renders the barcode as a
+    raster PNG image (via Pillow + python-barcode).  Final fallback is centred
+    plain text so the document number is always visible.
+    """
+    # ── Attempt 1: ESC/POS native barcode command ────────────────────────────
+    try:
+        from escpos.printer import Dummy as _Dummy
+        p = _Dummy()
+        p._raw(_ALIGN_CENTER)
+        p.barcode(doc_number, "CODE128", function_type="B", align_ct=True)
+        p._raw(_ALIGN_LEFT)
+        result = bytes(p.output)
+        if result:
+            log.info("escpos native barcode rendered doc=%s bytes=%d", doc_number, len(result))
+            return result
+    except Exception as exc:
+        log.warning("ESC/POS native barcode failed (%s), trying image fallback", exc)
+
+    # ── Attempt 2: render barcode as raster image ────────────────────────────
+    try:
+        import io
+        import tempfile
+        import barcode as _barcode
+        from barcode.writer import ImageWriter
+        from PIL import Image
+        from escpos.printer import Dummy as _Dummy2
+
+        code = _barcode.get("code128", doc_number, writer=ImageWriter())
+        buf = io.BytesIO()
+        code.write(buf, options={"write_text": False, "quiet_zone": 2, "module_height": 10})
+        buf.seek(0)
+        img = Image.open(buf).convert("RGB")
+        max_px = 576 if paper_width == "80mm" else 384
+        if img.width > max_px:
+            ratio = max_px / img.width
+            img = img.resize((max_px, max(1, int(img.height * ratio))), Image.LANCZOS)
+        tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+        img.save(tmp.name, "PNG")
+        tmp.close()
+        p2 = _Dummy2()
+        p2._raw(_ALIGN_CENTER)
+        p2.image(tmp.name)
+        p2._raw(_ALIGN_LEFT)
+        result2 = bytes(p2.output)
+        try:
+            os.unlink(tmp.name)
+        except Exception:
+            pass
+        if result2:
+            log.info("escpos barcode image fallback rendered doc=%s", doc_number)
+            return result2
+    except Exception as exc2:
+        log.warning("ESC/POS barcode image fallback failed (%s), using text", exc2)
+
+    # ── Attempt 3: plain text ────────────────────────────────────────────────
+    log.warning("ESC/POS barcode: printing doc number as text for: %s", doc_number)
+    line = doc_number.encode("ascii", errors="replace")
+    return _ALIGN_CENTER + b"\n" + line + b"\n" + _ALIGN_LEFT
+
+
+# ---------------------------------------------------------------------------
 # ESC/POS receipt renderer
 # ---------------------------------------------------------------------------
 
@@ -711,27 +783,31 @@ def render_receipt_escpos(
 
     has_unicode_footer = _contains_non_ascii(footer_text) or _contains_non_ascii(receipt_note)
 
-    # ── 3. Text body (skip footer when it contains Sinhala/Unicode) ──────────
+    # ── 3. Text body — always skip footer+barcode; both added separately ──────
     text = render_receipt_text(
         receipt_type, context, layout, company,
-        skip_footer=has_unicode_footer,
+        skip_footer=True,
+        skip_barcode=True,
     )
     payload += _ALIGN_LEFT
     payload += text.encode("cp437", errors="replace")
 
-    # ── 4. Render Sinhala / Unicode footer as raster image ───────────────────
-    if has_unicode_footer and show_footer:
+    # ── 4. Mandatory barcode (before footer, always) ──────────────────────────
+    doc_number = context.get("doc_number", "")
+    if doc_number:
+        payload += _render_escpos_barcode(doc_number, paper_width)
+
+    # ── 5. Footer (plain cp437 or Sinhala/Unicode raster) ────────────────────
+    if show_footer:
+        payload += _ALIGN_CENTER
         for utext in [footer_text, receipt_note]:
             if not utext:
                 continue
             if _contains_non_ascii(utext):
                 img_bytes = _render_unicode_text_as_escpos(utext, paper_width)
                 if img_bytes:
-                    payload += _ALIGN_CENTER
                     payload += img_bytes
-                    payload += _ALIGN_LEFT
                 else:
-                    # Graceful fallback: encode with replacement chars + log
                     log.warning(
                         "Sinhala raster render unavailable; text will print as '?': %r",
                         utext[:40],
@@ -741,8 +817,9 @@ def render_receipt_escpos(
             else:
                 payload += utext.encode("cp437", errors="replace")
                 payload += b"\n"
+        payload += _ALIGN_LEFT
 
-    # ── 5. Feed lines + auto-cut ─────────────────────────────────────────────
+    # ── 6. Feed lines + auto-cut ─────────────────────────────────────────────
     feed_lines = int(layout.get("rcpt_layout_feed_lines", 4))
     feed_lines = max(0, min(10, feed_lines))
     payload += b"\n" * feed_lines
