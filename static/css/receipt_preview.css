@@ -32,10 +32,12 @@ html, body {
 .rcpt-header { text-align: var(--rcpt-header-align, center); }
 .rcpt-logo {
   max-width: 60%;
-  max-height: 60px;
+  max-height: 72px;
   display: block;
   margin: 4px auto 6px;
   object-fit: contain;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
 }
 .rcpt-company {
   font-size: calc(var(--rcpt-font-size, 12px) + 4px);
@@ -155,6 +157,14 @@ html, body {
     margin: 0;
     padding: 4px 6px 8px;
     width: var(--paper-width, 80mm);
+  }
+  .rcpt-logo {
+    display: block !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    max-width: 60%;
+    max-height: 72px;
+    object-fit: contain;
   }
 }
 

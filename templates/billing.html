@@ -330,6 +330,7 @@
     </div>
     <div class="receipt-modal-footer">
       <button class="btn btn-ghost" id="printReceiptBtn" onclick="printSaleReceipt()">🖨️ Print Receipt</button>
+      <button class="btn btn-ghost" id="cutPaperBtn" onclick="cutReceiptPaper()" title="Send paper cut command to printer">✂️ Auto Cut</button>
       <button class="btn btn-primary" id="newSaleAutoBtn" onclick="_clearAutoCloseTimers();newSale()">➕ New Sale</button>
     </div>
   </div>
@@ -1984,6 +1985,29 @@ async function printSaleReceipt() {
   }
 }
 window.printSaleReceipt = printSaleReceipt;
+
+async function cutReceiptPaper() {
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+  const btn = document.getElementById('cutPaperBtn');
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch('/api/settings/printers/cut', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrf },
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      if (typeof toast === 'function') toast(data.msg || 'Cut failed', 'danger');
+    } else if (typeof toast === 'function') {
+      toast('Paper cut sent', 'success');
+    }
+  } catch (e) {
+    if (typeof toast === 'function') toast(`Cut error: ${e.message}`, 'danger');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+window.cutReceiptPaper = cutReceiptPaper;
 
 function newSale() {
   resetCartState();
