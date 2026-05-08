@@ -11,13 +11,13 @@ column layout and money formatting are shared.
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from flask import current_app, render_template
-from escpos.printer import Dummy
-from pathlib import Path
+from flask import render_template
 
 from printing.models import (
     CompanyProfile,
@@ -111,7 +111,20 @@ def _build_billing_context(source_id: int) -> Dict[str, Any]:
         )
 
     paid_total = sum((_to_decimal(p.amount) for p in sale.payments), Decimal("0"))
-    grand = _to_decimal(sale.total_amount)
+    grand_pre_charge = _to_decimal(sale.total_amount)
+    card_charge_rate = _to_decimal(getattr(sale, "card_charge_rate", None) or 0)
+    card_charge_amount = _to_decimal(getattr(sale, "card_charge_amount", None) or 0)
+    stored_final = _to_decimal(getattr(sale, "final_total", None) or 0)
+    grand = stored_final if stored_final > 0 else grand_pre_charge
+    payment_method = getattr(sale, "payment_method", None) or ", ".join(
+        sorted({(p.method or "").title() for p in sale.payments if p.method})
+    )
+
+    # cash given = tendered for cash payments; change = change_amount
+    cash_given = _to_decimal(sale.tendered) if payment_method == "Cash" else Decimal("0")
+    change_amount = _to_decimal(sale.change_amount) if payment_method == "Cash" else Decimal("0")
+
+    # balance for non-fully-paid invoices (e.g. wholesale credit)
     balance = grand - paid_total
     if balance < 0:
         balance = Decimal("0")
@@ -130,14 +143,18 @@ def _build_billing_context(source_id: int) -> Dict[str, Any]:
         "customer_phone": sale.customer_phone_snapshot or "",
         "vehicle": "",
         "items": items,
-        "subtotal": _to_decimal(sale.subtotal),
+        "subtotal": grand_pre_charge,
         "discount": _to_decimal(sale.discount),
         "tax": _to_decimal(sale.tax),
+        "card_charge_rate": card_charge_rate,
+        "card_charge_amount": card_charge_amount,
         "grand_total": grand,
         "paid": paid_total,
+        "cash_given": cash_given,
+        "change_amount": change_amount,
         "balance": balance,
         "outstanding": balance,
-        "payment_method": ", ".join(sorted({(p.method or "").title() for p in sale.payments if p.method})),
+        "payment_method": payment_method,
         "items_count": sum(int(it.quantity or 0) for it in sale.items),
         "extra": {},
     }
@@ -337,6 +354,9 @@ def render_receipt_text(
     context: Dict[str, Any],
     layout_settings: Optional[Dict[str, Any]] = None,
     company_profile: Optional[Dict[str, Any]] = None,
+    *,
+    skip_footer: bool = False,
+    skip_barcode: bool = False,
 ) -> str:
     """Plain-text representation suitable for thermal raw print or logs."""
     layout = layout_settings or ReceiptLayoutSettings.load()
@@ -417,11 +437,27 @@ def render_receipt_text(
             out.append(kv("Discount:", _money(context["discount"])))
         if context.get("tax"):
             out.append(kv("Tax:", _money(context["tax"])))
+        card_charge = _to_decimal(context.get("card_charge_amount") or 0)
+        card_rate = _to_decimal(context.get("card_charge_rate") or 0)
+        if card_charge > 0:
+            rate_str = f"{card_rate:g}" if card_rate == int(card_rate) else f"{float(card_rate):.4g}"
+            out.append(kv(f"Card Charge {rate_str}%:", _money(card_charge)))
         out.append(kv("Grand Total:", _money(context["grand_total"])))
-        out.append(kv("Total Paid:", _money(context["paid"])))
-        out.append(kv("Balance:", _money(context["balance"])))
+        pm = (context.get("payment_method") or "").strip()
+        if pm == "Cash" and context.get("cash_given"):
+            out.append(kv("Cash Given:", _money(context["cash_given"])))
+            out.append(kv("Balance:", _money(context.get("change_amount") or 0)))
+        else:
+            out.append(kv("Total Paid:", _money(context["paid"])))
+            out.append(kv("Balance:", _money(context["balance"])))
+        if pm:
+            out.append(kv("Payment:", pm))
         append_divider(out)
-    if layout.get("rcpt_layout_show_footer"):
+    if not skip_barcode and context.get("doc_number"):
+        append_divider(out)
+        out.append(center(context["doc_number"]))
+
+    if not skip_footer and layout.get("rcpt_layout_show_footer"):
         footer = company.get("company_footer_text") or "Thank you!"
         out.append(center(footer))
         if company.get("company_receipt_note"):
@@ -429,16 +465,157 @@ def render_receipt_text(
     return "\n".join(out) + "\n"
 
 
-# ESC/POS bytes — minimal but real enough to push to a thermal printer.
+# ---------------------------------------------------------------------------
+# ESC/POS byte constants
+# ---------------------------------------------------------------------------
+
 _ESC = b"\x1b"
 _GS = b"\x1d"
-_CUT = _GS + b"V" + b"\x00"
+_FULL_CUT = _GS + b"V" + b"\x00"      # GS V 0 — full cut
+_PARTIAL_CUT = _GS + b"V" + b"\x01"   # GS V 1 — partial cut
 _INIT = _ESC + b"@"
 _ALIGN_CENTER = _ESC + b"a" + b"\x01"
 _ALIGN_LEFT = _ESC + b"a" + b"\x00"
 _BOLD_ON = _ESC + b"E" + b"\x01"
 _BOLD_OFF = _ESC + b"E" + b"\x00"
 
+# Keep legacy alias so any external code that imported _CUT still works.
+_CUT = _FULL_CUT
+
+
+# ---------------------------------------------------------------------------
+# Sinhala / Unicode helpers
+# ---------------------------------------------------------------------------
+
+def _contains_non_ascii(text: str) -> bool:
+    """Return True if *text* has any character outside plain ASCII (0-127)."""
+    return bool(text) and any(ord(c) > 127 for c in text)
+
+
+def _find_unicode_font(size: int = 24):
+    """Try to find a TrueType font capable of rendering Sinhala / Unicode text.
+
+    Search order: Windows system fonts → bundled font → Linux fallback.
+    Returns an ImageFont object or None.
+    """
+    try:
+        from PIL import ImageFont
+    except ImportError:
+        return None
+
+    candidates = [
+        # Windows — Sinhala-capable system fonts (Vista/7/8/10/11)
+        r"C:\Windows\Fonts\iskoola_pota.ttf",
+        r"C:\Windows\Fonts\nirmalaui.ttf",
+        r"C:\Windows\Fonts\NirmalaUI.ttf",
+        r"C:\Windows\Fonts\ebrima.ttf",
+        r"C:\Windows\Fonts\leelawad.ttf",
+        # Font bundled alongside this package (add your own)
+        str(Path(__file__).parent / "fonts" / "NotoSerifSinhala-Regular.ttf"),
+        str(Path(__file__).parent / "fonts" / "FreeSans.ttf"),
+        # Linux / macOS fallback
+        "/usr/share/fonts/truetype/freefont/FreeSerif.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSerifSinhala-Regular.ttf",
+        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+    ]
+    for path in candidates:
+        if os.path.isfile(path):
+            try:
+                return ImageFont.truetype(path, size)
+            except Exception:
+                continue
+    return None
+
+
+def _render_unicode_text_as_escpos(
+    text: str,
+    paper_width: str = "80mm",
+    font_size: int = 22,
+) -> Optional[bytes]:
+    """Render a Unicode string as ESC/POS raster image bytes.
+
+    Used for Sinhala (and any script that cannot be represented in CP437).
+    Returns raw ESC/POS image bytes, or None if rendering is not available.
+    """
+    import tempfile
+
+    try:
+        from PIL import Image, ImageDraw
+        from escpos.printer import Dummy
+    except ImportError:
+        log.warning(
+            "PIL or python-escpos not available; cannot render Unicode text as image. "
+            "Install Pillow and python-escpos."
+        )
+        return None
+
+    font = _find_unicode_font(font_size)
+    if font is None:
+        log.warning(
+            "No Unicode/Sinhala-capable font found. "
+            "Install 'Iskoola Pota' (Windows) or bundle a Sinhala TTF font in printing/fonts/. "
+            "Sinhala text will print as '?' until a font is available."
+        )
+        return None
+
+    max_width = 576 if paper_width == "80mm" else 384
+    line_height = font_size + 8
+
+    # Simple word-wrap: split on spaces, accumulate until line overflows.
+    words = text.split()
+    lines: List[str] = []
+    current = ""
+    dummy_img = Image.new("RGB", (max_width, line_height), "white")
+    dummy_draw = ImageDraw.Draw(dummy_img)
+
+    for word in words:
+        test = (current + " " + word).strip()
+        try:
+            bbox = dummy_draw.textbbox((0, 0), test, font=font)
+            w = bbox[2] - bbox[0]
+        except AttributeError:
+            # older Pillow
+            w, _ = dummy_draw.textsize(test, font=font)
+        if w > max_width and current:
+            lines.append(current)
+            current = word
+        else:
+            current = test
+    if current:
+        lines.append(current)
+    if not lines:
+        return None
+
+    img_height = len(lines) * line_height + 12
+    img = Image.new("RGB", (max_width, img_height), "white")
+    draw = ImageDraw.Draw(img)
+    y = 6
+    for line in lines:
+        draw.text((max_width // 2, y), line, font=font, fill="black", anchor="mt")
+        y += line_height
+
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            tmp_path = f.name
+        img.save(tmp_path, "PNG")
+        p = Dummy()
+        p.image(tmp_path)
+        return bytes(p.output)
+    except Exception as exc:
+        log.warning("Unicode text→image→escpos failed: %s", exc)
+        return None
+    finally:
+        if tmp_path:
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+
+# ---------------------------------------------------------------------------
+# Logo helpers
+# ---------------------------------------------------------------------------
 
 def _resolve_logo_path(logo_rel: str) -> Optional[Path]:
     if not logo_rel:
@@ -450,42 +627,218 @@ def _resolve_logo_path(logo_rel: str) -> Optional[Path]:
     return p if p.exists() else None
 
 
+def _prepare_logo_for_escpos(logo_path: Path, paper_width: str = "80mm") -> Optional[Path]:
+    """Resize logo image to fit thermal paper width and return a temp PNG path."""
+    import tempfile
+
+    suffix = logo_path.suffix.lower()
+    if suffix == ".svg":
+        log.warning("SVG logo cannot be rasterised for ESC/POS; skip logo.")
+        return None
+    try:
+        from PIL import Image
+        max_px = 576 if paper_width == "80mm" else 384
+        img = Image.open(str(logo_path)).convert("RGB")
+        if img.width > max_px:
+            ratio = max_px / img.width
+            img = img.resize((max_px, max(1, int(img.height * ratio))), Image.LANCZOS)
+        tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+        img.save(tmp.name, "PNG")
+        log.info("logo prepared for escpos path=%s size=%dx%d", tmp.name, img.width, img.height)
+        return Path(tmp.name)
+    except Exception as e:
+        log.warning("logo prepare failed: %s", e)
+        return None
+
+
+# ---------------------------------------------------------------------------
+# ESC/POS barcode helper
+# ---------------------------------------------------------------------------
+
+def _render_escpos_barcode(doc_number: str, paper_width: str = "80mm") -> bytes:
+    """Return ESC/POS bytes for a Code128 barcode.
+
+    Tries python-escpos barcode() first.  On failure, renders the barcode as a
+    raster PNG image (via Pillow + python-barcode).  Final fallback is centred
+    plain text so the document number is always visible.
+    """
+    # ── Attempt 1: ESC/POS native barcode command ────────────────────────────
+    try:
+        from escpos.printer import Dummy as _Dummy
+        p = _Dummy()
+        p._raw(_ALIGN_CENTER)
+        p.barcode(doc_number, "CODE128", function_type="B", align_ct=True)
+        p._raw(_ALIGN_LEFT)
+        result = bytes(p.output)
+        if result:
+            log.info("escpos native barcode rendered doc=%s bytes=%d", doc_number, len(result))
+            return result
+    except Exception as exc:
+        log.warning("ESC/POS native barcode failed (%s), trying image fallback", exc)
+
+    # ── Attempt 2: render barcode as raster image ────────────────────────────
+    try:
+        import io
+        import tempfile
+        import barcode as _barcode
+        from barcode.writer import ImageWriter
+        from PIL import Image
+        from escpos.printer import Dummy as _Dummy2
+
+        code = _barcode.get("code128", doc_number, writer=ImageWriter())
+        buf = io.BytesIO()
+        code.write(buf, options={"write_text": False, "quiet_zone": 2, "module_height": 10})
+        buf.seek(0)
+        img = Image.open(buf).convert("RGB")
+        max_px = 576 if paper_width == "80mm" else 384
+        if img.width > max_px:
+            ratio = max_px / img.width
+            img = img.resize((max_px, max(1, int(img.height * ratio))), Image.LANCZOS)
+        tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+        img.save(tmp.name, "PNG")
+        tmp.close()
+        p2 = _Dummy2()
+        p2._raw(_ALIGN_CENTER)
+        p2.image(tmp.name)
+        p2._raw(_ALIGN_LEFT)
+        result2 = bytes(p2.output)
+        try:
+            os.unlink(tmp.name)
+        except Exception:
+            pass
+        if result2:
+            log.info("escpos barcode image fallback rendered doc=%s", doc_number)
+            return result2
+    except Exception as exc2:
+        log.warning("ESC/POS barcode image fallback failed (%s), using text", exc2)
+
+    # ── Attempt 3: plain text ────────────────────────────────────────────────
+    log.warning("ESC/POS barcode: printing doc number as text for: %s", doc_number)
+    line = doc_number.encode("ascii", errors="replace")
+    return _ALIGN_CENTER + b"\n" + line + b"\n" + _ALIGN_LEFT
+
+
+# ---------------------------------------------------------------------------
+# ESC/POS receipt renderer
+# ---------------------------------------------------------------------------
+
 def render_receipt_escpos(
     receipt_type: str,
     context: Dict[str, Any],
     layout_settings: Optional[Dict[str, Any]] = None,
     company_profile: Optional[Dict[str, Any]] = None,
 ) -> bytes:
-    """Generate raw ESC/POS bytes from the same context."""
+    """Generate raw ESC/POS bytes for a thermal receipt.
+
+    This is the single authoritative renderer for all RAW print paths
+    (both ``escpos`` and ``windows_raw`` print modes). It:
+      - Applies every layout setting from ReceiptLayoutSettings
+      - Prints the company logo as a raster image (if enabled and available)
+      - Detects Sinhala/Unicode text and renders it as a raster image
+      - Appends feed lines + cut command according to auto-cut settings
+    """
+    try:
+        from escpos.printer import Dummy
+    except ImportError:
+        Dummy = None  # type: ignore
+
     layout = layout_settings or ReceiptLayoutSettings.load()
     company = company_profile or CompanyProfile.load()
+    paper_width = str(layout.get("rcpt_layout_paper_width") or "80mm")
 
     payload = _INIT
 
-    # 1. Logo
+    # ── 1. Logo ──────────────────────────────────────────────────────────────
     if layout.get("rcpt_layout_show_logo") and company.get("company_logo_path"):
         lp = _resolve_logo_path(company["company_logo_path"])
         if lp:
+            tmp_logo: Optional[Path] = None
             try:
-                p = Dummy()
-                p._raw(_ALIGN_CENTER)
-                p.image(str(lp))
-                p._raw(_ALIGN_LEFT)
-                payload += p.output
+                tmp_logo = _prepare_logo_for_escpos(lp, paper_width)
+                if tmp_logo and Dummy is not None:
+                    p = Dummy()
+                    p._raw(_ALIGN_CENTER)
+                    p.image(str(tmp_logo))
+                    p._raw(_ALIGN_LEFT)
+                    payload += bytes(p.output)
+                    payload += b"\n"
             except Exception as e:
                 log.warning("escpos logo render failed: %s", e)
+            finally:
+                if tmp_logo and tmp_logo.exists():
+                    try:
+                        tmp_logo.unlink()
+                    except Exception:
+                        pass
+        else:
+            log.warning(
+                "Logo enabled but file not found: %s — printing without logo.",
+                company.get("company_logo_path"),
+            )
 
-    # 2. Text Content
-    text = render_receipt_text(receipt_type, context, layout, company)
-    payload += _ALIGN_CENTER
-    if layout.get("rcpt_layout_show_company_name"):
-        payload += _BOLD_ON
-    payload += _ALIGN_LEFT + _BOLD_OFF
-    safe = text.encode("cp437", errors="replace")
-    payload += safe
-    payload += b"\n\n\n"
+    # ── 2. Detect Sinhala / Unicode in footer fields ─────────────────────────
+    show_footer = bool(layout.get("rcpt_layout_show_footer"))
+    footer_text = (company.get("company_footer_text") or "Thank you!") if show_footer else ""
+    receipt_note = (company.get("company_receipt_note") or "") if show_footer else ""
+
+    has_unicode_footer = _contains_non_ascii(footer_text) or _contains_non_ascii(receipt_note)
+
+    # ── 3. Text body — always skip footer+barcode; both added separately ──────
+    text = render_receipt_text(
+        receipt_type, context, layout, company,
+        skip_footer=True,
+        skip_barcode=True,
+    )
+    payload += _ALIGN_LEFT
+    payload += text.encode("cp437", errors="replace")
+
+    # ── 4. Mandatory barcode (before footer, always) ──────────────────────────
+    doc_number = context.get("doc_number", "")
+    if doc_number:
+        payload += _render_escpos_barcode(doc_number, paper_width)
+
+    # ── 5. Footer (plain cp437 or Sinhala/Unicode raster) ────────────────────
+    if show_footer:
+        payload += _ALIGN_CENTER
+        for utext in [footer_text, receipt_note]:
+            if not utext:
+                continue
+            if _contains_non_ascii(utext):
+                img_bytes = _render_unicode_text_as_escpos(utext, paper_width)
+                if img_bytes:
+                    payload += img_bytes
+                else:
+                    log.warning(
+                        "Sinhala raster render unavailable; text will print as '?': %r",
+                        utext[:40],
+                    )
+                    payload += utext.encode("cp437", errors="replace")
+                    payload += b"\n"
+            else:
+                payload += utext.encode("cp437", errors="replace")
+                payload += b"\n"
+        payload += _ALIGN_LEFT
+
+    # ── 6. Feed lines + auto-cut ─────────────────────────────────────────────
+    feed_lines = int(layout.get("rcpt_layout_feed_lines", 4))
+    feed_lines = max(0, min(10, feed_lines))
+    payload += b"\n" * feed_lines
+
     if layout.get("rcpt_layout_auto_cut", True):
-        payload += _CUT
+        cut_type = str(layout.get("rcpt_layout_cut_type", "full")).strip().lower()
+        payload += _PARTIAL_CUT if cut_type == "partial" else _FULL_CUT
+        log.info("auto_cut appended cut_type=%s feed_lines=%d", cut_type, feed_lines)
+
+    log.info(
+        "escpos payload built type=%s doc=%s paper=%s logo=%s unicode_footer=%s auto_cut=%s bytes=%d",
+        receipt_type,
+        context.get("doc_number"),
+        paper_width,
+        bool(layout.get("rcpt_layout_show_logo")),
+        has_unicode_footer,
+        bool(layout.get("rcpt_layout_auto_cut")),
+        len(payload),
+    )
     return payload
 
 

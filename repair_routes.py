@@ -335,6 +335,58 @@ def register_repair_routes(app, log_action=None):
         ).order_by(RepairJob.received_date.desc()).limit(300).all()
         return jsonify({'jobs': [j.to_dict() for j in jobs]})
 
+    @app.route('/api/service-jobs/search', methods=['GET'])
+    @login_required
+    def api_service_jobs_search():
+        """Universal invoice/job search — supports job#, customer, phone, vehicle, barcode scan."""
+        q = (request.args.get('q') or '').strip()
+        if not q:
+            return jsonify({'success': True, 'results': [], 'count': 0})
+
+        like_q = f'%{q}%'
+
+        # Canonical plate for vehicle reg matching (strip non-alphanumeric)
+        canonical_q = re.sub(r'[^A-Z0-9]', '', q.upper())
+
+        from sqlalchemy import or_ as _or_
+        filters = _or_(
+            RepairJob.job_number.ilike(like_q),
+            RepairJob.customer_name.ilike(like_q),
+            RepairJob.customer_name_snapshot.ilike(like_q),
+            RepairJob.customer_phone.ilike(like_q),
+            RepairJob.customer_phone_snapshot.ilike(like_q),
+            RepairJob.vehicle_reg_no.ilike(like_q),
+            RepairJob.vehicle_model.ilike(like_q),
+            RepairJob.vehicle_make.ilike(like_q),
+        )
+
+        # Also try canonical plate match for scanned barcodes / plate numbers
+        if canonical_q:
+            filters = _or_(
+                filters,
+                _canonical_plate_expr(RepairJob.vehicle_reg_no).ilike(f'%{canonical_q}%'),
+            )
+
+        jobs = (
+            RepairJob.query
+            .filter(filters)
+            .options(
+                selectinload(RepairJob.parts),
+                selectinload(RepairJob.payments),
+                joinedload(RepairJob.technician),
+                joinedload(RepairJob.customer),
+            )
+            .order_by(RepairJob.received_date.desc())
+            .limit(60)
+            .all()
+        )
+
+        return jsonify({
+            'success': True,
+            'count': len(jobs),
+            'results': [j.to_dict() for j in jobs],
+        })
+
     @app.route('/api/vehicle-brands', methods=['GET'])
     @login_required
     def api_vehicle_brands_search():

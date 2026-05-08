@@ -288,6 +288,12 @@ MIGRATIONS: list[Migration] = [
         "ALTER TABLE stock_movements ADD COLUMN reference_type VARCHAR(40) NULL",
         "ALTER TABLE stock_movements ADD COLUMN reference_id INT NULL",
     ]),
+    Migration(23, 'v8.5 card charge and payment method on sales', [
+        "ALTER TABLE sales ADD COLUMN payment_method VARCHAR(20)",
+        "ALTER TABLE sales ADD COLUMN card_charge_rate NUMERIC(7,4) DEFAULT 0",
+        "ALTER TABLE sales ADD COLUMN card_charge_amount NUMERIC(14,2) DEFAULT 0",
+        "ALTER TABLE sales ADD COLUMN final_total NUMERIC(14,2) DEFAULT 0",
+    ]),
 ]
 
 

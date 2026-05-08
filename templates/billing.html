@@ -271,6 +271,21 @@
       <div id="changeDisplay" style="display:none;padding:10px 14px;background:rgba(16,185,129,.12);border-radius:10px;color:var(--accent2);font-weight:700;font-size:14px"></div>
     </div>
 
+    <div id="cardChargeSection" style="display:none;margin-bottom:14px">
+      <div style="padding:10px 14px;background:rgba(245,158,11,.12);border-radius:10px;font-size:13px;color:var(--text)">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span>Subtotal</span><strong id="cardChargeSubtotal">LKR 0.00</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px;color:#b45309">
+          <span>Card Service Charge (<span id="cardChargeRateLabel">2.5</span>%)</span>
+          <strong id="cardChargeAmountDisplay">LKR 0.00</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-weight:700;font-size:14px;border-top:1px solid rgba(0,0,0,.1);padding-top:6px;margin-top:4px">
+          <span>Total After Charge</span><strong id="cardChargeFinalTotal">LKR 0.00</strong>
+        </div>
+      </div>
+    </div>
+
     <div id="storeCreditSection" style="display:none;margin-bottom:14px">
       <div style="padding:10px 14px;background:rgba(16,185,129,.1);border-radius:10px;font-size:13px;color:var(--accent2)">
         💳 Available store credit: <strong id="modalStoreCreditAvail">LKR 0.00</strong>
@@ -330,6 +345,7 @@
     </div>
     <div class="receipt-modal-footer">
       <button class="btn btn-ghost" id="printReceiptBtn" onclick="printSaleReceipt()">🖨️ Print Receipt</button>
+      <button class="btn btn-ghost" id="cutPaperBtn" onclick="cutReceiptPaper()" title="Send paper cut command to printer">✂️ Auto Cut</button>
       <button class="btn btn-primary" id="newSaleAutoBtn" onclick="_clearAutoCloseTimers();newSale()">➕ New Sale</button>
     </div>
   </div>
@@ -1377,7 +1393,11 @@ function recalc() {
   document.getElementById('discountLine').textContent = '- ' + fmt(totalDisc);
   document.getElementById('taxLine').textContent      = fmt(tax);
   document.getElementById('totalDisplay').textContent = fmt(tot);
-  document.getElementById('modalTotal').textContent   = fmt(tot);
+  if (typeof currentMethod !== 'undefined' && currentMethod === 'Card') {
+    updateCardChargeDisplay();
+  } else {
+    document.getElementById('modalTotal').textContent = fmt(tot);
+  }
   document.getElementById('payBtn').disabled = cart.length === 0;
   const hb = document.getElementById('holdBtn'); if(hb) hb.disabled = cart.length === 0;
 }
@@ -1660,6 +1680,25 @@ function addWeightItem(product, quantityKg, totalPrice, label) {
   applyAutoDiscount(cartIndex).finally(() => renderCart());
 }
 
+const CARD_CHARGE_RATE = 2.5; // default 2.5% — make configurable in Settings later
+
+function getCardFinalTotal() {
+  const tot = parseFloat(document.getElementById('totalDisplay').textContent.replace(/[^0-9.-]/g,'')) || 0;
+  const charge = Math.round(tot * CARD_CHARGE_RATE / 100 * 100) / 100;
+  return { subtotal: tot, charge, finalTotal: Math.round((tot + charge) * 100) / 100 };
+}
+
+function updateCardChargeDisplay() {
+  const { subtotal, charge, finalTotal } = getCardFinalTotal();
+  const el = document.getElementById('cardChargeSection');
+  if (!el) return;
+  document.getElementById('cardChargeSubtotal').textContent    = fmt(subtotal);
+  document.getElementById('cardChargeAmountDisplay').textContent = fmt(charge);
+  document.getElementById('cardChargeFinalTotal').textContent  = fmt(finalTotal);
+  document.getElementById('cardChargeRateLabel').textContent   = CARD_CHARGE_RATE;
+  document.getElementById('modalTotal').textContent            = 'LKR ' + finalTotal.toFixed(2);
+}
+
 function selectPayMethod(m) {
   currentMethod = m;
   if (m !== 'Card') _currentCardTxn = null;
@@ -1670,11 +1709,19 @@ function selectPayMethod(m) {
     b.style.color       = sel ? 'var(--accent)' : 'var(--text)';
   });
   document.getElementById('cashSection').style.display        = m === 'Cash'        ? 'block' : 'none';
+  document.getElementById('cardChargeSection').style.display  = m === 'Card'        ? 'block' : 'none';
   document.getElementById('payhereCustomer').style.display    = m === 'PayHere'     ? 'block' : 'none';
   document.getElementById('storeCreditSection').style.display = m === 'StoreCredit' ? 'block' : 'none';
   const sandboxWarning = document.getElementById('payhereSandboxCashierWarning');
   if (sandboxWarning) {
     sandboxWarning.style.display = (m === 'PayHere' && (storeSettings.payhere_sandbox === true || storeSettings.payhere_sandbox === 'true' || storeSettings.payhere_sandbox === '1')) ? 'block' : 'none';
+  }
+  // Restore modal total for non-card methods
+  if (m !== 'Card') {
+    const tot = parseFloat(document.getElementById('totalDisplay').textContent.replace(/[^0-9.-]/g,'')) || 0;
+    document.getElementById('modalTotal').textContent = fmt(tot);
+  } else {
+    updateCardChargeDisplay();
   }
 }
 selectPayMethod('Cash');
@@ -1783,7 +1830,15 @@ async function confirmPayment() {
     phone:      document.getElementById('phPhone')?.value || '0771234567',
     address: 'Garage', city: 'Colombo', country: 'Sri Lanka'
   };
-  const totNum = parseFloat(document.getElementById('totalDisplay').textContent.replace(/[^0-9.-]/g,'')) || 0;
+  const baseTotal = parseFloat(document.getElementById('totalDisplay').textContent.replace(/[^0-9.-]/g,'')) || 0;
+  let totNum = baseTotal;
+  let cardChargeRate = 0, cardChargeAmount = 0;
+  if (method === 'Card') {
+    const cardCalc = getCardFinalTotal();
+    cardChargeRate   = CARD_CHARGE_RATE;
+    cardChargeAmount = cardCalc.charge;
+    totNum           = cardCalc.finalTotal;
+  }
 
   if (!method) {
     toast('Select a payment method', 'error');
@@ -1802,6 +1857,8 @@ async function confirmPayment() {
     tendered: null,
     discount: discFlat,
     discount_percent: discPct,
+    card_charge_rate: cardChargeRate,
+    card_charge_amount: cardChargeAmount,
     wholesale_customer_id: wsId || null,
     retail_customer: {
       id: document.getElementById('retailCustomerId')?.value ? parseInt(document.getElementById('retailCustomerId').value) : null,
@@ -1984,6 +2041,29 @@ async function printSaleReceipt() {
   }
 }
 window.printSaleReceipt = printSaleReceipt;
+
+async function cutReceiptPaper() {
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+  const btn = document.getElementById('cutPaperBtn');
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch('/api/settings/printers/cut', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrf },
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      if (typeof toast === 'function') toast(data.msg || 'Cut failed', 'danger');
+    } else if (typeof toast === 'function') {
+      toast('Paper cut sent', 'success');
+    }
+  } catch (e) {
+    if (typeof toast === 'function') toast(`Cut error: ${e.message}`, 'danger');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+window.cutReceiptPaper = cutReceiptPaper;
 
 function newSale() {
   resetCartState();

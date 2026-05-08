@@ -60,7 +60,12 @@ a = Analysis(
         ('static',           'static'),
         ('version.py',       '.'),
         ('update_config.py', '.'),   # GitHub update configuration constants
+<<<<<<< HEAD
     ] + _seed_db_datas + collect_data_files('escpos'),
+=======
+        *collect_data_files('escpos'),
+    ] + _seed_db_datas,
+>>>>>>> c51bdc81e2b6eac542a319988f7f8bb70d22a87a
     hiddenimports=[
         # ── Core application modules ────────────────────────────────────────────
         # app is the primary Flask application; it is loaded via
