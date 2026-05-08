@@ -123,21 +123,29 @@ html, body {
   padding-top: 4px;
 }
 
-/* ───── barcode (visual filler — real barcode lib isn't required) ───── */
-.rcpt-barcode { text-align: center; margin: 4px 0; }
+/* ───── barcode ───── */
+.rcpt-barcode { text-align: center; margin: 6px 0 4px; }
+.rcpt-barcode-img { display: block; margin: 0 auto 2px; max-width: 100%; height: 40px; }
 .rcpt-barcode .bars {
   display: inline-flex;
   gap: 2px;
   margin-bottom: 2px;
-  align-items: end;
-  height: 30px;
+  align-items: flex-end;
+  height: 36px;
 }
-.rcpt-barcode .bar { display: inline-block; width: 3px; background: #000; }
+.rcpt-barcode .bar { display: inline-block; width: 2px; background: #000; }
 .rcpt-barcode .bar-0 { height: 100%; }
 .rcpt-barcode .bar-1 { height: 60%; }
 .rcpt-barcode .bar-2 { height: 80%; }
 .rcpt-barcode .bar-3 { height: 40%; }
-.rcpt-barcode-text { font-size: calc(var(--rcpt-font-size, 12px) - 2px); letter-spacing: 2px; }
+.rcpt-barcode-text {
+  font-size: calc(var(--rcpt-font-size, 12px) - 1px);
+  letter-spacing: 2px;
+  font-family: ui-monospace, 'Courier New', monospace;
+}
+@media print {
+  .rcpt-barcode-img { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
 
 /* ───── footer ───── */
 .rcpt-footer { text-align: var(--rcpt-footer-align, center); margin-top: 4px; }

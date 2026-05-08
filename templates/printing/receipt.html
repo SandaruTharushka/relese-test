@@ -161,13 +161,16 @@
       {% if show_divider %}<div class="rcpt-divider"></div>{% endif %}
     {% endif %}
 
-    {% if layout.rcpt_layout_show_barcode and ctx.doc_number %}
+    {% if ctx.doc_number %}
       <div class="rcpt-barcode">
-        <div class="bars">
-          {% for ch in ctx.doc_number[:24] %}
-            <span class="bar bar-{{ loop.index0 % 4 }}"></span>
-          {% endfor %}
-        </div>
+        <svg id="rcpt-barcode-svg" class="rcpt-barcode-img"></svg>
+        <noscript>
+          <div class="bars">
+            {% for ch in ctx.doc_number[:32] %}
+              <span class="bar bar-{{ loop.index0 % 4 }}"></span>
+            {% endfor %}
+          </div>
+        </noscript>
         <div class="rcpt-barcode-text">{{ ctx.doc_number }}</div>
       </div>
       {% if show_divider %}<div class="rcpt-divider"></div>{% endif %}
@@ -183,9 +186,48 @@
     {% endif %}
   </div>
 
+  <script>
+  (function(){
+    var docNum = {{ ctx.doc_number | tojson }};
+    var svgEl = document.getElementById('rcpt-barcode-svg');
+    if (!svgEl || !docNum) return;
+
+    function drawFallbackBars(svg, text) {
+      svg.setAttribute('viewBox', '0 0 120 36');
+      svg.setAttribute('width', '120');
+      svg.setAttribute('height', '36');
+      var heights = [36,22,30,14,36,18,28,36,10,24,36,16,30,20,36,14,28,36,22,16,36,12,30,18,36,24,14,36,20,28,12,36];
+      var x = 2;
+      for (var i = 0; i < Math.min(text.length, heights.length); i++) {
+        var rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+        rect.setAttribute('x', x); rect.setAttribute('y', 36 - heights[i]);
+        rect.setAttribute('width', '2'); rect.setAttribute('height', heights[i]);
+        rect.setAttribute('fill', '#000');
+        svg.appendChild(rect);
+        x += (i % 3 === 1) ? 2 : 3;
+      }
+    }
+
+    function tryJsBarcode() {
+      if (typeof JsBarcode === 'undefined') { drawFallbackBars(svgEl, docNum); return; }
+      try {
+        JsBarcode(svgEl, docNum, {
+          format: 'CODE128', displayValue: false,
+          margin: 0, height: 36, width: 1.4, background: '#fff', lineColor: '#000'
+        });
+      } catch(e) { drawFallbackBars(svgEl, docNum); }
+    }
+
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/barcodes/JsBarcode.code128.min.js';
+    s.onload = tryJsBarcode;
+    s.onerror = function(){ drawFallbackBars(svgEl, docNum); };
+    document.head.appendChild(s);
+  })();
+  </script>
   {% if auto_print or request.args.get('auto_print') in ('1','true','yes') %}
     <script>
-      window.addEventListener('load', () => setTimeout(() => window.print(), 300));
+      window.addEventListener('load', () => setTimeout(() => window.print(), 600));
     </script>
   {% endif %}
 </body>

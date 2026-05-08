@@ -123,12 +123,17 @@
         <button class="chip" id="chip-delivered"    onclick="filterJobs('delivered')"    style="border-color:var(--muted);color:var(--muted)">Delivered</button>
       </div>
 
-      <!-- Reg No search -->
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
-        <input id="regNoSearch" type="text" class="input" placeholder="Search by Licence Plate (e.g. WP CAB-1234)" style="max-width:340px">
-        <button class="btn btn-ghost btn-sm" onclick="searchByRegNo()">Search</button>
-        <button class="btn btn-ghost btn-sm" onclick="clearRegNoSearch()">Clear</button>
+      <!-- Universal invoice / job search -->
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+        <input id="jobSearch" type="text" class="input"
+          placeholder="Search Job #, Customer, Phone, Vehicle, Reg. No., Barcode…"
+          style="flex:1;min-width:220px;max-width:520px"
+          onkeydown="if(event.key==='Enter')searchJobs()"
+          oninput="if(!this.value.trim())clearJobSearch()">
+        <button class="btn btn-primary btn-sm" onclick="searchJobs()">Search</button>
+        <button class="btn btn-ghost btn-sm" onclick="clearJobSearch()">Clear</button>
       </div>
+      <div id="searchResultBanner" style="display:none;background:rgba(79,108,246,.08);border:1px solid rgba(79,108,246,.2);border-radius:10px;padding:8px 14px;font-size:13px;color:var(--accent);margin-bottom:8px"></div>
 
       <div class="card" style="padding:0;overflow:hidden">
         <table class="table">
@@ -697,15 +702,24 @@ function filterJobs(status){
   loadJobs(status);
 }
 
-async function searchByRegNo(){
-  const q=(document.getElementById('regNoSearch').value||'').trim();
-  if(!q) return;
-  const r=await fetch('/api/repairs?reg_no='+encodeURIComponent(q));
-  const d=await r.json();
-  renderJobs(d.jobs||[]);
+async function searchJobs(){
+  const q=(document.getElementById('jobSearch').value||'').trim();
+  if(!q){ clearJobSearch(); return; }
+  try{
+    const r=await fetch('/api/service-jobs/search?q='+encodeURIComponent(q));
+    const d=await r.json();
+    const results=d.results||[];
+    renderJobs(results);
+    const banner=document.getElementById('searchResultBanner');
+    banner.style.display='';
+    banner.textContent=results.length
+      ? `Found ${results.length} result${results.length!==1?'s':''} for "${q}"`
+      : `No results found for "${q}"`;
+  }catch(e){ console.error('Job search failed',e); }
 }
-function clearRegNoSearch(){
-  document.getElementById('regNoSearch').value='';
+function clearJobSearch(){
+  document.getElementById('jobSearch').value='';
+  document.getElementById('searchResultBanner').style.display='none';
   loadJobs(currentFilter);
 }
 
