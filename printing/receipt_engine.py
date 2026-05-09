@@ -25,6 +25,7 @@ from printing.models import (
     ReceiptLayoutSettings,
     all_settings_snapshot,
 )
+from printing.font_manager import load_sinhala_font
 
 log = logging.getLogger(__name__)
 
@@ -492,90 +493,59 @@ def _contains_non_ascii(text: str) -> bool:
     return bool(text) and any(ord(c) > 127 for c in text)
 
 
-def _find_unicode_font(size: int = 24):
-    """Try to find a TrueType font capable of rendering Sinhala / Unicode text.
-
-    Search order: Windows system fonts → bundled font → Linux fallback.
-    Returns an ImageFont object or None.
-    """
-    try:
-        from PIL import ImageFont
-    except ImportError:
-        return None
-
-    candidates = [
-        # Windows — Sinhala-capable system fonts (Vista/7/8/10/11)
-        r"C:\Windows\Fonts\iskoola_pota.ttf",
-        r"C:\Windows\Fonts\nirmalaui.ttf",
-        r"C:\Windows\Fonts\NirmalaUI.ttf",
-        r"C:\Windows\Fonts\ebrima.ttf",
-        r"C:\Windows\Fonts\leelawad.ttf",
-        # Font bundled alongside this package (add your own)
-        str(Path(__file__).parent / "fonts" / "NotoSerifSinhala-Regular.ttf"),
-        str(Path(__file__).parent / "fonts" / "FreeSans.ttf"),
-        # Linux / macOS fallback
-        "/usr/share/fonts/truetype/freefont/FreeSerif.ttf",
-        "/usr/share/fonts/truetype/noto/NotoSerifSinhala-Regular.ttf",
-        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
-    ]
-    for path in candidates:
-        if os.path.isfile(path):
-            try:
-                return ImageFont.truetype(path, size)
-            except Exception:
-                continue
-    return None
-
-
 def _render_unicode_text_as_escpos(
     text: str,
     paper_width: str = "80mm",
     font_size: int = 22,
+    align: str = "center",
 ) -> Optional[bytes]:
-    """Render a Unicode string as ESC/POS raster image bytes.
+    """Render a Unicode / Sinhala string as ESC/POS raster image bytes.
 
-    Used for Sinhala (and any script that cannot be represented in CP437).
-    Returns raw ESC/POS image bytes, or None if rendering is not available.
+    Uses the centralized font_manager so the bundled font is always found
+    in both development and PyInstaller frozen modes — no Windows system
+    font required.
+
+    Processing pipeline:
+      1. Render text to greyscale PIL image using bundled TTF
+      2. Apply unsharp-mask sharpening for crisp glyph edges
+      3. Threshold to 1-bit monochrome (thermal-safe, no grey blobs)
+      4. Resize to fit paper width (no stretching)
+      5. Hand off to python-escpos Dummy printer → raw bytes
+
+    Returns None when Pillow / escpos is unavailable or the font is missing.
     """
     import tempfile
 
     try:
-        from PIL import Image, ImageDraw
+        from PIL import Image, ImageDraw, ImageFilter
         from escpos.printer import Dummy
     except ImportError:
         log.warning(
-            "PIL or python-escpos not available; cannot render Unicode text as image. "
-            "Install Pillow and python-escpos."
+            "Pillow or python-escpos not installed; cannot render Sinhala text as image."
         )
         return None
 
-    font = _find_unicode_font(font_size)
+    font = load_sinhala_font(font_size)
     if font is None:
-        log.warning(
-            "No Unicode/Sinhala-capable font found. "
-            "Install 'Iskoola Pota' (Windows) or bundle a Sinhala TTF font in printing/fonts/. "
-            "Sinhala text will print as '?' until a font is available."
-        )
         return None
 
-    max_width = 576 if paper_width == "80mm" else 384
-    line_height = font_size + 8
+    max_width = 560 if paper_width == "80mm" else 376
+    line_height = font_size + 10
 
-    # Simple word-wrap: split on spaces, accumulate until line overflows.
+    # ── Word-wrap ────────────────────────────────────────────────────────────
     words = text.split()
     lines: List[str] = []
     current = ""
-    dummy_img = Image.new("RGB", (max_width, line_height), "white")
-    dummy_draw = ImageDraw.Draw(dummy_img)
+    _probe = Image.new("L", (max_width, line_height), 255)
+    _draw = ImageDraw.Draw(_probe)
 
     for word in words:
         test = (current + " " + word).strip()
         try:
-            bbox = dummy_draw.textbbox((0, 0), test, font=font)
+            bbox = _draw.textbbox((0, 0), test, font=font)
             w = bbox[2] - bbox[0]
         except AttributeError:
-            # older Pillow
-            w, _ = dummy_draw.textsize(test, font=font)
+            w, _ = _draw.textsize(test, font=font)  # type: ignore[attr-defined]
         if w > max_width and current:
             lines.append(current)
             current = word
@@ -586,13 +556,21 @@ def _render_unicode_text_as_escpos(
     if not lines:
         return None
 
-    img_height = len(lines) * line_height + 12
-    img = Image.new("RGB", (max_width, img_height), "white")
+    # ── Render greyscale ─────────────────────────────────────────────────────
+    img_height = len(lines) * line_height + 16
+    img = Image.new("L", (max_width, img_height), 255)  # "L" = 8-bit greyscale
     draw = ImageDraw.Draw(img)
-    y = 6
-    for line in lines:
-        draw.text((max_width // 2, y), line, font=font, fill="black", anchor="mt")
+    y = 8
+    x_anchor = max_width // 2 if align == "center" else 4
+    pil_anchor = "mt" if align == "center" else "lt"
+    for ln in lines:
+        draw.text((x_anchor, y), ln, font=font, fill=0, anchor=pil_anchor)
         y += line_height
+
+    # ── Sharpen → threshold → monochrome ────────────────────────────────────
+    img = img.filter(ImageFilter.UnsharpMask(radius=1, percent=180, threshold=2))
+    img = img.point(lambda p: 0 if p < 160 else 255, "L")
+    img = img.convert("1")  # 1-bit monochrome for thermal
 
     tmp_path = None
     try:
@@ -603,7 +581,7 @@ def _render_unicode_text_as_escpos(
         p.image(tmp_path)
         return bytes(p.output)
     except Exception as exc:
-        log.warning("Unicode text→image→escpos failed: %s", exc)
+        log.warning("Sinhala text→image→escpos failed: %s", exc)
         return None
     finally:
         if tmp_path:

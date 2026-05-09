@@ -623,6 +623,8 @@ let allJobs = [], currentFilter = '', currentJobId = null, currentInspectionJobI
 // productsCache removed — part name now uses live search via /api/products/search
 let lastLookupPayload = null;
 let customerSearchTimer = null;
+// Injected from Flask — controls whether the delete button shows for delivered jobs.
+const CURRENT_USER_IS_ADMIN = {{ 'true' if is_admin else 'false' }};
 let brandSearchTimer = null;
 let brandRequestSeq = 0;
 let activeBrandIndex = -1;
@@ -689,7 +691,7 @@ function renderJobs(jobs){
       <td style="white-space:nowrap">
         <button class="btn btn-ghost btn-sm" onclick="viewJob(${j.id})" title="View job details">View</button>
         <button class="btn btn-ghost btn-sm" onclick="openEditJobModal(${j.id})" title="Edit job">Edit</button>
-        <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="deleteJob(${j.id}, '${(j.job_number||'').replace(/'/g, '\\\'')}')">🗑</button>
+        ${(j.status !== 'delivered' || CURRENT_USER_IS_ADMIN) ? `<button class="btn btn-ghost btn-sm" style="color:var(--danger)" title="${j.status==='delivered'?'Admin: delete delivered job':''}" onclick="deleteJob(${j.id}, '${(j.job_number||'').replace(/'/g, '\\\'')}', ${j.status==='delivered'})">🗑</button>` : ''}
       </td>
     </tr>
   `).join('');
@@ -1189,7 +1191,9 @@ function renderJobDetail(j){
   btns+=`<button class="btn btn-ghost" onclick="printJobReceipt(${j.id})" style="gap:6px">🖨️ Print Receipt</button>`;
   btns+=`<button class="btn btn-ghost" onclick="cutReceiptPaper()" title="Send paper cut command to printer" style="gap:6px">✂️ Auto Cut</button>`;
   if(j.status!=='delivered'){
-    btns+=`<button class="btn btn-ghost" style="color:var(--danger);gap:6px" onclick="deleteJob(${j.id}, '${(j.job_number||'').replace(/'/g, '\\\'')}')">🗑 Delete</button>`;
+    btns+=`<button class="btn btn-ghost" style="color:var(--danger);gap:6px" onclick="deleteJob(${j.id}, '${(j.job_number||'').replace(/'/g, '\\\'')}', false)">🗑 Delete</button>`;
+  } else if(CURRENT_USER_IS_ADMIN){
+    btns+=`<button class="btn btn-ghost" style="color:var(--danger);gap:6px;opacity:0.8" title="Admin: permanently delete delivered job" onclick="deleteJob(${j.id}, '${(j.job_number||'').replace(/'/g, '\\\'')}', true)">🗑 Delete (Admin)</button>`;
   }
   if(j.status!=='delivered'&&j.status!=='cancelled'){
     btns+=`<button class="btn btn-ghost" onclick="openInspectionModal(${j.id})" style="gap:6px">🔍 Inspection</button>`;
@@ -1305,22 +1309,56 @@ async function saveEditedJob(){
   }
 }
 
-async function deleteJob(id, jobNumber=''){
+function deleteJob(id, jobNumber='', isDelivered=false){
   const label = jobNumber || `#${id}`;
-  if(!confirm(`Delete job ${label}? This will remove parts, payments, and inspection records.`)) return;
-  const r = await fetch('/api/repairs/' + id, { method:'DELETE', headers: csrfHeaders() });
-  const d = await r.json().catch(() => ({}));
-  if(!r.ok || !d.success){
-    alert('Error: ' + (d.error || 'Could not delete this job.'));
-    return;
-  }
-  if(currentJobId === id){
-    closeModal('viewJobModal');
-    closeModal('editJobModal');
-    currentJobId = null;
-  }
-  await loadJobs(currentFilter);
-  await loadStats();
+  const msg = isDelivered
+    ? `Are you sure you want to permanently delete delivered job ${label}?\n\nThis may affect reports and invoices. This action cannot be undone.`
+    : `Delete job ${label}?\n\nThis will permanently remove parts, payments, and inspection records.`;
+
+  // Build a confirmation modal element
+  const existingModal = document.getElementById('_deleteConfirmModal');
+  if(existingModal) existingModal.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = '_deleteConfirmModal';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--card,#fff);border-radius:18px;padding:32px 28px;max-width:420px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,0.22);">
+      <div style="font-size:18px;font-weight:700;margin-bottom:12px;color:var(--danger,#d33);">
+        ${isDelivered ? '⚠️ Delete Delivered Job' : '🗑 Delete Service Job'}
+      </div>
+      <div style="font-size:14px;line-height:1.6;color:var(--text,#333);white-space:pre-wrap;margin-bottom:24px;">${msg}</div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button id="_deleteCancel" class="btn btn-ghost" style="min-width:90px;">Cancel</button>
+        <button id="_deleteConfirm" class="btn" style="background:var(--danger,#d33);color:#fff;min-width:110px;">
+          ${isDelivered ? 'Delete Anyway' : 'Delete'}
+        </button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  document.getElementById('_deleteCancel').onclick = () => overlay.remove();
+  overlay.addEventListener('click', e => { if(e.target === overlay) overlay.remove(); });
+
+  document.getElementById('_deleteConfirm').onclick = async () => {
+    overlay.remove();
+    const r = await fetch('/api/repairs/' + id, { method:'DELETE', headers: csrfHeaders() });
+    const d = await r.json().catch(() => ({}));
+    if(!r.ok || !d.success){
+      const errMsg = d.error || 'Could not delete this job.';
+      if(typeof toast === 'function') toast(errMsg, 'error');
+      else alert('Error: ' + errMsg);
+      return;
+    }
+    if(typeof toast === 'function') toast(`Job ${label} deleted.`, 'success');
+    if(currentJobId === id){
+      closeModal('viewJobModal');
+      closeModal('editJobModal');
+      currentJobId = null;
+    }
+    await loadJobs(currentFilter);
+    await loadStats();
+  };
 }
 
 function hideBrandMenu(){
