@@ -443,7 +443,7 @@ function updateReturnImeiOptions(productId) {
 }
 
 async function lookupInvoiceByNumber(invoiceNo) {
-  const inv = (invoiceNo || '').trim();
+  let inv = (invoiceNo || '').trim();
   if (!inv) {
     document.getElementById('invoiceInfo').textContent = '';
     document.getElementById('ret_invoice_id').value = '';
@@ -451,6 +451,35 @@ async function lookupInvoiceByNumber(invoiceNo) {
     resetReturnImeiSelection();
     return;
   }
+
+  // Handle RET: prefix — look up the return receipt via the universal endpoint.
+  const upper = inv.toUpperCase();
+  if (upper.startsWith('RET:') || upper.startsWith('RET-')) {
+    try {
+      const res = await fetch('/api/receipt-lookup/' + encodeURIComponent(inv));
+      const data = await res.json();
+      if (data && data.ok && data.type === 'return') {
+        document.getElementById('invoiceInfo').innerHTML =
+          `<span style="color:var(--accent)">Return receipt <strong>${data.number}</strong> found` +
+          (data.display && data.display.original_invoice ? ` (original invoice: ${data.display.original_invoice})` : '') +
+          '. To process a new return, scan or enter the original <em>sales</em> invoice number.</span>';
+        document.getElementById('ret_invoice').value = data.display && data.display.original_invoice
+          ? data.display.original_invoice : inv;
+      } else {
+        document.getElementById('invoiceInfo').innerHTML = '<span style="color:var(--danger)">Return receipt not found</span>';
+      }
+    } catch(e) {
+      document.getElementById('invoiceInfo').innerHTML = '<span style="color:var(--danger)">Lookup failed</span>';
+    }
+    return;
+  }
+
+  // Strip SALE: prefix so the raw invoice number is passed to the search.
+  if (upper.startsWith('SALE:')) {
+    inv = inv.slice(5).trim();
+    document.getElementById('ret_invoice').value = inv;
+  }
+
   const res = await api(`/api/invoices/search?q=${encodeURIComponent(inv)}&limit=1`);
   if (!res || !res.length) {
     document.getElementById('invoiceInfo').innerHTML = '<span style="color:var(--danger)">Invoice not found</span>';
@@ -548,6 +577,18 @@ function setupInvoiceSearch() {
   });
   input.addEventListener('focus', debouncedFetch);
   input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (results.style.display !== 'none' && activeIndex >= 0) {
+        selectInvoice(currentResults[activeIndex]);
+      } else {
+        // Scanner sent Enter after pasting the full code (no dropdown open).
+        clearTimeout(debounceTimer);
+        closeDropdown();
+        lookupInvoiceByNumber(input.value);
+      }
+      return;
+    }
     if (results.style.display === 'none') return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -555,13 +596,21 @@ function setupInvoiceSearch() {
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       highlight(Math.max(activeIndex - 1, 0));
-    } else if (e.key === 'Enter') {
-      if (activeIndex >= 0) {
-        e.preventDefault();
-        selectInvoice(currentResults[activeIndex]);
-      }
     } else if (e.key === 'Escape') {
       closeDropdown();
+    }
+  });
+
+  // Debounced oninput: fire lookupInvoiceByNumber for scanner paste (no Enter).
+  let _retScanDebounce;
+  const _origInput = input.oninput;
+  input.addEventListener('input', () => {
+    clearTimeout(_retScanDebounce);
+    const val = input.value.trim().toUpperCase();
+    // For receipt barcodes (RET-, SALE:, INV-) fire lookup after short pause.
+    if (val.startsWith('RET-') || val.startsWith('RET:') || val.startsWith('SALE:')
+        || /^INV-\d/.test(val)) {
+      _retScanDebounce = setTimeout(() => lookupInvoiceByNumber(input.value), 150);
     }
   });
 

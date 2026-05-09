@@ -637,7 +637,8 @@ def _prepare_logo_for_escpos(logo_path: Path, paper_width: str = "80mm") -> Opti
         return None
     try:
         from PIL import Image
-        max_px = 576 if paper_width == "80mm" else 384
+        # 240 px ≈ 30 mm on a 203-dpi 80 mm printer — keeps the logo compact.
+        max_px = 240 if paper_width == "80mm" else 200
         img = Image.open(str(logo_path)).convert("RGB")
         if img.width > max_px:
             ratio = max_px / img.width
@@ -700,6 +701,8 @@ def _render_escpos_barcode(doc_number: str, paper_width: str = "80mm") -> bytes:
         p2 = _Dummy2()
         p2._raw(_ALIGN_CENTER)
         p2.image(tmp.name)
+        # Print human-readable code below the barcode image so it matches what's encoded.
+        p2._raw(doc_number.encode("ascii", errors="replace") + b"\n")
         p2._raw(_ALIGN_LEFT)
         result2 = bytes(p2.output)
         try:
@@ -808,12 +811,14 @@ def render_receipt_escpos(
                 if img_bytes:
                     payload += img_bytes
                 else:
+                    # No Sinhala-capable font on this host; printing the raw
+                    # text via CP437 produces garbled boxes on thermal paper.
+                    # Use a plain English fallback instead.
                     log.warning(
-                        "Sinhala raster render unavailable; text will print as '?': %r",
+                        "Sinhala font unavailable — substituting English footer: %r",
                         utext[:40],
                     )
-                    payload += utext.encode("cp437", errors="replace")
-                    payload += b"\n"
+                    payload += b"Thank you for your business!\n"
             else:
                 payload += utext.encode("cp437", errors="replace")
                 payload += b"\n"

@@ -1466,12 +1466,55 @@ function normalizeScannedCode(raw) {
   return value;
 }
 
+// Returns true when the scanned code looks like a receipt barcode (not a product barcode).
+function isReceiptBarcode(code) {
+  const up = (code || '').toUpperCase().trim();
+  return up.startsWith('SALE:') || up.startsWith('JOB:') || up.startsWith('RET:')
+    || /^INV-\d/.test(up)
+    || /^JOB-/.test(up)
+    || /^RET-/.test(up);
+}
+
+async function handleReceiptBarcode(code) {
+  try {
+    const res = await fetch('/api/receipt-lookup/' + encodeURIComponent(code));
+    if (handleUnauthorizedResponse(res)) return;
+    const data = await res.json();
+    if (!data || !data.ok) {
+      toast('Receipt not found: ' + code, 'warning');
+      return;
+    }
+    if (data.type === 'sale') {
+      // Open the invoice search modal and display the matched invoice.
+      openModal('searchInvModal');
+      document.getElementById('invSearchInput').value = data.number || code;
+      viewInvoice(data.id);
+    } else if (data.type === 'job') {
+      toast('Service job ' + (data.number || '') + ' — open the Service Jobs page to view it', 'info');
+    } else if (data.type === 'return') {
+      toast('Return receipt ' + (data.number || '') + ' — open the Returns page to view it', 'info');
+    }
+  } catch (e) {
+    toast('Receipt lookup failed', 'error');
+  }
+}
+
 async function handleBarcodeValue(barcode) {
   const raw = (barcode || '').trim();
   if (!raw) return;
-  const clean = normalizeScannedCode(raw);
+
   const input = document.getElementById('barcodeInput');
   if (input) input.value = '';
+
+  // Receipt barcodes (INV-…, JOB-…, RET-…, SALE:, JOB:, RET:) go to the
+  // receipt lookup flow, not the product-add flow.
+  if (isReceiptBarcode(raw)) {
+    await handleReceiptBarcode(raw);
+    setTimeout(() => document.getElementById('barcodeInput')?.focus(), 30);
+    return;
+  }
+
+  const clean = normalizeScannedCode(raw);
 
   try {
     const res = await fetch(`/api/products/search?q=${encodeURIComponent(raw)}&limit=1`);
@@ -2472,12 +2515,22 @@ async function scanInvoiceBarcode() {
     return;
   }
   try {
-    const data = await api('/api/invoices/scan/' + encodeURIComponent(q));
-    if (!data || !data.ok || !data.found) {
-      document.getElementById('invSearchResults').innerHTML = `<div class="text-muted text-sm" style="text-align:center;padding:20px">No invoice found for <strong>${q}</strong></div>`;
+    // Use the universal receipt-lookup endpoint so SALE:/JOB:/RET: prefixes and
+    // raw INV-… / JOB-… / RET-… codes all resolve correctly.
+    const res = await fetch('/api/receipt-lookup/' + encodeURIComponent(q));
+    if (handleUnauthorizedResponse(res)) return;
+    const data = await res.json();
+    if (!data || !data.ok) {
+      document.getElementById('invSearchResults').innerHTML = `<div class="text-muted text-sm" style="text-align:center;padding:20px">No receipt found for <strong>${q}</strong></div>`;
       return;
     }
-    viewInvoice(data.id);
+    if (data.type === 'sale') {
+      viewInvoice(data.id);
+    } else if (data.type === 'job') {
+      document.getElementById('invSearchResults').innerHTML = `<div class="text-muted text-sm" style="text-align:center;padding:20px">This is a <strong>Service Job</strong> receipt (${data.number}). Open the Service Jobs page to view it.</div>`;
+    } else if (data.type === 'return') {
+      document.getElementById('invSearchResults').innerHTML = `<div class="text-muted text-sm" style="text-align:center;padding:20px">This is a <strong>Return</strong> receipt (${data.number}). Open the Returns page to view it.</div>`;
+    }
   } catch (e) {
     toast('Unable to scan invoice right now', 'error');
   }

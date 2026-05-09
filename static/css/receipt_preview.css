@@ -31,8 +31,8 @@ html, body {
 /* ───── header ───── */
 .rcpt-header { text-align: var(--rcpt-header-align, center); }
 .rcpt-logo {
-  max-width: 60%;
-  max-height: 72px;
+  max-width: 32mm;
+  max-height: 22mm;
   display: block;
   margin: 4px auto 6px;
   object-fit: contain;
@@ -170,8 +170,8 @@ html, body {
     display: block !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
-    max-width: 60%;
-    max-height: 72px;
+    max-width: 32mm;
+    max-height: 22mm;
     object-fit: contain;
   }
 }
