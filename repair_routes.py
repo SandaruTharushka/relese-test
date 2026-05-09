@@ -311,7 +311,8 @@ def register_repair_routes(app, log_action=None):
     @app.route('/repairs')
     @login_required
     def repairs_page():
-        return render_template('repairs.html', active='repairs')
+        is_admin = bool(current_user.is_admin or current_user.role == 'Admin')
+        return render_template('repairs.html', active='repairs', is_admin=is_admin)
 
     # ── API ────────────────────────────────────────────────────────────────────
 
@@ -732,7 +733,12 @@ def register_repair_routes(app, log_action=None):
         job = RepairJob.query.get_or_404(jid)
         try:
             if job.status == 'delivered':
-                return _repair_error('Delivered jobs cannot be deleted.', 400, code='repair_delete_blocked')
+                if not (current_user.is_admin or current_user.role == 'Admin'):
+                    return _repair_error(
+                        'Only admin users can delete delivered jobs.',
+                        403,
+                        code='repair_delete_requires_admin',
+                    )
 
             for part in list(job.parts or []):
                 if part.product_id:
@@ -755,10 +761,14 @@ def register_repair_routes(app, log_action=None):
             VehicleInspection.query.filter_by(job_id=job.id).delete(synchronize_session=False)
             VehicleHistory.query.filter_by(job_id=job.id).delete(synchronize_session=False)
             
+            was_delivered = job.status == 'delivered'
             db.session.delete(job)
             db.session.commit()
             if log_action:
-                log_action('delete_repair_job', target_type='repair_job', target_id=jid, metadata=f'job={job.job_number}')
+                meta = f'job={job.job_number}'
+                if was_delivered:
+                    meta += f';delivered_delete_by={current_user.id}'
+                log_action('delete_repair_job', target_type='repair_job', target_id=jid, metadata=meta)
             return jsonify({'success': True, 'message': 'Job deleted.'})
         except Exception as exc:
             db.session.rollback()

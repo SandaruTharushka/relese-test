@@ -60,12 +60,12 @@ a = Analysis(
         ('static',           'static'),
         ('version.py',       '.'),
         ('update_config.py', '.'),   # GitHub update configuration constants
-<<<<<<< HEAD
-    ] + _seed_db_datas + collect_data_files('escpos'),
-=======
+        # Bundled Sinhala/Unicode fonts — loaded by printing/font_manager.py.
+        # These are used for raster text rendering so Sinhala prints correctly
+        # even when the Windows PC has no Sinhala font installed.
+        ('printing/fonts',   'printing/fonts'),
         *collect_data_files('escpos'),
     ] + _seed_db_datas,
->>>>>>> c51bdc81e2b6eac542a319988f7f8bb70d22a87a
     hiddenimports=[
         # ── Core application modules ────────────────────────────────────────────
         # app is the primary Flask application; it is loaded via
@@ -108,6 +108,7 @@ a = Analysis(
         'printing',
         'printing.routes',
         'printing.models',
+        'printing.font_manager',
         'printing.receipt_engine',
         'printing.printer_detector',
         'printing.service',
