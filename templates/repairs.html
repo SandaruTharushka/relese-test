@@ -128,8 +128,8 @@
         <input id="jobSearch" type="text" class="input"
           placeholder="Search Job #, Customer, Phone, Vehicle, Reg. No., Barcode…"
           style="flex:1;min-width:220px;max-width:520px"
-          onkeydown="if(event.key==='Enter')searchJobs()"
-          oninput="if(!this.value.trim())clearJobSearch()">
+          onkeydown="if(event.key==='Enter'){event.preventDefault();clearTimeout(_jobSearchDebounce);searchJobs();}"
+          oninput="if(!this.value.trim()){clearJobSearch();}else{clearTimeout(_jobSearchDebounce);_jobSearchDebounce=setTimeout(()=>{if(isJobReceiptBarcode(this.value.trim()))searchJobs();},150);}">
         <button class="btn btn-primary btn-sm" onclick="searchJobs()">Search</button>
         <button class="btn btn-ghost btn-sm" onclick="clearJobSearch()">Clear</button>
       </div>
@@ -702,9 +702,43 @@ function filterJobs(status){
   loadJobs(status);
 }
 
+// Returns true when the value looks like a job receipt barcode.
+function isJobReceiptBarcode(code) {
+  const up = (code || '').toUpperCase().trim();
+  return up.startsWith('JOB:') || up.startsWith('JOB-');
+}
+
+// Called when a JOB receipt barcode is scanned — opens the matching job modal.
+async function handleJobReceiptScan(code) {
+  try {
+    const res = await fetch('/api/receipt-lookup/' + encodeURIComponent(code));
+    const data = await res.json();
+    if (!data || !data.ok) {
+      const banner = document.getElementById('searchResultBanner');
+      banner.style.display = '';
+      banner.textContent = 'No job receipt found for: ' + code;
+      return;
+    }
+    if (data.type === 'job') {
+      viewJob(data.id);
+    } else if (data.type === 'sale') {
+      const banner = document.getElementById('searchResultBanner');
+      banner.style.display = '';
+      banner.textContent = 'This is a sales invoice (' + data.number + '). Open the Billing page to view it.';
+    } else if (data.type === 'return') {
+      const banner = document.getElementById('searchResultBanner');
+      banner.style.display = '';
+      banner.textContent = 'This is a return receipt (' + data.number + '). Open the Returns page to view it.';
+    }
+  } catch(e) { console.error('Receipt lookup failed', e); }
+}
+
+let _jobSearchDebounce;
 async function searchJobs(){
   const q=(document.getElementById('jobSearch').value||'').trim();
   if(!q){ clearJobSearch(); return; }
+  // Receipt barcode scan: bypass text search and open the job directly.
+  if (isJobReceiptBarcode(q)) { await handleJobReceiptScan(q); return; }
   try{
     const r=await fetch('/api/service-jobs/search?q='+encodeURIComponent(q));
     const d=await r.json();

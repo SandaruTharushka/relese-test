@@ -1677,6 +1677,99 @@ register_service_analytics_routes(
 register_printing_routes(app, db=db, log_action=log_action)
 
 
+# ---------------------------------------------------------------------------
+# Universal receipt / barcode lookup
+# ---------------------------------------------------------------------------
+
+@app.route('/api/receipt-lookup/<path:code>')
+@login_required
+def api_receipt_lookup(code):
+    """Resolve a scanned receipt barcode to the matching sale / job / return.
+
+    Prefix detection order:
+      SALE:<invoice_no>  → billing invoice
+      JOB:<job_no>       → service job
+      RET:<return_no>    → product return
+    No prefix → try sale, then job, then return.
+    INV-…, JOB-…, RET-… formats are also matched directly without prefix.
+    """
+    raw = (code or '').strip().strip('\r\n\t ')
+    if not raw:
+        return jsonify({'ok': False, 'error': 'Code is required'}), 400
+
+    upper = raw.upper()
+    forced_type = None
+    lookup_code = raw
+
+    if upper.startswith('SALE:'):
+        forced_type = 'sale'
+        lookup_code = raw[5:].strip()
+    elif upper.startswith('JOB:'):
+        forced_type = 'job'
+        lookup_code = raw[4:].strip()
+    elif upper.startswith('RET:'):
+        forced_type = 'return'
+        lookup_code = raw[4:].strip()
+
+    if not lookup_code:
+        return jsonify({'ok': False, 'error': 'Code is required'}), 400
+
+    # --- sale ---
+    if forced_type in (None, 'sale'):
+        sale = Sale.query.filter_by(invoice_number=lookup_code).first()
+        if sale:
+            return jsonify({
+                'ok': True,
+                'type': 'sale',
+                'id': sale.id,
+                'number': sale.invoice_number,
+                'redirect_url': url_for('billing') + f'?invoice={sale.invoice_number}',
+                'display': {
+                    'invoice_number': sale.invoice_number,
+                    'total': float(sale.total_amount or 0),
+                    'date': sale.sale_date.isoformat() if sale.sale_date else '',
+                    'customer': sale.customer_name_snapshot or '',
+                },
+            })
+
+    # --- job ---
+    if forced_type in (None, 'job'):
+        job = RepairJob.query.filter_by(job_number=lookup_code).first()
+        if job:
+            return jsonify({
+                'ok': True,
+                'type': 'job',
+                'id': job.id,
+                'number': job.job_number,
+                'redirect_url': '/repairs',
+                'display': {
+                    'job_number': job.job_number,
+                    'customer': job.customer_name_snapshot or job.customer_name or '',
+                    'vehicle': job.vehicle_reg_no or '',
+                    'status': job.status or '',
+                },
+            })
+
+    # --- return ---
+    if forced_type in (None, 'return'):
+        ret = ProductReturn.query.filter_by(return_number=lookup_code).first()
+        if ret:
+            return jsonify({
+                'ok': True,
+                'type': 'return',
+                'id': ret.id,
+                'number': ret.return_number,
+                'redirect_url': '/returns',
+                'display': {
+                    'return_number': ret.return_number,
+                    'original_invoice': (ret.sale.invoice_number if ret.sale else '') or '',
+                    'total': float(ret.total_amount or 0),
+                },
+            })
+
+    return jsonify({'ok': False, 'error': f'Receipt not found: {raw}'}), 404
+
+
 @app.route('/forgot-password', methods=['POST'])
 def forgot_password():
     data = request.get_json(silent=True) or request.form
