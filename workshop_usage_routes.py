@@ -17,7 +17,7 @@ from shared_helpers import user_has_any_role
 def register_workshop_usage_routes(app, *, db, Product, ProductBarcode,
                                    StoreSettings, StockMovement,
                                    WorkshopStockUsage, RepairJob,
-                                   RetailCustomer, User, log_action):
+                                   RetailCustomer, User, log_action, csrf):
 
     # ── helpers ──────────────────────────────────────────────────────────────
 
@@ -142,14 +142,20 @@ def register_workshop_usage_routes(app, *, db, Product, ProductBarcode,
     # ── POST /api/workshop-usage/scan ────────────────────────────────────────
 
     @app.route('/api/workshop-usage/scan', methods=['POST'])
+    @csrf.exempt
     @login_required
     def api_workshop_usage_scan():
         _require_access()
         data = request.get_json(silent=True) or {}
 
-        raw_barcode = (data.get('barcode') or '').strip()
+        raw_barcode = (
+            data.get('barcode')
+            or data.get('code')
+            or ''
+        ).strip()
+        print(f"[WORKSHOP SCAN] barcode={raw_barcode}")
         if not raw_barcode:
-            return jsonify({'ok': False, 'error': 'Barcode is required'}), 400
+            return jsonify({'success': False, 'message': 'Barcode missing'}), 400
 
         quantity = float(data.get('quantity') or 1)
         if quantity <= 0:

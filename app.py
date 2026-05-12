@@ -1661,6 +1661,7 @@ register_workshop_usage_routes(
     RetailCustomer=RetailCustomer,
     User=User,
     log_action=log_action,
+    csrf=csrf,
 )
 register_service_analytics_routes(
     app,
