@@ -33,6 +33,9 @@ python-escpos==3.1
 pyserial==3.5
 pywin32==306
 
+# -- Scanner Bridge --
+pystray>=0.19
+
 # -- Utilities --
 requests==2.32.3
 python-dotenv==1.0.1

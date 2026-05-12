@@ -25,6 +25,15 @@ def register_workshop_usage_routes(app, *, db, Product, ProductBarcode,
         if not user_has_any_role(current_user, 'Admin', 'Operator', 'Manager'):
             abort(403)
 
+    def _require_access_or_internal():
+        """Allow 127.0.0.1 scanner bridge calls OR authenticated admin/manager users."""
+        if request.remote_addr in ('127.0.0.1', '::1'):
+            return  # Internal scanner bridge call — trusted localhost
+        if not current_user.is_authenticated:
+            abort(401)
+        if not user_has_any_role(current_user, 'Admin', 'Operator', 'Manager'):
+            abort(403)
+
     def _normalize_barcode(raw):
         """Strip scanner prefixes identical to the billing page normalizer."""
         value = (raw or '').strip()
@@ -143,9 +152,8 @@ def register_workshop_usage_routes(app, *, db, Product, ProductBarcode,
 
     @app.route('/api/workshop-usage/scan', methods=['POST'])
     @csrf.exempt
-    @login_required
     def api_workshop_usage_scan():
-        _require_access()
+        _require_access_or_internal()
         data = request.get_json(silent=True) or {}
 
         raw_barcode = (
@@ -224,15 +232,15 @@ def register_workshop_usage_routes(app, *, db, Product, ProductBarcode,
                 customer_id=customer_id,
                 mechanic_name=mechanic,
                 reason=reason,
-                created_by=current_user.id,
+                created_by=current_user.id if current_user.is_authenticated else None,
             )
             db.session.add(usage)
             db.session.flush()  # get usage.id before deduct_stock uses it
 
             _deduct_stock(
                 product, quantity, usage.id,
-                notes=f"Workshop use — {reason or 'no reason given'} — by {mechanic or current_user.full_name}",
-                created_by_id=current_user.id,
+                notes=f"Workshop use — {reason or 'no reason given'} — by {mechanic or (current_user.full_name if current_user.is_authenticated else 'scanner')}",
+                created_by_id=current_user.id if current_user.is_authenticated else None,
             )
             db.session.commit()
 
@@ -538,6 +546,74 @@ def register_workshop_usage_routes(app, *, db, Product, ProductBarcode,
         return jsonify({'ok': True, 'workshop_cost': float(total),
                         'from': start.strftime('%Y-%m-%d'),
                         'to': (end - timedelta(days=1)).strftime('%Y-%m-%d')})
+
+    # ── Scanner management API routes ─────────────────────────────────────────
+
+    @app.route('/api/scanner/devices', methods=['GET'])
+    @login_required
+    def api_scanner_devices():
+        """Return list of detected HID keyboard devices for the settings UI."""
+        try:
+            from scanner_bridge import enumerate_keyboards
+            devices = enumerate_keyboards()
+            return jsonify({'ok': True, 'devices': devices})
+        except Exception as exc:
+            return jsonify({'ok': True, 'devices': [], 'warning': str(exc)})
+
+    @app.route('/api/scanner/config', methods=['GET', 'POST'])
+    @login_required
+    def api_scanner_config():
+        """Read or write scanner_devices.json config."""
+        from scanner_bridge import load_config, save_config
+        if request.method == 'GET':
+            return jsonify({'ok': True, 'config': load_config()})
+        if not request.is_json:
+            return jsonify({'ok': False, 'error': 'Content-Type must be application/json'}), 400
+        new_cfg = request.get_json(silent=True) or {}
+        merged = {**load_config(), **new_cfg}
+        save_config(merged)
+        return jsonify({'ok': True, 'config': merged})
+
+    @app.route('/api/scanner/status', methods=['GET'])
+    @login_required
+    def api_scanner_status():
+        """Return bridge liveness and config summary."""
+        try:
+            from scanner_launcher import _bridge_proc
+        except ImportError:
+            _bridge_proc = None
+        from scanner_bridge import load_config
+        cfg = load_config()
+        alive = (_bridge_proc is not None and _bridge_proc.poll() is None) if _bridge_proc else False
+        return jsonify({
+            'ok': True,
+            'bridge_running': alive,
+            'sales_configured': bool(cfg.get('sales_scanner_device_id')),
+            'workshop_configured': bool(cfg.get('workshop_scanner_device_id')),
+            'api_url': cfg.get('api_url'),
+            'debounce_ms': cfg.get('debounce_ms'),
+        })
+
+    @app.route('/api/scanner/test-scan', methods=['POST'])
+    @login_required
+    def api_scanner_test_scan():
+        """Inject a test barcode from the settings UI (no stock deducted)."""
+        if not request.is_json:
+            return jsonify({'ok': False, 'error': 'Content-Type must be application/json'}), 400
+        data = request.get_json(silent=True) or {}
+        barcode = (data.get('barcode') or 'TEST-0000').strip()
+        return jsonify({'ok': True, 'barcode': barcode, 'note': 'Test scan. No stock deducted.'})
+
+    @app.route('/scanner-settings')
+    @login_required
+    def scanner_settings_page():
+        """Serve the Scanner Settings HTML page."""
+        import os as _os
+        import sys as _sys
+        from pathlib import Path as _Path
+        from flask import send_from_directory
+        static_dir = _Path(getattr(_sys, '_MEIPASS', _Path(__file__).parent)) / 'static'
+        return send_from_directory(str(static_dir), 'scanner_settings.html')
 
     # ── POST /api/workshop-usage/settings ────────────────────────────────────
 

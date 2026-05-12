@@ -500,9 +500,27 @@ class DesktopLauncher:
         self.server = LocalServer()
         self.license_service = LicenseService()
 
+    def _start_scanner_bridge(self) -> None:
+        """Launch scanner_bridge subprocess on Windows (non-fatal on failure)."""
+        try:
+            from scanner_launcher import start_scanner_bridge
+            ok = start_scanner_bridge()
+            logger.info('Scanner bridge %s.', 'started' if ok else 'not started (non-Windows or not configured)')
+        except Exception as exc:
+            logger.warning('Scanner bridge launch failed (non-critical): %s', exc)
+
+    def _stop_scanner_bridge(self) -> None:
+        """Terminate scanner bridge subprocess on app exit."""
+        try:
+            from scanner_launcher import stop_scanner_bridge
+            stop_scanner_bridge()
+        except Exception:
+            pass
+
     def run(self) -> None:
         ensure_runtime_environment()
         self.server.start()
+        self._start_scanner_bridge()
         activation = self.license_service.activation_status()
         start_url = f'{FLASK_URL}/activation' if activation.get('requires_activation') else FLASK_URL
         try:
@@ -510,6 +528,7 @@ class DesktopLauncher:
             self.run_qt_fallback(start_url)
         finally:
             self.server.stop()
+            self._stop_scanner_bridge()
 
     # ── Startup update check ──────────────────────────────────────────────────
 

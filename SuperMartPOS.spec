@@ -65,8 +65,18 @@ a = Analysis(
         # even when the Windows PC has no Sinhala font installed.
         ('printing/fonts',   'printing/fonts'),
         *collect_data_files('escpos'),
+        ('config/scanner_devices.json', 'config'),
+        ('static/scanner_settings.html', 'static'),
+        ('static/js/scanner_settings.js', 'static/js'),
     ] + _seed_db_datas,
     hiddenimports=[
+        # ── Scanner bridge ───────────────────────────────────────────────────────
+        'scanner_bridge',
+        'scanner_launcher',
+        'requests',
+        'pystray',
+        'PIL',
+
         # ── Core application modules ────────────────────────────────────────────
         # app is the primary Flask application; it is loaded via
         # importlib.import_module('app') inside desktop_runtime.LocalServer._run()
@@ -306,6 +316,59 @@ exe = EXE(
     # UPX is intentionally DISABLED — see header note.
     # PySide6/Qt WebEngine DLLs are PE-mapped by Qt's loader and will crash
     # silently if UPX re-compresses them. Do NOT enable UPX here.
+    upx=False,
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=False,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    icon='static/icons/icon.ico',
+)
+
+# ── Scanner Bridge — separate lightweight executable ─────────────────────────
+#
+# scanner_bridge.exe intercepts HID keyboard events from the workshop scanner
+# and POSTs barcodes to /api/workshop-usage/scan on localhost. It runs as a
+# background subprocess launched by desktop_runtime.DesktopLauncher.
+# Kept as a separate exe so it can be restarted without touching the main app.
+
+bridge_a = Analysis(
+    ['scanner_bridge.py'],
+    pathex=['.'],
+    binaries=[],
+    datas=[
+        ('config/scanner_devices.json', 'config'),
+    ],
+    hiddenimports=['requests', 'pystray', 'PIL', 'PIL.Image', 'PIL.ImageDraw'],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[
+        'tkinter', 'matplotlib', 'numpy', 'pandas', 'scipy', 'pytest',
+        'PySide6', 'waitress', 'flask', 'sqlalchemy',
+    ],
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+    cipher=block_cipher,
+    noarchive=False,
+)
+
+bridge_pyz = PYZ(bridge_a.pure, bridge_a.zipped_data, cipher=block_cipher)
+
+bridge_exe = EXE(
+    bridge_pyz,
+    bridge_a.scripts,
+    bridge_a.binaries,
+    bridge_a.zipfiles,
+    bridge_a.datas,
+    [],
+    name='scanner_bridge',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
     upx=False,
     upx_exclude=[],
     runtime_tmpdir=None,
